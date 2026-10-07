@@ -1,0 +1,2049 @@
+openapi: 3.0.3
+info:
+  title: FSP Draft API
+  version: 1.0.0
+  description: Reverse IT recruitment platform with verified achievement profiles
+    (FSP)
+paths:
+  /api/assessments:
+    get:
+      operationId: assessments_list
+      tags:
+      - assessments
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssessmentResult'
+          description: ''
+    post:
+      operationId: assessments_create
+      tags:
+      - assessments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartAssessmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartAssessmentRequest'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentSession'
+          description: ''
+  /api/assessments/{id}:
+    get:
+      operationId: assessments_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - assessments
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentSession'
+          description: ''
+  /api/assessments/{id}/answers:
+    post:
+      operationId: assessments_answers_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - assessments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnswerRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerResponse'
+          description: ''
+  /api/assessments/{id}/result:
+    get:
+      operationId: assessments_result_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - assessments
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentResult'
+          description: ''
+  /api/assessments/eligibility:
+    get:
+      operationId: assessments_eligibility_retrieve
+      tags:
+      - assessments
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+          description: ''
+  /api/auth/login:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+  /api/auth/logout:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/auth/register:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+  /api/candidates/me:
+    get:
+      operationId: candidates_me_retrieve
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateProfile'
+          description: ''
+    put:
+      operationId: candidates_me_update
+      tags:
+      - candidates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateProfileUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CandidateProfileUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateProfile'
+          description: ''
+  /api/candidates/me/card.pdf:
+    get:
+      operationId: candidates_me_card.pdf_retrieve
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/candidates/me/consents:
+    put:
+      operationId: candidates_me_consents_update
+      tags:
+      - candidates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConsentsRequest'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentsResponse'
+          description: ''
+  /api/candidates/me/resume:
+    post:
+      operationId: candidates_me_resume_create
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumeParseResponse'
+          description: ''
+  /api/companies/me:
+    get:
+      operationId: companies_me_retrieve
+      tags:
+      - companies
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+          description: ''
+    put:
+      operationId: companies_me_update
+      tags:
+      - companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Company'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Company'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+          description: ''
+  /api/demo/persona:
+    post:
+      operationId: demo_persona_create
+      description: 'Switch or login as demo personas: candidate_fsp, candidate_plain,
+        employer.'
+      tags:
+      - demo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PersonaRequest'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+          description: ''
+  /api/demo/time-travel:
+    post:
+      operationId: demo_time_travel_create
+      description: Time-travel endpoint for jury/demo testing cooldowns.
+      tags:
+      - demo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeTravelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TimeTravelRequest'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeTravelResponse'
+          description: ''
+  /api/events:
+    get:
+      operationId: events_retrieve
+      description: Server-Sent Events (SSE) endpoint for real-time notifications.
+      tags:
+      - events
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/fsp/link:
+    post:
+      operationId: fsp_link_create
+      tags:
+      - fsp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FSPLinkRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FSPLinkRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FSPLinkResponse'
+          description: ''
+  /api/fsp/sync:
+    post:
+      operationId: fsp_sync_create
+      description: Trigger background or immediate sync of FSP achievements.
+      tags:
+      - fsp
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FSPSyncResponse'
+          description: ''
+  /api/me:
+    get:
+      operationId: me_retrieve
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+          description: ''
+  /api/offers:
+    get:
+      operationId: offers_list
+      tags:
+      - offers
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Offer'
+          description: ''
+    post:
+      operationId: offers_create
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Offer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Offer'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/offers/{id}:
+    get:
+      operationId: offers_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - offers
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/offers/{id}/accept:
+    post:
+      operationId: offers_accept_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferAcceptRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferAcceptRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/offers/{id}/decline:
+    post:
+      operationId: offers_decline_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferDeclineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferDeclineRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/offers/{id}/view:
+    post:
+      operationId: offers_view_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferViewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferViewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/offers/{id}/withdraw:
+    post:
+      operationId: offers_withdraw_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferWithdrawRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferWithdrawRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/positions:
+    get:
+      operationId: positions_list
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+          description: ''
+    post:
+      operationId: positions_create
+      tags:
+      - positions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Position'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Position'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Position'
+          description: ''
+  /api/positions/{id}:
+    get:
+      operationId: positions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Position'
+          description: ''
+    put:
+      operationId: positions_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Position'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Position'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Position'
+          description: ''
+  /api/positions/{id}/pool:
+    get:
+      operationId: positions_pool_retrieve
+      description: Scouted talent pool for a position with explainable scores and
+        reason chips.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionPoolResponse'
+          description: ''
+  /api/positions/{id}/shortlist/{public_id}:
+    put:
+      operationId: positions_shortlist_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: public_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+    delete:
+      operationId: positions_shortlist_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: public_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/talent/{public_id}:
+    get:
+      operationId: talent_retrieve
+      description: |-
+        Talent card view for employers.
+
+        SECURITY INVARIANT: Contacts are only unmasked if an active ContactGrant exists!
+      parameters:
+      - in: path
+        name: public_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - talent
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TalentDetailResponse'
+          description: ''
+  /api/talent/search:
+    get:
+      operationId: talent_search_retrieve
+      description: General talent search without a specific position.
+      tags:
+      - talent
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TalentSearchResponse'
+          description: ''
+  /api/verify/{public_id}:
+    get:
+      operationId: verify_retrieve
+      parameters:
+      - in: path
+        name: public_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - verify
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyPublicIdResponse'
+          description: ''
+components:
+  schemas:
+    AnswerRequest:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        option_id:
+          type: string
+        value:
+          type: string
+        integrity: {}
+      required:
+      - item_id
+    AnswerResponse:
+      type: object
+      properties:
+        done:
+          type: boolean
+        next:
+          $ref: '#/components/schemas/ItemView'
+        result:
+          $ref: '#/components/schemas/AssessmentResult'
+      required:
+      - done
+    AssessmentResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        claimed_grade:
+          $ref: '#/components/schemas/GradesEnum'
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        status:
+          $ref: '#/components/schemas/Status61dEnum'
+        theta:
+          type: number
+          format: double
+          nullable: true
+          description: θ estimate (EAP) on the IRT scale
+        se:
+          type: number
+          format: double
+          nullable: true
+          description: Standard error of θ
+        rating:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: 'Sport-style rating: 1000 + 200θ'
+        result_grade:
+          oneOf:
+          - $ref: '#/components/schemas/GradesEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        decision:
+          oneOf:
+          - $ref: '#/components/schemas/DecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        promotion_unlocked:
+          type: boolean
+        counts_as_attempt:
+          type: boolean
+          description: False for fallback tests — failing does not burn a retake
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - claimed_grade
+      - id
+      - specialization
+      - started_at
+    AssessmentSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        claimed_grade:
+          $ref: '#/components/schemas/GradesEnum'
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        status:
+          $ref: '#/components/schemas/Status61dEnum'
+        current:
+          type: string
+          readOnly: true
+        theta:
+          type: number
+          format: double
+          nullable: true
+          description: θ estimate (EAP) on the IRT scale
+        se:
+          type: number
+          format: double
+          nullable: true
+          description: Standard error of θ
+        rating:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          description: 'Sport-style rating: 1000 + 200θ'
+        result_grade:
+          oneOf:
+          - $ref: '#/components/schemas/GradesEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        decision:
+          oneOf:
+          - $ref: '#/components/schemas/DecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        promotion_unlocked:
+          type: boolean
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - claimed_grade
+      - current
+      - id
+      - specialization
+      - started_at
+    BlankEnum:
+      enum:
+      - ''
+    CandidateContact:
+      type: object
+      properties:
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          maxLength: 30
+        telegram:
+          type: string
+          maxLength: 100
+    CandidateProfile:
+      type: object
+      properties:
+        public_id:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 100
+        timezone:
+          type: string
+          maxLength: 50
+        specialization:
+          oneOf:
+          - $ref: '#/components/schemas/SpecializationEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        claimed_grade:
+          oneOf:
+          - $ref: '#/components/schemas/GradesEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        years_experience:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+        work_formats:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkFormatsEnum'
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_type:
+          oneOf:
+          - $ref: '#/components/schemas/SalaryTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        salary_floor:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Private minimum salary; offers below trigger a warning
+        open_to_offers:
+          type: boolean
+        blind_mode:
+          type: boolean
+          description: Hide name and photo until offer acceptance
+        blocked_company_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Companies hidden from seeing this profile
+        about:
+          type: string
+        experience_text:
+          type: string
+        completeness:
+          type: integer
+          readOnly: true
+          description: Profile completeness 0-100
+        contacts:
+          type: string
+          readOnly: true
+        skills:
+          type: string
+          readOnly: true
+        league:
+          type: string
+          readOnly: true
+        fsp:
+          type: string
+          readOnly: true
+        consents:
+          type: string
+          readOnly: true
+      required:
+      - completeness
+      - consents
+      - contacts
+      - fsp
+      - league
+      - public_id
+      - skills
+    CandidateProfileUpdate:
+      type: object
+      properties:
+        full_name:
+          type: string
+          maxLength: 255
+        city:
+          type: string
+          maxLength: 100
+        timezone:
+          type: string
+          maxLength: 50
+        specialization:
+          oneOf:
+          - $ref: '#/components/schemas/SpecializationEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        claimed_grade:
+          oneOf:
+          - $ref: '#/components/schemas/GradesEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        years_experience:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+        work_formats:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkFormatsEnum'
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_type:
+          oneOf:
+          - $ref: '#/components/schemas/SalaryTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        salary_floor:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Private minimum salary; offers below trigger a warning
+        open_to_offers:
+          type: boolean
+        blind_mode:
+          type: boolean
+          description: Hide name and photo until offer acceptance
+        blocked_company_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Companies hidden from seeing this profile
+        about:
+          type: string
+        experience_text:
+          type: string
+        contacts:
+          $ref: '#/components/schemas/CandidateContact'
+        skills:
+          type: array
+          items:
+            type: string
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        inn:
+          type: string
+          description: Russian INN (tax ID)
+          maxLength: 12
+        website:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 200
+          - type: string
+            maxLength: 0
+        email_domain:
+          type: string
+          maxLength: 255
+        business_domain:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        contact_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        trust_level:
+          allOf:
+          - $ref: '#/components/schemas/TrustLevelEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - trust_level
+    ConsentsRequest:
+      type: object
+      properties:
+        processing:
+          type: boolean
+        publication:
+          type: boolean
+        fsp_sync:
+          type: boolean
+        version:
+          type: string
+          default: '1.0'
+    ConsentsResponse:
+      type: object
+      properties:
+        processing:
+          type: boolean
+        publication:
+          type: boolean
+        fsp_sync:
+          type: boolean
+      required:
+      - fsp_sync
+      - processing
+      - publication
+    ContactChannelEnum:
+      enum:
+      - email
+      - phone
+      - telegram
+      - platform
+      type: string
+      description: |-
+        * `email` - Email
+        * `phone` - Phone
+        * `telegram` - Telegram
+        * `platform` - Platform
+    DecisionEnum:
+      enum:
+      - confirmed
+      - unconfirmed
+      type: string
+      description: |-
+        * `confirmed` - Confirmed
+        * `unconfirmed` - Unconfirmed
+    DeclineReasonEnum:
+      enum:
+      - salary
+      - stack
+      - format
+      - company
+      - timing
+      - not_looking
+      - other
+      type: string
+      description: |-
+        * `salary` - Salary
+        * `stack` - Stack
+        * `format` - Format
+        * `company` - Company
+        * `timing` - Timing
+        * `not_looking` - Not Looking
+        * `other` - Other
+    EligibilityResponse:
+      type: object
+      properties:
+        can_start:
+          type: boolean
+        next_attempt_at:
+          type: string
+        promotion_available:
+          type: boolean
+        reason:
+          type: string
+        active_session_id:
+          type: string
+          nullable: true
+      required:
+      - can_start
+      - promotion_available
+    FSPLinkRequest:
+      type: object
+      properties:
+        participant_id:
+          type: string
+      required:
+      - participant_id
+    FSPLinkResponse:
+      type: object
+      properties:
+        participant_id:
+          type: string
+        sports_rank:
+          type: string
+        sync_status:
+          type: string
+        results_count:
+          type: integer
+      required:
+      - participant_id
+      - results_count
+      - sports_rank
+      - sync_status
+    FSPSyncResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        synced_at:
+          type: string
+      required:
+      - status
+      - synced_at
+    GradesEnum:
+      enum:
+      - intern
+      - junior
+      - middle
+      - senior
+      type: string
+      description: |-
+        * `intern` - Intern
+        * `junior` - Junior
+        * `middle` - Middle
+        * `senior` - Senior
+    ItemView:
+      type: object
+      description: |-
+        Client-facing representation of an assessment question.
+
+        SECURITY INVARIANT: The 'key' field MUST NEVER be included in this serializer!
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          readOnly: true
+        seq:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          description: Item sequence number within the assessment
+        stem_md:
+          type: string
+          readOnly: true
+        code:
+          readOnly: true
+        options:
+          readOnly: true
+        input_type:
+          type: string
+          readOnly: true
+        time_limit_s:
+          type: integer
+          readOnly: true
+        deadline_at:
+          type: string
+          format: date-time
+          description: Item-level time limit deadline
+        served_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - deadline_at
+      - input_type
+      - item_id
+      - options
+      - seq
+      - served_at
+      - stem_md
+      - time_limit_s
+    KindEnum:
+      enum:
+      - initial
+      - fallback
+      - promotion
+      - screening
+      type: string
+      description: |-
+        * `initial` - Initial
+        * `fallback` - Fallback
+        * `promotion` - Promotion
+        * `screening` - Screening
+    Login:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        demo:
+          type: boolean
+        company_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - company_id
+      - demo
+      - email
+      - email_verified
+      - id
+      - role
+    MeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        demo:
+          type: boolean
+        company_id:
+          type: string
+          format: uuid
+          nullable: true
+        onboarding_step:
+          type: string
+      required:
+      - demo
+      - email
+      - email_verified
+      - id
+      - role
+    ModeEnum:
+      enum:
+      - full
+      - express
+      type: string
+      description: |-
+        * `full` - Full
+        * `express` - Express
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          allOf:
+          - $ref: '#/components/schemas/Company'
+          readOnly: true
+        position:
+          type: string
+          format: uuid
+          nullable: true
+        candidate_public_id:
+          type: string
+          writeOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_type:
+          $ref: '#/components/schemas/SalaryTypeEnum'
+        currency:
+          type: string
+          maxLength: 3
+        contact_channel:
+          $ref: '#/components/schemas/ContactChannelEnum'
+        contact_value:
+          type: string
+          maxLength: 255
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OfferStatusEnum'
+          readOnly: true
+        decline_reason:
+          oneOf:
+          - $ref: '#/components/schemas/DeclineReasonEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        decline_comment:
+          type: string
+        why_you:
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+          description: Incremented on every status change for optimistic locking
+        candidate_contacts:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Auto-expire after 14 days by default
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - candidate_contacts
+      - company
+      - contact_channel
+      - contact_value
+      - created_at
+      - description
+      - expires_at
+      - id
+      - salary_max
+      - salary_min
+      - salary_type
+      - status
+      - title
+      - updated_at
+      - version
+      - why_you
+    OfferAcceptRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+      required:
+      - version
+    OfferDeclineRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+        reason:
+          type: string
+          default: salary
+        comment:
+          type: string
+      required:
+      - version
+    OfferStatusEnum:
+      enum:
+      - sent
+      - viewed
+      - accepted
+      - declined
+      - expired
+      - withdrawn
+      - interview
+      - hired
+      - closed
+      type: string
+      description: |-
+        * `sent` - Sent
+        * `viewed` - Viewed
+        * `accepted` - Accepted
+        * `declined` - Declined
+        * `expired` - Expired
+        * `withdrawn` - Withdrawn
+        * `interview` - Interview
+        * `hired` - Hired
+        * `closed` - Closed
+    OfferViewRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+      required:
+      - version
+    OfferWithdrawRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+      required:
+      - version
+    PersonaRequest:
+      type: object
+      properties:
+        persona:
+          type: string
+          default: candidate_fsp
+    PoolItem:
+      type: object
+      properties:
+        talent:
+          $ref: '#/components/schemas/TalentShort'
+        score:
+          type: number
+          format: double
+        components:
+          type: object
+          additionalProperties: {}
+        reasons:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        shortlisted:
+          type: boolean
+      required:
+      - components
+      - reasons
+      - score
+      - shortlisted
+      - talent
+    Position:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 255
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        grades:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradesEnum'
+          description: Acceptable grades for this position
+        must_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          description: Required skills (weight=2 in matching)
+        nice_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          description: Nice-to-have skills (weight=1 in matching)
+        work_formats:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkFormatsEnum'
+        location:
+          type: string
+          maxLength: 255
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Minimum salary in RUB/month. Must be > 0.
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Maximum salary in RUB/month. Must be >= salary_min.
+        salary_type:
+          allOf:
+          - $ref: '#/components/schemas/SalaryTypeEnum'
+          description: |-
+            Gross or net — mandatory for salary transparency
+
+            * `gross` - Gross
+            * `net` - Net
+        team_context:
+          type: string
+        description:
+          type: string
+        allow_adjacent:
+          type: boolean
+          description: Allow candidates from adjacent grades
+        is_public:
+          type: boolean
+          description: True = published vacancy, False = private hiring need
+        status:
+          $ref: '#/components/schemas/PositionStatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - company
+      - created_at
+      - grades
+      - id
+      - salary_max
+      - salary_min
+      - salary_type
+      - specialization
+      - title
+    PositionPoolResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoolItem'
+        total:
+          type: integer
+        page:
+          type: integer
+      required:
+      - items
+      - page
+      - total
+    PositionStatusEnum:
+      enum:
+      - open
+      - closed
+      type: string
+      description: |-
+        * `open` - Open
+        * `closed` - Closed
+    Register:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          minLength: 6
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          default: candidate
+      required:
+      - email
+      - password
+    RegisterResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        email_verified:
+          type: boolean
+      required:
+      - email
+      - email_verified
+      - role
+      - user_id
+    ResumeParseResponse:
+      type: object
+      properties:
+        prefill: {}
+        unknown_terms:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+      required:
+      - prefill
+      - source
+      - unknown_terms
+    RoleEnum:
+      enum:
+      - candidate
+      - employer
+      - admin
+      type: string
+      description: |-
+        * `candidate` - Candidate
+        * `employer` - Employer
+        * `admin` - Admin
+    SalaryTypeEnum:
+      enum:
+      - gross
+      - net
+      type: string
+      description: |-
+        * `gross` - Gross
+        * `net` - Net
+    SpecializationEnum:
+      enum:
+      - backend
+      - frontend
+      - ml_data
+      type: string
+      description: |-
+        * `backend` - Backend
+        * `frontend` - Frontend
+        * `ml_data` - ML & Data
+    StartAssessmentRequest:
+      type: object
+      properties:
+        specialization:
+          type: string
+          default: backend
+        claimed_grade:
+          type: string
+          default: middle
+        mode:
+          type: string
+          default: full
+    Status61dEnum:
+      enum:
+      - in_progress
+      - finished
+      - abandoned
+      - expired
+      type: string
+      description: |-
+        * `in_progress` - In Progress
+        * `finished` - Finished
+        * `abandoned` - Abandoned
+        * `expired` - Expired
+    TalentDetailResponse:
+      type: object
+      properties:
+        public_id:
+          type: string
+        city:
+          type: string
+        work_formats:
+          type: array
+          items:
+            type: string
+        salary_min:
+          type: integer
+          nullable: true
+        salary_max:
+          type: integer
+          nullable: true
+        salary_type:
+          type: string
+        league:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        fsp:
+          type: object
+          additionalProperties: {}
+        skills:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        about:
+          type: string
+        experience_text:
+          type: string
+        contacts:
+          type: object
+          additionalProperties: {}
+          nullable: true
+      required:
+      - about
+      - city
+      - contacts
+      - experience_text
+      - fsp
+      - league
+      - public_id
+      - salary_max
+      - salary_min
+      - salary_type
+      - skills
+      - work_formats
+    TalentSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TalentShort'
+        total:
+          type: integer
+        page:
+          type: integer
+      required:
+      - items
+      - page
+      - total
+    TalentShort:
+      type: object
+      properties:
+        public_id:
+          type: string
+          maxLength: 10
+        city:
+          type: string
+          maxLength: 100
+        work_formats:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkFormatsEnum'
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        salary_type:
+          oneOf:
+          - $ref: '#/components/schemas/SalaryTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        league:
+          type: string
+          readOnly: true
+        fsp:
+          type: string
+          readOnly: true
+        skills:
+          type: string
+          readOnly: true
+        last_active_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - fsp
+      - league
+      - skills
+    TimeTravelRequest:
+      type: object
+      properties:
+        days:
+          type: integer
+          default: 30
+    TimeTravelResponse:
+      type: object
+      properties:
+        clock_offset_days:
+          type: integer
+      required:
+      - clock_offset_days
+    TrustLevelEnum:
+      enum:
+      - none
+      - domain
+      - verified
+      type: string
+      description: |-
+        * `none` - None
+        * `domain` - Domain verified
+        * `verified` - Verified
+    VerifyPublicIdResponse:
+      type: object
+      properties:
+        public_id:
+          type: string
+        valid:
+          type: boolean
+        specialization:
+          type: string
+        grade:
+          type: string
+        status:
+          type: string
+        rating:
+          type: integer
+      required:
+      - grade
+      - public_id
+      - rating
+      - specialization
+      - status
+      - valid
+    WorkFormatsEnum:
+      enum:
+      - office
+      - hybrid
+      - remote
+      type: string
+      description: |-
+        * `office` - Office
+        * `hybrid` - Hybrid
+        * `remote` - Remote
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
