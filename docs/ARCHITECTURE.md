@@ -1,5 +1,7 @@
 # FSP Draft: Architecture & Execution Plan
 
+> **Implementation status (2026-10-07):** The current checkout contains the Django 5.x + Django REST Framework backend MVP under `apps/`. The React/FastAPI/Valkey deployment described in the original target architecture is planned work, not shipped code. For implemented behavior, `README.md`, `docs/BACKEND.md`, `requirements.txt`, migrations, and tests are authoritative.
+
 > **Working title.** LCT 2026, FSP track: an IT hiring platform with reverse recruitment and verified achievement profiles.
 > **Inputs:** `TK.md` (spec) and `QA.md` (organizer clarifications). **Language:** product UI, deck and jury docs in Russian.
 
@@ -53,19 +55,19 @@
 4. **CPU-only and offline-capable.** Model weights are baked into the image; the system runs with no LLM keys at all.
 5. **Config-driven integrations.** FSP ID is an OIDC issuer URL plus client credentials.
 
-### 2.2 System view
+### 2.2 Target system view
 
 ```
 Browser ─ React SPA: Candidate · Employer · Jury Mode · Validation Lab
    │ HTTPS
 Caddy ─── auto-TLS, serves the SPA, proxies /api
    │
-API ───── FastAPI modular monolith (Swagger at /api/docs)
+API ───── Django + Django REST Framework modular monolith (Swagger at /api/docs)
    │      identity · profiles · assessment · matching · outreach
    │      vacancies · microtasks · fsp · lab
    ├── PostgreSQL 17 + pgvector   system of record, JSONB item params, vectors
-   ├── Valkey                     SSE pub/sub, rate limits, locks, job queue
-   ├── worker (same image, arq)   parsing, embeddings, LLM calls, FSP sync, cron
+   ├── Redis-compatible broker     Celery broker/result backend and future SSE fan-out
+   ├── worker (same image, Celery) parsing, embeddings, LLM calls, FSP sync, cron
    ├── LLM gateway                GigaChat → rule-based fallback, PII redacted first
    ├── fsp-id-mock                OIDC on Keycloak-style paths + FSP Registry API
    └── Mailpit                    SMTP sink for email verification (local)
@@ -85,14 +87,14 @@ API ───── FastAPI modular monolith (Swagger at /api/docs)
 | fsp | FSP links, results, ranks | registry adapter, sync, FSP boost |
 | lab | validation report, demo tools | report API, Jury Mode personas, time travel |
 
-### 2.4 Stack
+### 2.4 Target stack and current implementation
 
 | Layer | Choice | Why | License |
 |---|---|---|---|
-| Web | React 19 + TypeScript, Vite, Tailwind + shadcn/ui, TanStack Query, React Router, Recharts, Shiki | Fastest path to polished dashboards; typed client generated from OpenAPI (orval) | MIT |
-| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 + Alembic, Uvicorn, sse-starlette | OpenAPI for free (a mandatory deliverable); same language as the ML code | MIT / BSD |
+| Web | React 19 + TypeScript, Vite, Tailwind + shadcn/ui, TanStack Query, React Router, Recharts, Shiki | Planned frontend; no frontend source is present in this checkout | MIT |
+| API | Python 3.12, **Django 5.x + Django REST Framework**, drf-spectacular, Django ORM, WSGI | **Current implementation**: modular monolith with session-cookie auth, migrations, RFC 7807 errors and OpenAPI | BSD / MIT |
 | Data | PostgreSQL 17 + pgvector | One store for relational data, JSONB and vectors | PostgreSQL |
-| Queue / cache | Valkey + arq | SSE fan-out, rate limits, jobs; license-clean Redis fork | BSD-3 / MIT |
+| Queue / cache | Redis-compatible broker + Celery | **Current implementation**: FSP sync task queue and result backend; Valkey/arq remains a target option | BSD-3 / MIT |
 | Auth | Authlib (OIDC client), argon2-cffi, our own `fsp-id-mock` | Swap the mock for real Keycloak through env vars | BSD / MIT |
 | Psychometrics | numpy/scipy (in-house CAT/EAP, about 150 LOC), girth (calibration) | Small enough to understand and defend line by line | BSD / MIT |
 | NLP | pypdf + pdfplumber, rapidfuzz, sentence-transformers + `deepvk/USER-bge-m3` on CPU | Domestic RU/EN embedding model, ~0.4B params, no GPU | BSD / MIT / Apache-2.0 |
@@ -235,9 +237,9 @@ Our proposed registry contract:
 
 Column-level schema and invariants: `TASKS.md` §1.3.
 
-### 2.10 API surface
+### 2.10 API surface (current Django MVP)
 
-FastAPI serves Swagger at `/api/docs`. All paths below sit under `/api`; errors use RFC 9457 `problem+json`. Full request/response contracts are in `TASKS.md` §1.4.
+DRF serves Swagger at `/api/docs` and the generated schema at `/api/schema/`. All implemented paths sit under `/api`; errors use RFC 7807-compatible `problem+json`. Full request/response contracts are in `docs/openapi.json`.
 
 | Area | Endpoints |
 |---|---|
@@ -284,20 +286,17 @@ FastAPI serves Swagger at `/api/docs`. All paths below sit under `/api`; errors 
 
 Targets are in §5.3. Report every number, including the misses: being honest about limits wins Q&A.
 
-### 2.13 Deployment & repo
+### 2.13 Deployment & repo (current checkout)
 
-- `docker compose up` runs migrations and an idempotent seed (1,500 candidates, 12 companies, 40 positions, demo personas), aiming to be ready within 2 minutes. Services: `caddy` (with the built SPA), `api`, `worker`, `db`, `valkey`, `fsp-id-mock`, `mailpit`, plus an optional `keycloak` profile.
-- Footprint is about 2.5 GB RAM with no GPU (the testbed has 32–64 GB and ~8 vCPU). Healthchecks, `restart: unless-stopped`, and a nightly DB dump.
-- Public demo on a Russian VPS (4 vCPU / 8 GB is plenty) with Caddy auto-HTTPS. In DEMO_MODE the verification link is shown in the app, since QA allows waiving email verification in demos. Fallbacks: local compose and a video.
+- The current checkout is started with `python manage.py migrate`, `python manage.py seed --mode=mini`, and `python manage.py runserver`; PostgreSQL is required for the configured runtime database.
+- Celery worker/beat commands are documented in `docs/BACKEND.md`. Docker Compose, Caddy, the SPA, Valkey, Mailpit, and a production FSP ID mock are target deployment work, not present runtime components.
 
 ```
-apps/web              React SPA (candidate, employer, jury, lab)
-apps/api              one uv project: app/ (FastAPI modules) · families/ (generators + oracles)
-                      · content/ (taxonomy, blueprints) · validation/ (simulators, benchmark) · seed_data/
-services/fsp-id-mock  OIDC + registry mock
-deploy/               docker-compose.yml, Caddyfile, keycloak/realm-fsp.json (P2)
-docs/                 01-architecture … 08-runbook, openapi.json, sbom.json
-Makefile, .env.example  dev · up · seed · test · verify · validate · openapi · sbom
+apps/                 Django apps: identity, profiles, assessment, matching, outreach, fsp_sync, core
+config/               Django settings, URLs and Celery configuration
+tests/                pytest-django invariant and access-control tests
+docs/                 architecture, QA, task plan, backend notes and OpenAPI schema
+manage.py             migrate · seed · runserver
 ```
 
 ---
