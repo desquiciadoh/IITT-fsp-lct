@@ -45,3 +45,7 @@ htmlcov/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Node / frontend
+node_modules/
+.vite/

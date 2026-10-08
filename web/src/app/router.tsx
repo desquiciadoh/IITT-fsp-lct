@@ -1,0 +1,95 @@
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { HomePage } from '@/pages/home'
+import { DevUiPage } from '@/pages/dev-ui'
+import { DesignVariantsPage } from '@/pages/design-variants'
+import { LoginPage } from '@/features/auth/login-page'
+import { RegisterPage } from '@/features/auth/register-page'
+import { VerifyPage } from '@/features/auth/verify-page'
+import { JuryPage } from '@/features/jury/jury-page'
+import { OnboardingPage } from '@/features/onboarding/onboarding-page'
+import { ResultPage } from '@/features/result/result-page'
+import { DashboardPage } from '@/features/candidate/dashboard-page'
+import { OffersListPage } from '@/features/offers/offers-list-page'
+import { OfferDetailPage } from '@/features/offers/offer-detail-page'
+import { SettingsPage } from '@/features/settings/settings-page'
+import { AppLayout } from '@/app/layouts/app-layout'
+import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
+import { IndexRedirect } from '@/app/index-redirect'
+import { Placeholder } from '@/app/placeholder'
+
+const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
+  <Placeholder title={title} owner={owner} task={task} />
+)
+
+export const router = createBrowserRouter([
+  { path: '/', element: <IndexRedirect /> },
+  { path: '/home', element: <HomePage /> },
+  { path: '/login', element: <LoginPage /> },
+  { path: '/register', element: <RegisterPage /> },
+  { path: '/verify', element: <VerifyPage /> },
+  { path: '/dev/ui', element: <DevUiPage /> },
+  { path: '/dev/design', element: <DesignVariantsPage /> },
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: '/jury', element: <JuryPage /> },
+          {
+            element: <RequireRole role="candidate" />,
+            children: [
+              {
+                path: '/candidate/onboarding/:step',
+                element: <OnboardingPage />,
+              },
+              {
+                element: <OnboardingGate />,
+                children: [
+                  { path: '/candidate', element: <DashboardPage /> },
+                  {
+                    path: '/candidate/qualification/start',
+                    element: ph('Вход в тест', 'FE2', 'FE-12'),
+                  },
+                  {
+                    path: '/candidate/qualification/:id',
+                    element: ph('Тест-раннер', 'FE2', 'FE-12'),
+                  },
+                  {
+                    path: '/candidate/qualification/:id/result',
+                    element: <ResultPage />,
+                  },
+                  { path: '/candidate/offers', element: <OffersListPage /> },
+                  {
+                    path: '/candidate/offers/:id',
+                    element: <OfferDetailPage />,
+                  },
+                  { path: '/candidate/settings', element: <SettingsPage /> },
+                ],
+              },
+            ],
+          },
+          {
+            element: <RequireRole role="employer" />,
+            children: [
+              { path: '/employer', element: ph('Кабинет работодателя', 'FE2', 'FE-13') },
+              { path: '/employer/company', element: ph('Профиль компании', 'FE2', 'FE-13') },
+              {
+                path: '/employer/positions/new',
+                element: ph('Новая вакансия', 'FE2', 'FE-14'),
+              },
+              {
+                path: '/employer/positions/:id',
+                element: ph('Вакансия (детально)', 'FE2', 'FE-14'),
+              },
+              { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
+              { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-17') },
+              { path: '/lab', element: ph('Лаборатория', 'FE2', 'FE-18') },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+])

@@ -1,0 +1,82 @@
+/*
+ * FSP Draft design tokens — direction "Arena (dark)".
+ * Placeholder palette until PD-02 (brand book) lands; swap the raw
+ * values below and every component follows automatically.
+ */
+
+:root {
+  /* surfaces */
+  --fsp-bg: #0b0f14;
+  --fsp-panel: #121821;
+  --fsp-panel-hover: #182031;
+  --fsp-line: #1f2836;
+
+  /* text */
+  --fsp-fg: #e8eef5;
+  --fsp-muted: #8b98a8;
+
+  /* brand accent (FSP neon) */
+  --fsp-accent: #b8ff3c;
+  --fsp-accent-fg: #0b0f14;
+
+  /* semantic states */
+  --fsp-plus: #b8ff3c;
+  --fsp-minus: #ff6b6b;
+  --fsp-info: #58c7ff;
+  --fsp-warn: #ffc857;
+
+  /* offer statuses */
+  --fsp-status-sent: #58c7ff;
+  --fsp-status-viewed: #ffc857;
+  --fsp-status-accepted: #b8ff3c;
+  --fsp-status-declined: #ff6b6b;
+  --fsp-status-withdrawn: #8b98a8;
+  --fsp-status-expired: #8b98a8;
+
+  /* league statuses */
+  --fsp-league-pending: #8b98a8;
+  --fsp-league-confirmed: #b8ff3c;
+  --fsp-league-unconfirmed: #ffc857;
+
+  /* type */
+  --fsp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fsp-font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+
+  /* radii */
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-background: var(--fsp-bg);
+  --color-foreground: var(--fsp-fg);
+  --color-panel: var(--fsp-panel);
+  --color-card: var(--fsp-panel);
+  --color-card-foreground: var(--fsp-fg);
+  --color-popover: var(--fsp-panel);
+  --color-popover-foreground: var(--fsp-fg);
+  --color-primary: var(--fsp-accent);
+  --color-primary-foreground: var(--fsp-accent-fg);
+  --color-secondary: var(--fsp-panel-hover);
+  --color-secondary-foreground: var(--fsp-fg);
+  --color-muted: var(--fsp-panel-hover);
+  --color-muted-foreground: var(--fsp-muted);
+  --color-accent: var(--fsp-panel-hover);
+  --color-accent-foreground: var(--fsp-fg);
+  --color-destructive: var(--fsp-minus);
+  --color-destructive-foreground: var(--fsp-accent-fg);
+  --color-border: var(--fsp-line);
+  --color-input: var(--fsp-line);
+  --color-ring: var(--fsp-accent);
+  --color-plus: var(--fsp-plus);
+  --color-minus: var(--fsp-minus);
+  --color-info: var(--fsp-info);
+  --color-warn: var(--fsp-warn);
+
+  --font-sans: var(--fsp-font-sans);
+  --font-mono: var(--fsp-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
