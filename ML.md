@@ -1,0 +1,402 @@
+# ML.md: Machine Learning & Psychometrics Tasks (owner: ML engineer)
+
+> **Audience:** the ML engineer and their AI coding agent.
+> **Scope:** everything that decides *numbers*: parametric item families and oracles, the CAT/IRT engine and grade policy, the matching scorer, Profile Strength and FSP boost, league percentiles, embeddings, the synthetic world, and the validation suite (`make validate` → `report.json`).
+> **Date:** 2026-10-08. Related files: [BE.md](BE.md) (backend wiring), [AI.md](AI.md) (LLM and taxonomy), [FE1.md](FE1.md), [FE2.md](FE2.md).
+
+---
+
+## 0. Ownership Rules
+
+| You own | You do **not** own |
+|---|---|
+| `apps/assessment/families/`: item families, registry, HMAC rng, `verify` harness | Django models, migrations, views, serializers, URLs, Celery tasks (BE) |
+| `apps/assessment/engine/`: CAT, 3PL EAP, grade policy, topic evidence, blueprints | Persisting `CatState`, serving items, deadlines, cooldowns, endpoints (BE) |
+| `apps/matching/engine/`: features, weights and presets, reasons, gaps, strength, FSP boost, percentiles, gross↔net, relaxations (P1), acceptance likelihood (P1) | SQL prefilters, ORM loading into DTOs, pagination, facets (BE) |
+| `content/specializations.yaml`, `content/grades.yaml`, `content/blueprints.yaml` | `content/skills.yaml` and `normalize_skill()` (AI) |
+| `validation/`: synthetic world, assessment simulation, matching benchmark, report | LLM parsing, the "why" sentence (AI) |
+| `seed_data/full/` content and schema | Loading it into the DB (`seed --mode=full`, BE) |
+| Docs: `docs/BACKEND.md` §4 and §5; methodology sections (docs 02–04) | UI (FE1, FE2) |
+
+**Hard invariants (from TK and ARCHITECTURE; never break them):**
+1. **An LLM never decides a grade.** Grades come only from IRT scoring over oracle-computed keys.
+2. **The answer key never leaves the server.** `Instance.view()` must not contain the key or anything derived from it.
+3. **FSP achievements affect Strength and ranking only, never the grade.**
+4. **Everything is deterministic and reproducible** from a seed. The same inputs give the same outputs, including tie-breaks.
+5. **Engine packages are pure.** They must not import Django, the ORM or `core.enums`; use string constants. One unit test asserts your constants equal the values in `core.enums`. Validation scripts must import the exact production engine code.
+
+---
+
+## 1. Current State (audit of merge `3cf4044`)
+
+The backend MVP has placeholder ML logic. All of it is yours to replace.
+
+**ML-F1 🔴 Answer keys are constant, so the "leak-proof" claim is false** **[verified on 200 seeds]**.
+- `apps/assessment/engine.py:68-74` (`be.sql.group_having.v1`): department counts are always `threshold+1, threshold, threshold−1`, so the correct answer is **always "2 отдела(ов)"**. Salaries and department names are decoration.
+- `fe.js.event_loop.v1` (`:163-167`): the answer is always the pattern `1, <v>, 3, 2`.
+- `be.algo.complexity.v1`: 4 variants, 2 possible answers.
+- `fingerprint` includes the seed, so it can never collide and collision statistics are meaningless. It must hash the *drawn parameters* only.
+- `oracle()` is declared but never implemented, and there is no verify harness.
+
+**ML-F2 🔴 Grading is not IRT.**
+- `score_assessment()` (`engine.py:207-243`) computes `theta = avg_b + (pct − 0.5)·2` and `se = max(0.2, 1/√n)`. The `a` and `c` parameters are ignored.
+- It always returns `decision=CONFIRMED` **[verified]**; the view ignores that value and recomputes the decision itself.
+- Cut scores are `−1.0 / −0.2 / 0.6 / 1.5` (`:199-204`), while ARCHITECTURE §2.5 says `−1 / 0 / +1` separate Intern | Junior | Middle | Senior. Decide which is right, put it in `content/grades.yaml`, and document it.
+
+**ML-F3 🔴 There is no CAT.**
+- Each session gets the first 3 registry families (`assessment/views.py:122-131`), with no adaptivity and no stop rule.
+- Frontend candidates receive backend items. `ml_data` has **no** families at all.
+- The seed is `sha256("secret:session:family:seq")`, but the spec says HMAC (you provide `make_rng`).
+
+**ML-F4 🟠 The matching scorer is far from spec** (`apps/matching/scoring.py`).
+- `nice_skills` are ignored, and the evidence source (test / FSP / declared) doesn't change the weight.
+- Skills are matched by lower-cased display **name**, not by skill id or aliases.
+- The "strength" component is a linear function of `rating`, not Profile Strength.
+- FSP gets `3 × count + 5 if rank`. There's no gross/net normalization, no semantic or freshness feature, and `Position.weights` and presets are ignored.
+- Some components emit no reason chip: no league gives 5 points silently; unknown salary expectations give a silent 10/10.
+- `components` is a dict without weight or contribution, and there are no `gaps`.
+- It receives ORM objects and lazily queries them (an N+1 that BE will remove once you take DTOs).
+- Weights are 35/25/15/15/10 rather than the spec's 35/20/15/15/10/5.
+
+**ML-F5 🟠 Strength, FSP boost and percentiles.**
+- At finalize, `strength = 50 + 25θ` (`assessment/views.py:282,292`).
+- FSP sync adds `+5` per result **cumulatively** on every call (`fsp_sync/views.py:103-108`). BE is fixing idempotency and storage (BE.md B10); you own the formula.
+- `percentile` is never computed anywhere.
+- The seed hardcodes inconsistent values (Anna: rating 1250, strength 95), so the synthetic world must produce values consistent with your formulas.
+
+**ML-F6 🟡 Not started:** embeddings and pgvector, the synthetic world, the validation suite and report, girth calibration, and the leak monitor.
+
+---
+
+## 2. Target Layout
+
+```text
+apps/assessment/families/          # pure, no Django
+  base.py          FamilyMeta, Instance, ItemFamily protocol
+  registry.py      all_families(), active_metas(spec), make_rng()
+  verify.py        python -m assessment.families.verify  (1,000 instances per family)
+  shared/ backend/ frontend/ ml_data/   one module per family (+ optional YAML meta)
+apps/assessment/engine/            # pure, no Django
+  irt.py           p_3pl, item information, EAP (61-point quadrature, N(0,1) prior)
+  cat.py           CatEngine, CatState (JSON round-trip), selection, stopping
+  policy.py        grade decision, promotion, fallback, cut scores loaded from content/grades.yaml
+  topics.py        topic evidence (strong / moderate / limited)
+  blueprint.py     blueprint_for(spec, skills) for JD screening (used by AI's parse_jd)
+apps/matching/engine/              # pure, no Django
+  types.py         CandidateCtx, NeedCtx, Weights, Component, Reason, Scored, ...
+  features.py      skill_fit, grade_fit, salary_fit, semantic_fit, freshness
+  score.py         passes_hard_filters, score_pool, presets
+  strength.py      fsp_boost, strength, percentiles
+  salary.py        to_gross / to_net (NDFL scale)
+  relax.py         relaxations, acceptance_likelihood   (P1)
+content/specializations.yaml  grades.yaml  blueprints.yaml
+validation/
+  synth.py  sim_assessment.py  bench_matching.py  report.py  run.py   # python -m validation.run
+  data/truth.jsonl (hidden truth; never loaded into the app)
+  out/report.json  out/report.fixture.json  out/charts/
+seed_data/full/*.jsonl + seed_data/README.md (schema)
+tests/ml/          pure unit tests (fixed seeds, no DB)
+```
+
+**Imports:** apps are importable as top-level packages today (`config/settings.py` puts `apps/` on `sys.path`), so `from assessment.engine.cat import ...` works. BE may move to `apps.<name>` imports (BE.md A9). Keep imports inside your packages **relative** so a move is cheap.
+
+**Tests without a database:** pytest-django is configured, but tests not marked `django_db` never touch Postgres. Run `pytest tests/ml -q`.
+
+**Dependencies:** add `numpy` (and `scipy` only if needed) in your first PR. Add `girth` (P1, calibration) and `sentence-transformers` (P1, CPU torch) when you start those tasks. BE reviews `requirements.txt` changes.
+
+---
+
+## 3. The Contract (you publish it; BE wires it)
+
+**Publish this first, as stubs that return final shapes.** BE (and through BE, the FE API shape) depend on it. Changing a signature later means one PR touching both sides. The copies of these shapes in BE.md §2.1 summarize this section; this section is authoritative.
+
+```python
+# ── apps/assessment/families/base.py ──
+from __future__ import annotations
+import random
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol
+
+Spec = Literal["backend", "frontend", "ml_data"]
+Grade = Literal["intern", "junior", "middle", "senior"]          # ordered
+ItemFormat = Literal["code_output", "find_bug", "sql_result", "complexity",
+                     "numeric_scenario", "concept_mcq"]
+InputKind = Literal["choice", "number", "text"]
+
+@dataclass(frozen=True)
+class FamilyMeta:
+    id: str                    # "be.sql.group_having.v2"
+    version: int
+    specs: tuple[Spec, ...]    # shared families list every spec
+    topic: str                 # must exist in content/specializations.yaml
+    skills: tuple[str, ...]    # skill ids from content/skills.yaml (AI-owned); CI checks references
+    format: ItemFormat
+    a: float                   # discrimination
+    b: float                   # difficulty (expert prior → recalibrated)
+    c: float                   # 1/len(options) for choice, 0 for typed answers
+    time_limit_s: int
+
+@dataclass
+class Instance:
+    stem_md: str
+    input: InputKind
+    key: Any                                  # SERVER-SIDE ONLY → AssessmentItem.key
+    fingerprint: str                          # sha256 of the drawn PARAMETERS (not the seed)
+    code: dict[str, str] | None = None        # {"lang": "python"|"javascript"|"sql", "text": ...}
+    options: list[dict[str, str]] | None = None   # [{"id": opaque, "text_md": ...}], shuffled, distinct
+
+    def view(self) -> dict: ...               # stem_md, input, code, options. NEVER key/fingerprint
+
+class ItemFamily(Protocol):
+    meta: FamilyMeta
+    def generate(self, rng: random.Random) -> Instance: ...
+    def is_correct(self, key: Any, answer: dict) -> bool: ...   # answer: {"option_id": str} | {"value": str}
+    def oracle(self, inst: Instance) -> Any: ...                # independent recomputation; verify harness only
+
+# ── apps/assessment/families/registry.py ──
+def all_families() -> dict[str, ItemFamily]: ...
+def active_metas(spec: Spec) -> list[FamilyMeta]: ...           # BE syncs these into ItemFamily rows
+def make_rng(secret: bytes, session_id: str, purpose: str, n: int) -> random.Random:
+    """HMAC-SHA256(secret, f"{session_id}|{purpose}|{n}") → int seed.
+    purpose = family_id for item generation, "select" for randomesque selection."""
+
+# ── apps/assessment/engine/cat.py ──
+Mode = Literal["full", "express"]
+Kind = Literal["initial", "fallback", "promotion", "screening"]
+
+@dataclass
+class CatState:
+    spec: Spec; claimed: Grade; mode: Mode; kind: Kind
+    administered: list[dict]   # [{family_id, seq, a, b, c, topic, correct: bool|None, late: bool}]
+    theta: float; se: float
+    min_items: int; max_items: int
+    def to_json(self) -> dict: ...              # BE stores it in AssessmentSession.state (JSONB)
+    @classmethod
+    def from_json(cls, d: dict) -> "CatState": ...
+
+@dataclass(frozen=True)
+class CatResult:
+    theta: float; se: float
+    rating: int                     # round(1000 + 200·θ)
+    rating_ci: int                  # round(1.96 · 200 · SE)
+    result_grade: Grade
+    decision: Literal["confirmed", "unconfirmed"]
+    promotion_unlocked: bool        # P(θ ≥ next cut) ≥ 0.9
+    fallback_grade: Grade | None    # highest lower grade with P(θ ≥ cut) ≥ 0.8, else None
+    topics: list[tuple[str, Literal["strong", "moderate", "limited"]]]
+    evidence: list[tuple[int, Grade, bool]]     # (seq, item level, correct)
+
+class CatEngine(Protocol):
+    def start(self, spec: Spec, claimed: Grade, mode: Mode, kind: Kind,
+              pool: list[FamilyMeta], seen: set[str]) -> CatState: ...
+    def next_family(self, state: CatState, pool: list[FamilyMeta],
+                    rng: random.Random) -> FamilyMeta | None: ...      # None → stop
+    def record(self, state: CatState, family_id: str, correct: bool,
+               late: bool = False) -> CatState: ...                     # late ⇒ scored as incorrect
+    def result(self, state: CatState) -> CatResult: ...
+
+def item_level(meta: FamilyMeta) -> Grade: ...       # difficulty band of b → ItemView.level
+
+# ── apps/assessment/engine/blueprint.py ──
+def blueprint_for(spec: Spec, skill_ids: list[str]) -> list[tuple[str, float]]: ...   # (topic, weight), Σ=1
+
+# ── apps/matching/engine/types.py ──
+Source = Literal["test", "fsp", "microtask", "declared"]
+
+@dataclass(frozen=True)
+class SkillEvidence: skill_id: str; source: Source; level: float          # level 0..1
+
+@dataclass(frozen=True)
+class FspResultCtx:
+    tier: Literal["winner", "prize_winner", "finalist", "participant"]
+    date: "datetime.date"; discipline: str; participants_total: int; team_size: int | None
+
+@dataclass(frozen=True)
+class CandidateCtx:
+    public_id: str
+    specialization: Spec | None
+    league_grade: Grade | None
+    league_status: Literal["pending", "confirmed", "unconfirmed"] | None
+    theta: float | None; se: float | None; rating: int | None; percentile: float | None
+    strength: float | None                      # precomputed by strength(), stored by BE
+    skills: tuple[SkillEvidence, ...]
+    topic_levels: dict[str, str]                # from CatResult.topics
+    fsp_rank: Literal["cat3", "cat2", "cat1", "kms", "ms"] | None
+    fsp_results: tuple[FspResultCtx, ...]
+    salary_min: int | None; salary_max: int | None; salary_type: Literal["gross", "net"] | None
+    work_formats: tuple[str, ...]; city: str; timezone: str
+    last_active_at: "datetime.datetime | None"
+    embedding: tuple[float, ...] | None         # P1
+
+@dataclass(frozen=True)
+class NeedCtx:
+    position_id: str; specialization: Spec
+    grades: tuple[Grade, ...]; allow_adjacent: bool
+    must_skills: tuple[str, ...]; nice_skills: tuple[str, ...]   # skill ids (normalized at save time)
+    work_formats: tuple[str, ...]; location: str
+    salary_min: int; salary_max: int; salary_type: Literal["gross", "net"]
+    embedding: tuple[float, ...] | None
+
+@dataclass(frozen=True)
+class Weights:
+    skill: float = 35; strength: float = 20; grade: float = 15
+    salary: float = 15; semantic: float = 10; freshness: float = 5
+
+@dataclass(frozen=True)
+class Component:
+    key: Literal["skill", "strength", "grade", "salary", "semantic", "freshness"]
+    value: float          # 0..1
+    weight: float
+    contribution: float   # value · weight; Σ contribution == Scored.score
+
+@dataclass(frozen=True)
+class Reason:
+    kind: Literal["plus", "minus", "info"]
+    text: str             # Russian, user-facing (e.g. "SQL подтверждён тестом")
+    source: Source | None
+
+@dataclass(frozen=True)
+class Scored:
+    public_id: str; score: float                 # 0..100
+    components: tuple[Component, ...]; reasons: tuple[Reason, ...]; gaps: tuple[str, ...]
+
+# ── apps/matching/engine/score.py ──
+def passes_hard_filters(need: NeedCtx, c: CandidateCtx) -> bool: ...   # reference; BE mirrors indexed parts in SQL
+def preset(name: Literal["balanced", "skills", "budget"]) -> Weights: ...
+def score_pool(need: NeedCtx, pool: "Sequence[CandidateCtx]", weights: Weights,
+               now: "datetime.datetime") -> list[Scored]: ...         # sorted desc; tie-break by public_id
+
+# ── apps/matching/engine/strength.py ──
+@dataclass(frozen=True)
+class StrengthBreakdown: base: float; fsp_boost: float; total: float; percentile: float
+
+def fsp_boost(rank: str | None, results: "Sequence[FspResultCtx]", now: "datetime.datetime") -> float: ...  # 0..15, pure
+def percentiles(thetas: "Sequence[float]") -> list[float]: ...           # same order as input, 0..100
+def strength(c: CandidateCtx, league_thetas: "Sequence[float]", now: "datetime.datetime") -> StrengthBreakdown: ...
+
+# ── apps/matching/engine/salary.py ──
+def to_gross(amount: int, salary_type: Literal["gross", "net"]) -> int: ...
+def to_net(amount: int, salary_type: Literal["gross", "net"]) -> int: ...
+
+# ── apps/matching/engine/relax.py (P1) ──
+@dataclass(frozen=True)
+class Relaxation: change: str; delta: int     # "убрать Kubernetes из обязательных" → +23 candidates
+def relaxations(need: NeedCtx, pool: "Sequence[CandidateCtx]", weights: Weights) -> list[Relaxation]: ...
+def acceptance_likelihood(need: NeedCtx, offer_salary_max: int, c: CandidateCtx) -> Literal["low", "medium", "high"]: ...
+```
+
+**How BE uses it:**
+- **Start:** BE calls `start()`, then `next_family()`, then `generate(make_rng(...))`. It stores `view()` and `key`, and serves the view.
+- **Answer:** BE calls `is_correct()`, then `record()`, then `next_family()`. When that returns `None`, BE calls `result()` and persists it.
+- **League update:** BE calls `strength()` and `percentiles()` for the league and emits `league.updated`.
+- **Pool:** BE runs the SQL prefilter, loads `CandidateCtx` in one batch, calls `score_pool()`, and paginates.
+
+---
+
+## 4. Task Checklist
+
+IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHITECTURE §5.3.
+
+### P0: in this order
+
+- [ ] **ML-0 · Publish the contract with stubs** (F-07, MK3/MK4).
+  - Create the packages from §2 with the §3 types.
+  - `StubCatEngine`: serves 8 items, θ = (correct − 4)/2, decision against the claimed cut.
+  - Stub `score_pool`: move the current `scoring.py` formula onto the DTOs, return the final shapes, and add a chip for every component.
+  - Stub `fsp_boost`: `min(15, 5·n)`. `percentiles` can be real immediately.
+  - *Done:* BE can replace `engine.py`/`scoring.py` calls with no API shape change, and `tests/ml` is green.
+- [ ] **ML-1 · Fix the 3 live families and build the harness** (AI-02; fixes ML-F1).
+  - Make every key depend on the drawn parameters.
+    - **SQL:** randomize the count of matching departments (0..N) and the table data, and compute the answer with an in-memory `sqlite3` oracle.
+    - **JS event loop:** randomize the sequence of `log`/`setTimeout`/`Promise.then`/`queueMicrotask`, and compute order with a small simulator; CI runs the real Node oracle.
+    - **Complexity:** more loop shapes.
+  - Fingerprint the parameters, not the seed.
+  - `python -m assessment.families.verify --n 1000` checks: the oracle agrees with the key, exactly one option is correct, options are distinct, rendering works, the collision rate is ≤ 0.1%, and **answer-text entropy > 1 bit** (no constant keys).
+  - *Done:* the 3 families pass; a deliberately broken family fails.
+- [ ] **ML-2 · Content files.**
+  - `content/specializations.yaml`: topics per spec.
+  - `content/grades.yaml`: id, Russian descriptor, θ cut, rating cut. Resolve the cut-score mismatch (ML-F2).
+  - `content/blueprints.yaml`: topic quotas per spec.
+  - BE serves these via `GET /api/taxonomy`, and FE shows the grade descriptors.
+- [ ] **ML-3 · CAT/IRT engine** (AI-03; fixes ML-F2, ML-F3).
+  - Fixed-c 3PL with EAP (61-point quadrature, N(0,1) prior) and Fisher information.
+  - **First item** targets the claimed grade's cut. Scoring always uses the neutral prior, so claiming high never inflates θ.
+  - **Selection:** max information under blueprint quotas, randomesque top-5 using `rng`, preferring unseen families.
+  - **Stopping:** at ≥10 items when SE ≤ 0.30 or the 95% CI clears the cut; hard cap 20. Express mode stops at 8 items.
+  - **Policy:** confirmed if θ ≥ cut(claimed); promotion if P ≥ 0.9; fallback grade if P ≥ 0.8; topic evidence; rating = 1000 + 200θ.
+  - *Done:* tests cover all-correct, all-wrong, alternating and seed reproducibility; `CatState` round-trips through JSON; it replaces the stub with no API change.
+- [ ] **ML-4 · Matching scorer & strength** (AI-05; fixes ML-F4, ML-F5).
+  - **Hard-filter reference:** spec, grades (+adjacent), formats.
+  - **Features:**
+    - SkillFit = Σ w·evidence / Σ w, with must w=2 and nice w=1. Evidence: test 1.0 (scaled by topic level), FSP or micro-task 0.8, declared 0.4, related skill 0.5 × evidence.
+    - GradeFit: exact and confirmed 1.0, exact and unconfirmed 0.6, adjacent 0.5.
+    - SalaryFit: overlap of the ranges after gross↔net normalization with the NDFL scale (verify the current 2025+ progressive brackets).
+    - SemanticFit: 0.5 while embeddings are off (MK8).
+    - Freshness.
+  - **Presets:** balanced, skills, budget.
+  - **Explanations:** every component yields a chip; `gaps` lists missing must-haves; Russian texts.
+  - **Strength:** 0.85·Base + FSP Boost, where Base = 0.75·θ-percentile + 0.15·activity + 0.10·freshness. FSP Boost = 12·(1 − e^(−R/2)) + rank bonus (cat1 +1, KMS +2, MS +3), with placement weights 1.0/0.7/0.4/0.15 and participation capped at 0.6.
+  - **Fairness:** unconfirmed candidates are ranked ×0.75, and no FSP means a boost of 0.
+  - *Done:* golden tests on hand-ranked fixtures pass; `fsp_boost` is idempotent; Σ contributions equals the score.
+- [ ] **ML-5 · Report schema and fixture early** (AI-10 part 1, MK9).
+  - `validation/out/report.fixture.json` with `"synthetic_fixture": true`, exactly matching `ValidationReport` in `TASKS.md` §1.4.
+  - *Done:* BE serves it at `GET /api/lab/report`, and FE2 renders the Lab with a red FIXTURE banner.
+- [ ] **ML-6 · Family content to M1** (AI-04).
+  - At least 15 families per spec (shared algorithm families count for every spec), mixing all 6 formats, with author priors for `b` (bookmark standard-setting, PD-07).
+  - **Use the AI engineer's LLM-drafted families as input** (AI.md, AI-DRAFT); you review them, and the harness gates them.
+  - *Done:* `verify` is green; a topic × grade-band coverage table is in the docs.
+- [ ] **ML-7 · Synthetic world** (AI-09).
+  - Latent skills and θ per candidate.
+  - Observables:
+    - declared skills with inflation and omissions;
+    - CAT results simulated through the real engine;
+    - FSP history for ~35% (correlated with θ), in the ARCHITECTURE §2.8 registry contract format;
+    - salaries by grade and city; formats.
+  - 12 companies, 60 positions, CV texts, and the hero personas (Anna, Alex, Ivan…) injected.
+  - Output to `seed_data/full/*.jsonl` with the schema in `seed_data/README.md`. The hidden truth goes to `validation/data/truth.jsonl`.
+  - *Done:* deterministic per seed; BE's `seed --mode=full` loads it in < 60 s; BE's `fsp-id-mock` serves the FSP part.
+- [ ] **ML-8 · Validation suite** (AI-10 part 2).
+  - `sim_assessment.py` (10k simulees): exact and adjacent accuracy, QWK, retest same-grade and r, TIF, median length, maximum family exposure, collision rate, leak attack (10/30/50% leaked, static bank vs parametric), and girth recovery.
+  - `bench_matching.py`: a relevance oracle (0–3) from the hidden truth; 5 systems (keyword, BM25, embeddings-only, ours without verified evidence, ours); nDCG@10, P@10, R@50, MRR, non-FSP parity, latency.
+  - Charts; `python -m validation.run` in under 10 min.
+  - *Done:* a real `report.json` with `git_sha` is committed at M2. **Report misses honestly.**
+
+### P1
+
+- [ ] **ML-9 · Embeddings** (AI-11).
+  - Use `deepvk/USER-bge-m3` on CPU, baked into the image.
+  - Profiles and positions are embedded on seed and update; BE provides the pgvector field, the HNSW index and the trigger points.
+  - SemanticFit goes live with `EMBEDDINGS=local`.
+  - Pool p95 stays under 300 ms.
+- [ ] **ML-10 · Counterfactual relaxations and acceptance likelihood** (AI-12, non-LLM part). Top 3 relaxations by delta; low/medium/high likelihood from the salary ratio, format fit, status and responsiveness.
+- [ ] **ML-11 · Leak and drift monitor + calibration** (AI-13). Observed vs expected correct rate per θ band, flags, retiring families with a < 0.6, and a girth recalibration job. BE schedules it in Celery beat and exposes `GET /lab/families`.
+- [ ] **ML-12 · Test Twins and screening blueprints** (AI-14). Turn a position into a blueprint and generate two instances of the same blueprint; FE2 renders them side by side.
+- [ ] **ML-13 · Content to final** (AI-15). At least 40 families per spec, a promotion blueprint, and retirement of weak families.
+- [ ] **ML-14 · Pilot and annotation analysis** (AI-16). Known grade vs result, retest, κ on 300 pairs, oracle-vs-human Spearman, all into the report.
+
+---
+
+## 5. Interfaces With Other Streams
+
+| With | You give | You need |
+|---|---|---|
+| **BE** | The §3 contract, a stub first; `active_metas()` for `sync_families`; content YAMLs; `seed_data/full/`; report files | `ItemFamily` sync, `CatState` persistence, deadline enforcement, the `CandidateCtx` batch loader, `recompute_league()` trigger points, pgvector (P1), Celery beat for the drift monitor (P1) |
+| **AI** | `blueprint_for()` for JD parsing; review of LLM-drafted families | `content/skills.yaml` ids (your `FamilyMeta.skills` reference them); drafted family candidates |
+| **FE2** | `report.json` in the `ValidationReport` shape; `ItemView.level` / `max_items` semantics; `components`/`reasons`/`gaps` semantics | — |
+| **FE1** | `CatResult` field semantics for the result screen (rating ± CI, topics, evidence, fallback, promotion) | — |
+
+---
+
+## 6. Docs You Own
+
+- `docs/BACKEND.md` §4.1–§4.3 (item families, IRT, grade immutability) and §5 (scoring and ReasonChips). These sections currently describe 3PL EAP and nice-skill weights that don't exist; rewrite them to match the shipped engine and formulas.
+- The methodology sections (docs 02–04: assessment, matching, validation), including the topic × grade coverage table and the standard-setting notes.
+- An entry for `USER-bge-m3` in the model usage register (the AI engineer maintains the register).
+- `seed_data/README.md` (schema) and `validation/README.md` (how to reproduce every number).
+
+## 7. Working Agreements
+
+- Unit tests use fixed seeds and run with **no DB** (`pytest tests/ml`). Every formula has a golden test.
+- No LLM calls anywhere on the grading or scoring path.
+- Small PRs (under ~400 lines), titled with the task ID (`ML-3 CAT engine`).
+- If you need a model or endpoint change, write it into BE.md §2 as a request rather than editing Django code.
