@@ -4,6 +4,8 @@
 > **You start today.** Your first deliverable is the **web scaffold**. Frontend dev 2 ([FE2.md](FE2.md)) builds on it, so merge it as early as possible, ideally by the end of today.
 > **Scope:** project scaffold, API client and mocks, design tokens and the shared domain components, auth and app shell, live updates, Jury Mode, and every **candidate-side** screen except the test runner (FE2 owns the runner).
 > **Date:** 2026-10-08. Related files: [FE2.md](FE2.md), [BE.md](BE.md) (backend and API gaps), [ML.md](ML.md), [AI.md](AI.md).
+>
+> **Status (2026-10-08, review of branch `fe1-p0-tasks` @ `c0d8731`):** scope of FE1-0 and all P0 tasks is implemented, but the branch **does not build from a clean clone** and the golden path is blocked. **Start with [§1A Rework](#1a-rework-after-review-of-c0d8731-do-this-first)** before any new work.
 
 ---
 
@@ -123,6 +125,85 @@ web/
 - **Merge, then tell FE2.**
 
 **Running the backend locally:** it needs PostgreSQL, then `python manage.py migrate && python manage.py seed --mode=mini && python manage.py runserver`. `runserver` **currently fails** because `config/wsgi.py` is missing (BE.md B13). Until BE fixes that or ships docker compose, work with `VITE_API_MOCKS=all`.
+
+---
+
+## 1A. Rework after review of `c0d8731` (DO THIS FIRST)
+
+> **For the AI agent:** work on branch `fe1-p0-tasks`. Fix items in order; one commit per item, message prefixed with the item ID (e.g. `R1 Track web/src/lib`). Do **not** start P1 tasks until every R-item below is checked. All paths are relative to `web/` unless stated otherwise.
+
+### Review verdict
+
+| Task | Implementation | "Done" criterion |
+|---|---|---|
+| FE1-0 Scaffold | ✅ stack, layout, `client.ts`, `events.ts`, `keys.ts`, all routes, README | ❌ clean clone fails `typecheck`/`build` (R1); mock modes wrong (R4); not merged early |
+| FE-01 Components | ✅ all components, `normalizeComponents` tested | ⚠️ `useCountdown` not committed (R1) |
+| FE-02 Shell & auth | ✅ login/register/verify, errors by `code`, field errors | ❌ expired session does not return to `/login` (R6) |
+| FE-03 Jury Mode | ✅ guide, personas, time travel, reset | ❌ page requires auth, judges can't open it (R3) |
+| FE-04 Onboarding | ✅ 4 steps, resume prefill, `unknown_terms` | ⚠️ refresh on survey loses prefill (R8) |
+| FE-06 Result | ✅ all variants, cooldown, PDF content-type check | ❌ unreachable for a new candidate (R2) |
+| FE-07 Offers | ✅ view/accept/decline state machine, 409 recovery, polling | ⚠️ raw enum codes in UI (R9) |
+| FE-08 Settings | ✅ | — |
+
+Verified on a clean checkout: `pnpm lint` ✅, `pnpm test` ✅ (17/17), **`pnpm typecheck` ❌ 43 × TS2307 `Cannot find module '@/lib/...'`**, so `pnpm build` ❌.
+
+### Blockers (merge is impossible until these are fixed)
+
+- [ ] **R1 · `web/src/lib/` is not in git.** The root `.gitignore` has the Python rule `lib/` (line 14), which silently ignores `web/src/lib/`. 41 imports point to it: `@/lib/utils`, `@/lib/labels`, `@/lib/format`, `@/lib/personas`, `@/lib/hooks/useCountdown`. Your local build is green only because the files exist on your disk.
+  - **Fix:** in the root `.gitignore`, directly after the `lib/` / `lib64/` lines, add `!web/src/lib/`. Then `git add web/src/lib` and commit.
+  - **Also:** `package.json` pins `"packageManager": "pnpm@12.10.1"`; on the reviewer's machine pnpm could not bootstrap that version. Pin the version the team actually runs (`pnpm -v`) or remove the field.
+  - **Acceptance:** in a fresh directory, `git clone … && cd web && pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` is green. Paste the output into the PR description.
+
+- [ ] **R2 · `OnboardingGate` blocks the test runner and the result page.** The backend keeps `onboarding_step === 'qualification'` until the candidate has a confirmed/unconfirmed league, i.e. **until the test is finished** (`apps/identity/views.py:150`). `src/app/guards.tsx:37` redirects every path except `/candidate/qualification/start`, so `/candidate/qualification/:id` (FE2 runner) and `/candidate/qualification/:id/result` bounce back to `/start`. The golden path cannot complete.
+  - **Fix:** when `step === 'qualification'`, allow any `location.pathname.startsWith('/candidate/qualification/')`; redirect everything else to `/candidate/qualification/start`.
+  - **Acceptance:** add `src/app/guards.test.ts` (extract the decision into a pure function `onboardingRedirect(me, pathname): string | null` and test it): `qualification` + `/candidate/qualification/abc` → `null`; `qualification` + `/candidate/qualification/abc/result` → `null`; `qualification` + `/candidate` → `/candidate/qualification/start`; `consent` + anything → `/candidate/onboarding/consent`; `done` → `null`.
+
+- [ ] **R3 · `/jury` and `/lab` are behind auth.** `src/app/router.tsx:83` puts `/jury` inside `RequireAuth`; `/lab` (line 132) is inside `RequireRole role="employer"`. Jury Mode is the **entry page for anonymous judges**; `/lab` is **public** (FE2.md).
+  - **Fix:** move both routes to the top-level public list (next to `/login`). Wrap them in `AppLayout` only if the layout renders correctly without a user (no nav crash when `useMe` returns 401); otherwise give them a minimal public layout. Do **not** mount `useLiveEvents()` for anonymous users.
+  - **Also:** anonymous `/` currently redirects to `/login`; redirect it to `/jury` instead (keep `/login` reachable from the Jury page).
+  - **Acceptance:** in a private window with no cookies, `/jury` renders; clicking "Анна" lands on `/candidate`; `/lab` renders a placeholder without login.
+
+- [ ] **R4 · Mock modes do not match the contract (§1 API layer).**
+  - **`missing` must mock only real gaps.** `src/mocks/browser.ts:213` adds `demoHandlers` in `missing` mode. `POST /api/demo/persona` and `POST /api/demo/time-travel` **exist on the backend**; mocking them means no session cookie is set and `/api/me` (not mocked in this mode) returns 401, so persona login is broken. Only `POST /api/demo/reset` (G4) is a gap. Split `demo.ts` so `missing` gets only `reset`.
+  - **Do not mix fixtures into real data.** `src/mocks/handlers/gaps.ts` `GET /api/assessments` prepends three fake attempts to the real history in `missing` mode. Remove that handler from `missing` (the endpoint exists). Keep the `demo-*` result fixtures for `/dev/ui` and `all` mode only. The real result endpoint lacks G5 fields; the UI already hides those sections, which is the intended behaviour.
+  - **`all` must cover every endpoint FE1 screens call.** Add stateful handlers (in `handlers/offers.ts`, `handlers/assessments.ts`, `handlers/fsp.ts`, fixtures in `fixtures/`) for: `GET /api/offers`, `GET /api/offers/:id`, `POST /api/offers/:id/{view,accept,decline}` (bump `version`, enforce the state machine, return 409 `invalid_transition` / `version_conflict` problem+json), `GET /api/assessments/eligibility`, `GET /api/assessments`, `POST /api/fsp/link` (409 `fsp_id_already_linked` for a fixed id, e.g. `taken-123`), `POST /api/fsp/sync`, `GET /api/candidates/me/card.pdf` (return a tiny PDF with `content-type: application/pdf`).
+  - Mocked `/api/me` must advance `onboarding_step` when consents / survey are saved, so the wizard → gate flow is realistic in `all` mode.
+  - **Acceptance:** with `VITE_API_MOCKS=all` and no backend, a candidate persona can walk consent → profile → survey → claim → (runner placeholder) and open dashboard, an offer (view → accept, and view → decline), result fixtures and settings with zero failed requests in the console. With `VITE_API_MOCKS=missing` and the live backend, persona login works and no response on the persona/onboarding/offers path carries `X-Stub`.
+
+### Architecture deviations (fix in this PR)
+
+- [ ] **R5 · One source of truth for API types.** `src/api/generated/` (orval, ~3.6k lines) is committed but imported nowhere; features use hand-written DTOs in `src/api/types.ts`. Hand-written hooks around `customFetch` are **accepted** as a deviation from "orval hooks", but types must not drift from the backend.
+  - **Fix:** for every DTO that exists in the schema (`Offer`, `CandidateProfile`, `AssessmentResult`/`AssessmentSession`, `MeResponse`, `ConsentsResponse`, `FSPLinkResponse`, enums), re-export or derive from `@/api/generated/models` in `src/api/types.ts`. Keep hand-written types **only** for gap/target shapes (G3 taxonomy, G5 result extras, G8 score list, G14 `{items}`), each with a `// gap Gx` comment. Remove the duplicate `Reason`/`Source` types from `components/domain/reason-chips.tsx` and import them from `@/api/types`.
+  - Configure orval to emit models only if the generated hooks are not going to be used (`client: 'fetch'` or drop the hooks file) so there is no dead code; document the choice.
+  - **Fix `web/README.md`** ("Для FE2" §2 says "use the orval client"): describe what FE2 must actually do — hooks in `src/api/<feature>.ts` via `customFetch`, types from `@/api/types`, keys from `@/api/keys`.
+  - **Acceptance:** `grep -r "api/generated" src --include=*.ts* | grep -v src/api/generated` returns at least the `types.ts` imports; `pnpm typecheck` green.
+
+- [ ] **R6 · Expired session must return to `/login` (FE-02 Done).** There is no global 401 handling and `useMe` is not refetched (`refetchOnWindowFocus: false`), so a dead session shows error states on every screen.
+  - **Fix:** in `src/app/providers.tsx` create the client with `queryCache: new QueryCache({ onError })` and `mutationCache: new MutationCache({ onError })`; on `ApiError` with `status === 401` and the request not being `/api/auth/login`, call `queryClient.clear()` and `router.navigate('/login', { replace: true })` (keep `?next=` for the current path).
+  - In `src/api/client.ts:98`, the 401 fallback code must be `unauthorized` (add the Russian text "Сессия истекла, войдите снова" to `i18n/errors.ts`), not `bad_credentials`. Only the login form maps 401 to `bad_credentials` (the backend already sends that code explicitly).
+  - **Logout and persona switch:** replace `invalidateQueries({ queryKey: ['me'] })` with `queryClient.clear()` before navigating (`app/layouts/app-layout.tsx:25`, `features/auth/login-page.tsx:29`, `features/jury/jury-page.tsx`), and seed `keys.me` with the persona/login response via `setQueryData`, so the next screen never shows the previous user's cached offers/profile or redirects by the old role.
+  - **Acceptance:** delete the `sessionid` cookie in devtools while on `/candidate/offers` → within one request you are on `/login` with the "Сессия истекла" toast; switching Anna → employer lands directly on `/employer` without a `/candidate` flash.
+
+- [ ] **R7 · Verified vs declared must look different (UX rule).** In `components/domain/reason-chips.tsx` the only difference is a small muted icon with a `title` tooltip.
+  - **Fix:** declared reasons get a **dashed border** and muted text; verified (`test`, `fsp`) get a solid border plus a visible short label (`тест`, `ФСП`) next to the icon, not only a tooltip. Apply the same convention to skill chips on the profile/prefill form. Show every variant on `/dev/ui`.
+
+- [ ] **R7b · Palette deviation.** `styles/tokens.css` implements "Arena (dark)" instead of the FE1-01 palette (`#0369a1` primary, etc.). Do not change it yet; the lead decides. Until then keep all colour values inside `tokens.css` only (no raw hex in components) and verify WCAG AA for `--fsp-muted` on `--fsp-panel` and for status colours used as text.
+
+### Smaller fixes (same PR)
+
+- [ ] **R8 · Survey step loses prefill on refresh.** `features/onboarding/steps/survey-step.tsx` computes `defaultValues` from `useProfile()` before the profile loads and never resets. Render a skeleton while `isLoading`, then call `reset(valuesFromProfile)` once data arrives (or mount the form only after load). Same check for `profile-step.tsx` and `claim-step.tsx`.
+- [ ] **R9 · No raw enum codes in the UI.** `features/offers/offer-detail-page.tsx:126` shows `decline_reason` raw ("salary") and line 180 shows `«{offer.status}»` raw. Use `DECLINE_REASON_LABEL` / the status labels from `lib/labels.ts`. Grep the candidate features for other `{x.status}`, `{x.grade}`, `{x.specialization}` rendered directly.
+- [ ] **R10 · Auto-view can get stuck.** In `offer-detail-page.tsx:51`, if `POST /view` fails (409), `autoViewed` stays set and the page shows "Открываем оффер…" forever. On a conflict, reset the ref after refetch so the view is retried once with the new `version`; on any other error show the `ErrorState` with a retry button.
+- [ ] **R11 · Decline modal accessibility.** Replace the hand-made overlay in `features/offers/decline-modal.tsx` with the shadcn `Dialog` (`pnpm dlx shadcn@latest add dialog`): Esc closes, focus is trapped and returns to the trigger. Reset `reason`/`comment` when the modal reopens.
+- [ ] **R12 · Eligibility default.** `api/assessments.ts:88` falls back to `'backend'` when the specialization is unknown, so a frontend/ML candidate can see the wrong cooldown. Disable the query (`enabled: Boolean(specialization)`) instead of defaulting.
+- [ ] **R13 · Charts.** Topic and evidence charts are plain `div`s although `recharts` is a dependency. Either switch to Recharts (preferred, consistent with FE2) or remove `recharts` from `package.json`. Keep `shiki`: FE2 uses it in the runner (FE2.md FE-12).
+- [ ] **R14 · Nested page shells.** `OnboardingPage` and `JuryPage` render their own `<main className="min-h-screen …">` inside `AppLayout`'s `<main>`. Use a `<section>`/`<div>` without `min-h-screen` when rendered inside the layout.
+- [ ] **R15 · Docs.** On your branch, `docs/TASKS.md` F-06 says "`apps/web/`, `npm run build`". Correct it to "`web/`, `pnpm build`". In `web/README.md` replace the "Структура" block with the real tree (it says `features/ auth/ (login)` only).
+
+### Process
+
+- [ ] **R16 ·** Open a PR `fe1-p0-tasks → main` titled `FE1-0 FE-01..08 Scaffold and candidate screens`. Description: the review table above with every R-item ticked, the clean-clone command output from R1, and screenshots of `/jury` (anonymous), onboarding, result (3 variants), offer detail and settings.
+- [ ] **R17 ·** After merge, tell FE2 immediately (they are blocked on `components/domain/`, `lib/labels`, `useCountdown` and the router). From now on: **one PR per task ID**, small, reviewed by FE2.
 
 ---
 
