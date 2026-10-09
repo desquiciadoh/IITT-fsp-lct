@@ -1,0 +1,130 @@
+/*
+ * FSP Draft design tokens — direction "Arena (dark)".
+ * Placeholder palette until PD-02 (brand book) lands; swap the raw
+ * values below and every component follows automatically.
+ */
+
+:root {
+  /* surfaces */
+  --fsp-bg: #0b0f14;
+  --fsp-panel: #121821;
+  --fsp-panel-hover: #182031;
+  --fsp-line: #1f2836;
+
+  /* text */
+  --fsp-fg: #e8eef5;
+  --fsp-muted: #8b98a8;
+
+  /* brand accent (FSP neon) */
+  --fsp-accent: #b8ff3c;
+  --fsp-accent-fg: #0b0f14;
+
+  /* semantic states */
+  --fsp-plus: #b8ff3c;
+  --fsp-minus: #ff6b6b;
+  --fsp-info: #58c7ff;
+  --fsp-warn: #ffc857;
+
+  /* offer statuses */
+  --fsp-status-sent: #58c7ff;
+  --fsp-status-viewed: #ffc857;
+  --fsp-status-accepted: #b8ff3c;
+  --fsp-status-declined: #ff6b6b;
+  --fsp-status-withdrawn: #8b98a8;
+  --fsp-status-expired: #8b98a8;
+
+  /* league statuses */
+  --fsp-league-pending: #8b98a8;
+  --fsp-league-confirmed: #b8ff3c;
+  --fsp-league-unconfirmed: #ffc857;
+
+  /* score-bar segments without a semantic token yet */
+  --fsp-score-salary: #a78bfa;
+  --fsp-score-semantic: #f472b6;
+  --fsp-score-fsp: #ffc857;
+
+  /*
+   * WCAG AA check (R7b), ratio of each colour used as text on --fsp-panel
+   * #121821 (AA normal text needs >= 4.5):
+   *   --fsp-muted 6.07 · sent 9.36 · viewed 11.59 · accepted 14.77 ·
+   *   declined 6.42 · info 9.36 · warn 11.59 · minus 6.42 · plus 14.77.
+   * All pass; on --fsp-bg the ratios are higher still.
+   */
+
+  /* type */
+  --fsp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fsp-font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+
+  /* radii */
+  --radius: 0.625rem;
+}
+
+/*
+ * PD-02 palette candidates, shown side by side on /dev/design only.
+ * Dev-only: never applied to the app shell. Kept out of components so the
+ * R7b rule (colour values only in this file) still holds.
+ */
+.dv-arena {
+  --v-bg: #0b0f14;
+  --v-panel: #121821;
+  --v-fg: #e8eef5;
+  --v-muted: #8b98a8;
+  --v-accent: #b8ff3c;
+  --v-accent-fg: #0b0f14;
+  --v-line: #1f2836;
+}
+
+.dv-fsp-red {
+  --v-bg: #f7f7f8;
+  --v-panel: #ffffff;
+  --v-fg: #17181a;
+  --v-muted: #6b7076;
+  --v-accent: #e01b24;
+  --v-accent-fg: #ffffff;
+  --v-line: #e4e4e7;
+}
+
+.dv-corporate {
+  --v-bg: #f4f6fa;
+  --v-panel: #ffffff;
+  --v-fg: #101725;
+  --v-muted: #5f6b7f;
+  --v-accent: #2456e6;
+  --v-accent-fg: #ffffff;
+  --v-line: #dfe5ef;
+}
+
+@theme inline {
+  --color-background: var(--fsp-bg);
+  --color-foreground: var(--fsp-fg);
+  --color-panel: var(--fsp-panel);
+  --color-card: var(--fsp-panel);
+  --color-card-foreground: var(--fsp-fg);
+  --color-popover: var(--fsp-panel);
+  --color-popover-foreground: var(--fsp-fg);
+  --color-primary: var(--fsp-accent);
+  --color-primary-foreground: var(--fsp-accent-fg);
+  --color-secondary: var(--fsp-panel-hover);
+  --color-secondary-foreground: var(--fsp-fg);
+  --color-muted: var(--fsp-panel-hover);
+  --color-muted-foreground: var(--fsp-muted);
+  --color-accent: var(--fsp-panel-hover);
+  --color-accent-foreground: var(--fsp-fg);
+  --color-destructive: var(--fsp-minus);
+  --color-destructive-foreground: var(--fsp-accent-fg);
+  --color-border: var(--fsp-line);
+  --color-input: var(--fsp-line);
+  --color-ring: var(--fsp-accent);
+  --color-plus: var(--fsp-plus);
+  --color-minus: var(--fsp-minus);
+  --color-info: var(--fsp-info);
+  --color-warn: var(--fsp-warn);
+
+  --font-sans: var(--fsp-font-sans);
+  --font-mono: var(--fsp-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
