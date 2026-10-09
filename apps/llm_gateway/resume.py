@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import Any
 
@@ -55,6 +56,10 @@ def parse_resume(
         validate=validate_resume_payload,
     )
     draft = outcome.draft
+    if outcome.fallback_reason == "pii_residual":
+        # Something personal survived redaction: never copy free text into a profile that
+        # employers see before an accepted offer (the candidate types it in the form instead)
+        draft = dataclasses.replace(draft, about=None, experience_text=None)
 
     matches, unknown_terms = normalize_many(draft.skills_raw)
 

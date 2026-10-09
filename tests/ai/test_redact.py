@@ -176,3 +176,22 @@ def test_assert_clean_blocks_llm_call(monkeypatch):
     assert res.source == "rules"
     assert res.fallback_reason == "pii_residual"
     mock_gw.resume.assert_not_called()
+
+
+def test_residual_pii_never_reaches_profile_free_text(monkeypatch):
+    """A phone the redactor missed must not be copied into about/experience_text."""
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    leaked = "Обо мне:\nЗвоните 8-999-1234567 в любое время.\nОпыт работы:\nООО Ромашка, звонить 8-999-1234567"
+
+    def leaking_redact(text, **kwargs):
+        return Redacted(text=leaked, found={"email": [], "phone": [], "telegram": [], "url": [], "name": []})
+
+    monkeypatch.setattr(llm_gateway.resume, "redact", leaking_redact)
+    gateway = MagicMock()
+    gateway.name = "gigachat"
+    res = parse_resume(pdf_bytes, gateway=gateway)
+
+    gateway.resume.assert_not_called()
+    assert res.fallback_reason == "pii_residual"
+    assert res.prefill["about"] == "" and res.prefill["experience_text"] == ""
+    assert "1234567" not in str(res.prefill)
