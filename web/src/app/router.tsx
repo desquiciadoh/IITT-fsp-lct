@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 import { HomePage } from '@/pages/home'
 import { DevUiPage } from '@/pages/dev-ui'
 import { DesignVariantsPage } from '@/pages/design-variants'
@@ -20,6 +20,15 @@ import { Placeholder } from '@/app/placeholder'
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
 )
+
+/**
+ * The FSP ID OIDC callback (R26) returns the user to `/candidate/profile?fsp_linked=true`;
+ * the FSP section lives on settings, so forward there and keep the query.
+ */
+function ProfileToSettings() {
+  const { search } = useLocation()
+  return <Navigate to={`/candidate/settings${search}`} replace />
+}
 
 export const router = createBrowserRouter([
   { path: '/', element: <IndexRedirect /> },
@@ -72,6 +81,7 @@ export const router = createBrowserRouter([
                     element: <OfferDetailPage />,
                   },
                   { path: '/candidate/settings', element: <SettingsPage /> },
+                  { path: '/candidate/profile', element: <ProfileToSettings /> },
                 ],
               },
             ],

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link2, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { ApiError, customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
 import { errorMessage } from '@/i18n/errors'
+import { useMe } from '@/api/me'
 import { useProfile, useSaveConsents, useSaveProfile } from '@/api/profile'
 import { formatDate } from '@/lib/format'
 import { PLACEMENT_TIER_LABEL, SPORTS_RANK_LABEL } from '@/lib/labels'
@@ -12,11 +14,12 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 /**
- * One-line switch to the OIDC flow once BE ships gap G15:
- * set `USE_OIDC = true` and replace the POST below with
- * `window.location.assign('/api/auth/fsp-id/login?intent=link')`.
+ * Outside DEMO_MODE the backend rejects a bare participant ID (`fsp_oidc_required`),
+ * so ownership must be proven through the FSP ID OIDC flow (G15). The callback
+ * returns the user to `/candidate/profile?fsp_linked=true`, which the router
+ * forwards to this page (see `router.tsx`).
  */
-const USE_OIDC = false
+const FSP_OIDC_LINK = '/api/auth/fsp-id/login?intent=link'
 
 /** Mock company picker — real lookup endpoint is gap G17; ids must be UUIDs (backend constraint). */
 const MOCK_COMPANIES = [
@@ -58,8 +61,11 @@ function ToggleRow({
 export function SettingsPage() {
   const client = useQueryClient()
   const { data: profile, isLoading } = useProfile()
+  const { data: me } = useMe()
   const saveProfile = useSaveProfile()
   const saveConsents = useSaveConsents()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isDemo = Boolean(me?.demo)
 
   const [blindMode, setBlindMode] = useState(false)
   const [openToOffers, setOpenToOffers] = useState(true)
@@ -78,6 +84,23 @@ export function SettingsPage() {
     setBlocked(profile.blocked_company_ids ?? [])
     if (profile.consents) setConsents(profile.consents)
   }, [profile])
+
+  // Outcome of the FSP ID OIDC round-trip (R26).
+  useEffect(() => {
+    const linked = searchParams.get('fsp_linked')
+    const error = searchParams.get('fsp_error')
+    if (!linked && !error) return
+    if (linked === 'true') {
+      toast.success('ID ФСП привязан, результаты подтянуты')
+      void client.invalidateQueries({ queryKey: keys.profile })
+    } else if (error) {
+      toast.error(errorMessage(error))
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('fsp_linked')
+    next.delete('fsp_error')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, client, setSearchParams])
 
   const savePrivacy = () => {
     const floor = salaryFloor.trim() === '' ? null : Number(salaryFloor)
@@ -106,8 +129,8 @@ export function SettingsPage() {
   }
 
   const linkFsp = () => {
-    if (USE_OIDC) {
-      window.location.assign('/api/auth/fsp-id/login?intent=link')
+    if (!isDemo) {
+      window.location.assign(FSP_OIDC_LINK)
       return
     }
     if (!fspId.trim()) {
@@ -126,7 +149,9 @@ export function SettingsPage() {
         void client.invalidateQueries({ queryKey: keys.profile })
       })
       .catch((e: unknown) => {
-        if (e instanceof ApiError && e.code === 'fsp_id_already_linked') {
+        if (e instanceof ApiError && e.code === 'fsp_oidc_required') {
+          window.location.assign(FSP_OIDC_LINK)
+        } else if (e instanceof ApiError && e.code === 'fsp_id_already_linked') {
           toast.error('Этот ID ФСП уже привязан к другому кандидату')
         } else {
           toast.error(
@@ -328,22 +353,35 @@ export function SettingsPage() {
           </>
         ) : (
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-            <label className="text-sm">
-              ID участника ФСП
-              <input
-                type="text"
-                value={fspId}
-                onChange={(e) => setFspId(e.target.value)}
-                placeholder="например, FSP-000123"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
-              />
-            </label>
-            <Button onClick={linkFsp} disabled={fspPending}>
-              {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.).
-            </span>
+            {isDemo ? (
+              <>
+                <label className="text-sm">
+                  ID участника ФСП
+                  <input
+                    type="text"
+                    value={fspId}
+                    onChange={(e) => setFspId(e.target.value)}
+                    placeholder="например, FSP-000123"
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                  />
+                </label>
+                <Button onClick={linkFsp} disabled={fspPending}>
+                  {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.).
+                </span>
+              </>
+            ) : (
+              <>
+                <Button onClick={linkFsp} disabled={fspPending}>
+                  <Link2 className="h-4 w-4" /> Привязать через FSP ID
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Подтверждение владения проходит на стороне FSP ID (OIDC).
+                </span>
+              </>
+            )}
           </div>
         )}
       </section>
