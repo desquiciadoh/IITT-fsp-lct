@@ -1,8 +1,12 @@
 """Unit tests for GigaChat LLM adapter (AI-R2, AI-R3, AI-R8)."""
+import http.client
 import io
 import json
+import ssl
+import threading
 import time
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -398,6 +402,130 @@ def test_gigachat_oauth_timeout_reason():
         with pytest.raises(LlmUnavailable) as exc_info:
             client.jd("vacancy")
     assert exc_info.value.reason == "timeout"
+
+
+def test_gigachat_budget_is_measured_after_oauth():
+    """A slow OAuth leaves less time for the completion: the total still fits the budget."""
+    clock = FakeClock()
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k", timeout_s=10.0))
+    completion_timeouts: list[float] = []
+
+    def slow_oauth_then_hang(req, timeout, context):
+        if "oauth" in req.full_url:
+            clock.now += 7.9
+            return _make_http_response(200, {"access_token": "t", "expires_at": _expires_in_30_min()})
+        completion_timeouts.append(timeout)
+        clock.now += timeout
+        raise TimeoutError("timed out")
+
+    started = clock.now
+    with patch("urllib.request.urlopen", side_effect=slow_oauth_then_hang), \
+            patch("llm_gateway.gigachat.time.monotonic", clock.monotonic), \
+            patch("llm_gateway.gigachat.time.sleep", clock.sleep):
+        with pytest.raises(LlmUnavailable):
+            client.jd("vacancy")
+
+    assert completion_timeouts[0] <= 2.1 + 1e-9
+    assert clock.now - started <= 10.0 + 1e-9
+
+
+@pytest.mark.parametrize(
+    "first_error",
+    [
+        http.client.RemoteDisconnected("Remote end closed connection without response"),
+        http.client.IncompleteRead(b"{\"choi"),
+        ConnectionResetError(10054, "reset by peer"),
+    ],
+)
+def test_gigachat_dropped_connections_get_the_retry(first_error):
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+
+    with patch("urllib.request.urlopen", side_effect=_transport([first_error, _completion(VALID_JD)], calls)), \
+            patch("llm_gateway.gigachat.time.sleep"):
+        assert client.jd("vacancy").title == "Python Developer"
+    assert calls["chat"] == 2
+
+
+def test_gigachat_tls_verification_failure_is_not_retried():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+    tls_error = urllib.error.URLError(ssl.SSLCertVerificationError("certificate verify failed"))
+
+    with patch("urllib.request.urlopen", side_effect=_transport([tls_error, _completion(VALID_JD)], calls)):
+        with pytest.raises(LlmUnavailable):
+            client.jd("vacancy")
+    assert calls["chat"] == 1
+
+
+def test_gigachat_negative_retry_after_is_clamped():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+    completions = [_http_error(429, {"Retry-After": "-1"}), _completion(VALID_JD)]
+
+    with patch("urllib.request.urlopen", side_effect=_transport(completions, calls)), \
+            patch("llm_gateway.gigachat.time.sleep") as sleep:
+        client.jd("vacancy")
+    sleep.assert_called_once_with(0.0)
+
+
+def test_gigachat_null_content_is_a_schema_error():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+    null_content = {"choices": [{"message": {"content": None}}]}
+
+    with patch("urllib.request.urlopen", side_effect=_transport([null_content], calls)):
+        with pytest.raises(LlmSchemaError) as exc_info:
+            client.jd("vacancy")
+    assert exc_info.value.reason == "schema"
+
+
+def test_gigachat_slow_drip_body_cannot_outlive_the_budget():
+    """A real local server sends the body 4 bytes every 0.3 s: the call stops at the deadline."""
+    body = json.dumps(_completion(VALID_JD)).encode("utf-8")
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            if "oauth" in self.path:
+                payload = json.dumps({"access_token": "t", "expires_at": _expires_in_30_min()}).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for i in range(0, len(body), 4):
+                    self.wfile.write(body[i:i + 4])
+                    self.wfile.flush()
+                    time.sleep(0.3)
+            except OSError:
+                pass  # the client gave up
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k", timeout_s=2.0))
+        client.OAUTH_URL = f"{base}/oauth"
+        client.COMPLETIONS_URL = f"{base}/chat/completions"
+        started = time.monotonic()
+        with pytest.raises(LlmUnavailable) as exc_info:
+            client.jd("vacancy")
+        elapsed = time.monotonic() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert exc_info.value.reason == "timeout"
+    assert elapsed < 3.5, f"took {elapsed:.1f}s with a 2 s budget"
 
 
 def test_two_parse_calls_share_one_oauth_token():

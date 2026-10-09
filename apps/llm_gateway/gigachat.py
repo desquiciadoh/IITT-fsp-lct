@@ -11,8 +11,10 @@ Implements LlmGateway protocol for Sber GigaChat API:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import logging
+import math
 import re
 import ssl
 import threading
@@ -42,6 +44,48 @@ def _is_timeout(error: BaseException) -> bool:
     """socket.timeout / TimeoutError, raw or wrapped in URLError."""
     reason = getattr(error, "reason", None)
     return isinstance(error, TimeoutError) or isinstance(reason, TimeoutError) or "timed out" in str(error).lower()
+
+
+def _is_tls_verification(error: BaseException) -> bool:
+    reason = getattr(error, "reason", None)
+    return isinstance(error, ssl.SSLCertVerificationError) or isinstance(reason, ssl.SSLCertVerificationError)
+
+
+def _retry_after_s(header: str | None) -> float:
+    """Retry-After in seconds, clamped to [0, 2]; 0.5 if missing or not a number."""
+    try:
+        value = float(header) if header else 0.5
+    except ValueError:
+        return 0.5
+    return min(max(value, 0.0), 2.0) if math.isfinite(value) else 0.5
+
+
+_MAX_BODY_BYTES = 2_000_000
+
+
+def _read_within(resp: Any, deadline: float) -> bytes:
+    """Read the body in chunks; each read waits at most for the budget left (a slow drip of bytes
+    cannot outlive the call deadline, which a single read() with a per-socket timeout allows)."""
+    chunks: list[bytes] = []
+    size = 0
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise LlmUnavailable("Timeout budget exceeded while reading the answer", reason="timeout")
+        # http.client drops fp and closes the socket once the body is complete: look it up each time
+        sock = getattr(getattr(getattr(resp, "fp", None), "raw", None), "_sock", None)
+        if sock is not None:
+            try:
+                sock.settimeout(left)
+            except OSError:
+                pass
+        chunk = resp.read1(65536)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        size += len(chunk)
+        if size > _MAX_BODY_BYTES:
+            raise LlmUnavailable("GigaChat answer is too large", reason="http_error")
 
 
 _FENCED_RE = re.compile(r"^\s*`{1,3}[a-zA-Z]*\s*(.*?)\s*`{1,3}\s*$", re.DOTALL)
@@ -132,13 +176,15 @@ class GigaChatLlm:
             try:
                 call_timeout = min(remaining, 8.0)
                 with urllib.request.urlopen(req, timeout=call_timeout, context=self._ssl_context) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
+                    data = json.loads(_read_within(resp, deadline).decode("utf-8"))
                     self._access_token = data["access_token"]
                     expires_at_raw = data.get("expires_at", (time.time() + 1800) * 1000)
                     self._token_expires_at = (
                         expires_at_raw / 1000.0 if expires_at_raw > 1e11 else float(expires_at_raw)
                     )
                     return self._access_token
+            except LlmUnavailable:
+                raise
             except urllib.error.HTTPError as e:
                 status = e.code
                 reason = "no_key" if status in (401, 403) else "http_error"
@@ -165,12 +211,15 @@ class GigaChatLlm:
             return False
 
         while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
+            if deadline - time.monotonic() <= 0:
                 raise LlmUnavailable("Timeout budget exceeded", reason="timeout")
 
-            # Obtain token and build fresh headers on EVERY attempt
+            # Obtain token and build fresh headers on EVERY attempt; the budget left is measured
+            # after OAuth, which may have used part of it
             token = self._get_access_token(deadline)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LlmUnavailable("Timeout budget exceeded after OAuth", reason="timeout")
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
@@ -188,8 +237,15 @@ class GigaChatLlm:
             try:
                 call_timeout = min(remaining, 8.0)
                 with urllib.request.urlopen(req, timeout=call_timeout, context=self._ssl_context) as resp:
-                    resp_data = json.loads(resp.read().decode("utf-8"))
-                    return resp_data["choices"][0]["message"]["content"]
+                    body = _read_within(resp, deadline)
+                resp_data = json.loads(body.decode("utf-8"))
+                content = resp_data["choices"][0]["message"]["content"]
+                if not isinstance(content, str):
+                    raise LlmSchemaError("GigaChat answer has no text content", reason="schema")
+                return content
+
+            except (LlmSchemaError, LlmUnavailable):
+                raise
 
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -201,12 +257,7 @@ class GigaChatLlm:
                     continue
 
                 if status == 429:
-                    pause_s = 0.5
-                    try:
-                        pause_s = min(float(e.headers.get("Retry-After") or pause_s), 2.0)
-                    except ValueError:
-                        pass
-                    if retry_after_pause(pause_s):
+                    if retry_after_pause(_retry_after_s(e.headers.get("Retry-After") if e.headers else None)):
                         continue
                     raise LlmUnavailable("GigaChat rate limit (429)", reason="http_error") from e
 
@@ -216,14 +267,16 @@ class GigaChatLlm:
                 # 5xx after the retry, 400, 403, 422 and other client errors
                 raise LlmUnavailable(f"GigaChat HTTP {status}", reason="http_error") from e
 
-            except (urllib.error.URLError, TimeoutError) as e:
-                if retry_after_pause(0.5):
+            except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+                # timeouts, refused/reset connections, RemoteDisconnected, IncompleteRead;
+                # a failed certificate check is configuration, not a transient error
+                if not _is_tls_verification(e) and retry_after_pause(0.5):
                     continue
                 reason = "timeout" if _is_timeout(e) else "http_error"
                 raise LlmUnavailable(f"Connection failure: {type(e).__name__}", reason=reason) from e
 
-            except Exception as e:
-                raise LlmUnavailable(f"Unexpected error: {type(e).__name__}", reason="http_error") from e
+            except Exception as e:  # a malformed body: not JSON, no "choices"
+                raise LlmUnavailable(f"Unexpected response: {type(e).__name__}", reason="http_error") from e
 
     def _clean_and_parse_json(self, raw_content: str, messages: list[dict[str, str]], deadline: float) -> dict[str, Any]:
         """Parse the model's JSON object; one repair call if it is not one (AI-R3)."""
