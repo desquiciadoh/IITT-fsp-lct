@@ -1,6 +1,7 @@
 """Profiles app API views."""
 import hashlib
 import logging
+import traceback
 
 from core.enums import (
     ConsentType,
@@ -275,10 +276,21 @@ class ResumeParseView(views.APIView):
                 422,
             )
         except Exception as e:
-            # A bug, not a bad PDF: log the type and the file hash (never the text), answer 500
+            # A bug, not a bad PDF. Log the type, the file hash and file:line:function of each
+            # frame, never the message or source lines (they may quote CV text), and answer
+            # problem+json instead of Django's HTML 500.
             file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
-            logger.error("Resume parse failed (%s, sha=%s)", type(e).__name__, file_sha)
-            raise
+            frames = " > ".join(
+                f"{frame.filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
+                for frame in traceback.extract_tb(e.__traceback__)
+            )
+            logger.error("Resume parse failed (%s, sha=%s) at %s", type(e).__name__, file_sha, frames)
+            raise FSPAPIError(
+                'resume_parse_failed',
+                'Не удалось разобрать резюме',
+                'Заполните профиль вручную или попробуйте позже.',
+                500,
+            ) from None
 
         return Response({
             'prefill': parse_res.prefill,
