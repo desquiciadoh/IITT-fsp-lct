@@ -1,0 +1,27 @@
+`json
+{
+  "specialization": "backend",
+  "claimed_grade": "middle",
+  "years_experience": 3.5,
+  "roles": [
+    "Backend Developer"
+  ],
+  "skills_raw": [
+    "Python",
+    "Django",
+    "FastAPI",
+    "PostgreSQL",
+    "Docker"
+  ],
+  "work_formats": [
+    "remote",
+    "hybrid"
+  ],
+  "salary_min": 220000,
+  "salary_max": 280000,
+  "salary_type": "net",
+  "city": "Москва",
+  "about": "Опытный бэкенд разработчик.",
+  "experience_text": "3.5 года коммерческого опыта на Python."
+}
+`

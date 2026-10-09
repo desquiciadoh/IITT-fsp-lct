@@ -53,6 +53,7 @@ class ResumeParseResult:
     contacts: dict[str, Any]  # {"full_name", "email", "phone", "telegram"} from local redaction only
     unknown_terms: list[str]  # raw skills that normalize_skill() could not map
     source: Source
+    fallback_reason: str | None = None  # "provider_fake" | "timeout" | "http_error" | "invalid_json" | "schema" | "pii_residual" | "no_key" | None
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,7 @@ class JdParseResult:
     unknown_terms: list[str]
     blueprint: list[dict[str, Any]]  # [{"topic": str, "weight": float}] from ML's blueprint_for(); [] until available
     source: Source
+    fallback_reason: str | None = None
 
 
 class UnreadablePdf(Exception):

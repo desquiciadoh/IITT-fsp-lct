@@ -1,0 +1,262 @@
+- name: all_caps_name
+  raw: 'ИВАНОВ ИВАН ИВАНОВИЧ
+
+    Python Developer
+
+    Опыт 3 года'
+  expected_name: ИВАНОВ ИВАН ИВАНОВИЧ
+  forbidden:
+  - ИВАНОВ
+  - ИВАН
+  - ИВАНОВИЧ
+- name: name_title_same_line
+  raw: 'Петров Иван, Python-разработчик
+
+    Email: petrov@example.com
+
+    Опыт 2 года'
+  expected_name: Петров Иван
+  forbidden:
+  - Петров
+  - Иван
+  - petrov@example.com
+- name: hyphenated_name
+  raw: 'Анна Римская-Корсакова
+
+    Frontend разработчик
+
+    Опыт 4 года'
+  expected_name: Анна Римская-Корсакова
+  forbidden:
+  - Анна
+  - Римская-Корсакова
+- name: title_not_name_and_references
+  raw: 'Python Developer
+
+    Опыт 5 лет
+
+    Рекомендации: Сидоров Петр Алексеевич, CTO компании Tech'
+  expected_name: Сидоров Петр Алексеевич
+  forbidden:
+  - Сидоров
+  - Петр
+  - Алексеевич
+- name: labelled_fio
+  raw: 'ФИО: Смирнов Алексей Васильевич
+
+    Стек: Go, PostgreSQL'
+  expected_name: Смирнов Алексей Васильевич
+  forbidden:
+  - Смирнов
+  - Алексей
+  - Васильевич
+- name: labelled_name
+  raw: 'Имя: Дмитрий Ковалев
+
+    Специализация: ML Engineer'
+  expected_name: Дмитрий Ковалев
+  forbidden:
+  - Дмитрий
+  - Ковалев
+- name: inflected_names_in_body
+  raw: 'Кузнецов Сергей Михайлович
+
+    Работал в проекте, где Кузнецову Сергею поручили архитектуру бэкенда.'
+  expected_name: Кузнецов Сергей Михайлович
+  forbidden:
+  - Кузнецов
+  - Кузнецову
+  - Сергей
+  - Сергею
+  - Михайлович
+- name: tg_tme_link
+  raw: 'Контакты: https://t.me/ivan_developer
+
+    Стек: Python, Django'
+  expected_tg: '@ivan_developer'
+  forbidden:
+  - t.me/ivan_developer
+  - ivan_developer
+- name: tg_labelled_no_at
+  raw: 'Telegram: ivan_petrov
+
+    Опыт 3 года'
+  expected_tg: '@ivan_petrov'
+  forbidden:
+  - ivan_petrov
+- name: tg_labelled_with_at
+  raw: 'ТГ: @cool_coder
+
+    Стек: React, TypeScript'
+  expected_tg: '@cool_coder'
+  forbidden:
+  - '@cool_coder'
+  - cool_coder
+- name: tg_negative_code_annotations
+  raw: Использую @dataclass, @pytest и @staticmethod в коде на Python.
+  expected_tg: null
+  forbidden: []
+  must_preserve:
+  - '@dataclass'
+  - '@pytest'
+  - '@staticmethod'
+- name: email_standard
+  raw: 'Связь: alex.dev@company.org
+
+    Телефон: +7 999 111-22-33'
+  expected_email: alex.dev@company.org
+  forbidden:
+  - alex.dev@company.org
+- name: email_plus
+  raw: 'Почта: user+tag@domain.co.uk
+
+    Город: Москва'
+  expected_email: user+tag@domain.co.uk
+  forbidden:
+  - user+tag@domain.co.uk
+- name: phone_ru_plus7_spaces
+  raw: 'Тел: +7 999 123 45 67
+
+    Формат: удаленка'
+  expected_phone: +7 999 123 45 67
+  forbidden:
+  - 123 45 67
+  - 999 123
+- name: phone_ru_8_brackets
+  raw: 'Моб: 8 (916) 123-45-67
+
+    Опыт: 2 года'
+  expected_phone: 8 (916) 123-45-67
+  forbidden:
+  - 123-45-67
+  - '916'
+- name: phone_by_375
+  raw: 'Телефон: +375 29 123-45-67
+
+    Минск'
+  expected_phone: +375 29 123-45-67
+  forbidden:
+  - 123-45-67
+  - +375 29 123-45-67
+- name: phone_ru_solid_digits
+  raw: 'Связь: 89991234567
+
+    Стек: Python'
+  expected_phone: '89991234567'
+  forbidden:
+  - '89991234567'
+- name: phone_negative_years
+  raw: Работал в компании с 2018 2019 2020 2021 годы.
+  expected_phone: null
+  forbidden: []
+  must_preserve:
+  - 2018 2019 2020 2021
+- name: phone_negative_salary
+  raw: 'Ожидания: 250 000 руб net, ранее получал 180 000.'
+  expected_phone: null
+  forbidden: []
+  must_preserve:
+  - 250 000
+  - 180 000
+- name: url_github_profile
+  raw: 'GitHub: github.com/ivan-coder/my-repo
+
+    Стек: FastAPI'
+  expected_url: github.com/ivan-coder/my-repo
+  forbidden:
+  - github.com/ivan-coder
+- name: url_gitlab_profile
+  raw: 'GitLab: https://gitlab.com/ivanov_dev
+
+    Опыт 3 года'
+  expected_url: https://gitlab.com/ivanov_dev
+  forbidden:
+  - gitlab.com/ivanov_dev
+- name: url_linkedin_profile
+  raw: 'Профиль: linkedin.com/in/petrov-alex
+
+    Москва'
+  expected_url: linkedin.com/in/petrov-alex
+  forbidden:
+  - linkedin.com/in/petrov-alex
+- name: url_vk_and_habr
+  raw: 'VK: vk.com/ivan.petrov, Habr: career.habr.com/ivan-petrov'
+  expected_urls:
+  - vk.com/ivan.petrov
+  - career.habr.com/ivan-petrov
+  forbidden:
+  - vk.com/ivan.petrov
+  - career.habr.com/ivan-petrov
+- name: domain_personal_dev
+  raw: 'Портфолио: ivanov.dev/projects
+
+    Бэкенд разработчик'
+  expected_url: ivanov.dev/projects
+  forbidden:
+  - ivanov.dev
+- name: domain_personal_ru
+  raw: 'Сайт: alex-coder.ru
+
+    Специализация: Frontend'
+  expected_url: alex-coder.ru
+  forbidden:
+  - alex-coder.ru
+- name: domain_negative_aspnet
+  raw: Опыт работы с ASP.NET Core и C# более 4 лет.
+  expected_url: null
+  forbidden: []
+  must_preserve:
+  - ASP.NET Core
+- name: domain_negative_nodejs
+  raw: 'Стек: Node.js, Express, Next.js, Vue.js.'
+  expected_url: null
+  forbidden: []
+  must_preserve:
+  - Node.js
+  - Next.js
+  - Vue.js
+- name: phone_ru_dashes
+  raw: 'Контакт: +7-903-555-44-33
+
+    Санкт-Петербург'
+  expected_phone: +7-903-555-44-33
+  forbidden:
+  - 555-44-33
+  - +7-903
+- name: bare_tg_handle
+  raw: Пишите мне в tg @developer_profi по любым вопросам.
+  expected_tg: '@developer_profi'
+  forbidden:
+  - '@developer_profi'
+- name: header_full_name_and_title
+  raw: 'Васильев Андрей Олегович — Senior Backend Engineer
+
+    Опыт 6 лет.'
+  expected_name: Васильев Андрей Олегович
+  forbidden:
+  - Васильев
+  - Андрей
+  - Олегович
+- name: full_contacts_block
+  raw: 'Соколов Артем Игоревич
+
+    Email: artem.sokolov@mail.ru
+
+    Телефон: +7 (926) 333-22-11
+
+    Телеграм: @artem_sokolov
+
+    GitHub: github.com/artem-sokolov
+
+    Сайт: sokolov.tech
+
+    Опыт: 3 года Python разработчик.'
+  forbidden:
+  - Соколов
+  - Артем
+  - Игоревич
+  - artem.sokolov@mail.ru
+  - 333-22-11
+  - '@artem_sokolov'
+  - github.com/artem-sokolov
+  - sokolov.tech

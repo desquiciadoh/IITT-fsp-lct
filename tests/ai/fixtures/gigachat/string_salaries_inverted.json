@@ -1,0 +1,19 @@
+{
+  "specialization": "frontend",
+  "claimed_grade": "junior",
+  "years_experience": "1.5",
+  "roles": [
+    "Frontend Developer"
+  ],
+  "skills_raw": [
+    "React",
+    "TypeScript"
+  ],
+  "work_formats": [
+    "remote"
+  ],
+  "salary_min": "250 000",
+  "salary_max": "150к",
+  "salary_type": "net",
+  "city": "Санкт-Петербург"
+}

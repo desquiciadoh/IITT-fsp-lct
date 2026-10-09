@@ -10,6 +10,21 @@ from typing import Any, Protocol, runtime_checkable
 from .types import JdDraft, ResumeDraft
 
 
+class LlmError(Exception):
+    """Base error for LLM provider failures."""
+    def __init__(self, message: str, reason: str = "http_error") -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class LlmUnavailable(LlmError):
+    """Raised on auth failure, network timeout, 5xx, 429, or missing key."""
+
+
+class LlmSchemaError(LlmError):
+    """Raised when output is invalid JSON or fails schema validation."""
+
+
 @runtime_checkable
 class LlmGateway(Protocol):
     """Protocol for LLM Gateways (FakeLlm, GigaChatLlm)."""

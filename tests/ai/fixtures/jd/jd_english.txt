@@ -1,0 +1,8 @@
+Senior Backend Software Engineer (Go)
+We are looking for an experienced Golang Engineer to join our core platform team.
+Requirements:
+- Strong experience with Go (Golang), microservices architecture
+- Deep knowledge of PostgreSQL, Redis, gRPC
+- Hands-on experience with Docker, Kubernetes, CI/CD
+Location: Remote (Worldwide)
+Salary: от 350000 до 450000 net

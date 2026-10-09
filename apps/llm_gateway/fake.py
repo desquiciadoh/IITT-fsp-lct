@@ -2,13 +2,15 @@
 
 Permanent fallback and CI default.
 Extracts fields from resume and JD texts using regex heuristics and taxonomy rules.
+Adheres strictly to AI.md AI-R6 requirements (scoring spec, header-only grades, bounded salary cues).
 """
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from apps.taxonomy import extract_skills, load_skills
+from taxonomy import extract_skills, load_skills
+
 from .types import JdDraft, ResumeDraft
 
 
@@ -25,17 +27,17 @@ class FakeLlm:
         matches, _ = extract_skills(redacted_text)
         skills_raw = [m.name for m in matches]
 
-        # 2. Infer specialization
-        specialization = self._infer_specialization(lowered, matches)
+        # 2. Infer specialization (scoring mechanism)
+        specialization = self._infer_specialization(redacted_text, matches)
 
         # 3. Infer years of experience
         years_exp = self._extract_years_experience(lowered)
 
-        # 4. Infer grade (intern, junior, middle, senior)
-        claimed_grade = self._infer_grade(lowered, years_exp)
+        # 4. Infer grade (header regex or derived from years)
+        claimed_grade = self._infer_grade(redacted_text, years_exp)
 
         # 5. Infer salary and salary_type
-        sal_min, sal_max, sal_type = self._extract_salary(lowered)
+        sal_min, sal_max, sal_type = self._extract_salary(redacted_text)
 
         # 6. Infer work formats (office, hybrid, remote)
         work_formats = self._extract_work_formats(lowered)
@@ -48,6 +50,7 @@ class FakeLlm:
 
         # 9. Clean about & experience_text
         about = self._extract_about(redacted_text)
+        experience_text = self._extract_experience_text(redacted_text)
 
         return ResumeDraft(
             specialization=specialization,
@@ -61,11 +64,27 @@ class FakeLlm:
             salary_type=sal_type,
             city=city,
             about=about,
-            experience_text=redacted_text[:1500] if redacted_text else None,
+            experience_text=experience_text,
         )
 
     def jd(self, text: str) -> JdDraft:
         """Extract job description draft using regex heuristics."""
+        if not text or not text.strip():
+            return JdDraft(
+                title=None,
+                specialization=None,
+                grades=[],
+                must_skills_raw=[],
+                nice_skills_raw=[],
+                work_formats=[],
+                location=None,
+                salary_min=None,
+                salary_max=None,
+                salary_type=None,
+                team_context=None,
+                description=None,
+            )
+
         lowered = text.lower()
 
         # 1. Split text into "must" and "nice" sections if present
@@ -74,17 +93,17 @@ class FakeLlm:
         # 2. Extract title & specialization
         title = self._extract_jd_title(text)
         all_matches, _ = extract_skills(text)
-        specialization = self._infer_specialization(lowered, all_matches)
+        specialization = self._infer_specialization(text, all_matches)
 
         # 3. Extract grades
-        grades = self._extract_jd_grades(lowered)
+        grades = self._extract_jd_grades(text)
 
         # 4. Extract work formats & location
         work_formats = self._extract_work_formats(lowered)
         location = self._extract_city(lowered)
 
         # 5. Extract salary
-        sal_min, sal_max, sal_type = self._extract_salary(lowered)
+        sal_min, sal_max, sal_type = self._extract_salary(text)
 
         return JdDraft(
             title=title,
@@ -98,7 +117,7 @@ class FakeLlm:
             salary_max=sal_max,
             salary_type=sal_type,
             team_context=None,
-            description=text[:2000] if text else None,
+            description=text[:4000] if text else None,
         )
 
     def phrase(self, facts: list[str]) -> str:
@@ -111,92 +130,111 @@ class FakeLlm:
             return "Кандидат соответствует ключевым требованиям позиции."
 
         if len(clean_facts) == 1:
-            return f"Кандидат подходит на позицию: {clean_facts[0].lower()}."
+            return f"Кандидат подходит на позицию: {clean_facts[0]}."
 
         joined = ", ".join(clean_facts[:-1]) + f" и {clean_facts[-1]}"
         return f"Сильные стороны кандидата: {joined}."
 
     # ── Helpers ──
 
-    def _infer_specialization(self, lowered: str, matches: list[Any]) -> str:
-        """Infer backend | frontend | ml_data from text and matched skills."""
-        # Keyword checks
-        if any(w in lowered for w in ("ml engineer", "data scientist", "machine learning", "дата саентист", "nlp", "computer vision")):
-            return "ml_data"
-        if any(w in lowered for w in ("frontend", "фронтенд", "react", "vue", "angular", "верстальщик")):
-            return "frontend"
-        if any(w in lowered for w in ("backend", "бэкенд", "бэкендер", "django", "fastapi", "spring", "golang")):
-            return "backend"
+    def _infer_specialization(self, text: str, matches: list[Any]) -> str | None:
+        """Infer backend | frontend | ml_data using score-based weighting."""
+        scores = {"backend": 0, "frontend": 0, "ml_data": 0}
 
-        # Topic counts from matched skills
+        # Topics from matched skills
         catalog = load_skills()
-        topic_counts = {"backend": 0, "frontend": 0, "ml_data": 0}
         for m in matches:
             entry = catalog.get(m.skill_id)
             if not entry:
                 continue
             t = entry.topic
             if t.startswith("backend") or t.startswith("infrastructure"):
-                topic_counts["backend"] += 1
+                scores["backend"] += 1
             elif t.startswith("frontend"):
-                topic_counts["frontend"] += 1
+                scores["frontend"] += 1
             elif t.startswith("ml"):
-                topic_counts["ml_data"] += 1
+                scores["ml_data"] += 1
 
-        top_spec = max(topic_counts, key=topic_counts.get)  # type: ignore
-        if topic_counts[top_spec] > 0:
-            return top_spec
-        return "backend"
+        # Text keywords (Header lines count x3)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        header_lines = lines[:3]
+        for line in lines[3:]:
+            if any(term in line.lower() for term in ("желаемая должность", "позиция", "должность")):
+                header_lines.append(line)
+
+        header_text = " ".join(header_lines).lower()
+        body_text = text.lower()
+
+        spec_keywords = {
+            "backend": [
+                r"\bbackend\b", r"\bбэкенд\b", r"\bбэкендер\b", r"\bdjango\b",
+                r"\bfastapi\b", r"\bspring\b", r"\bgolang\b", r"\bgo developer\b",
+                r"\bpython developer\b", r"\bjava developer\b", r"\bc# developer\b",
+                r"\bphp developer\b", r"\bnodejs developer\b",
+            ],
+            "frontend": [
+                r"\bfrontend\b", r"\bфронтенд\b", r"\bфронтендер\b", r"\breact\b",
+                r"\bvue\b", r"\bangular\b", r"\bверстальщик\b", r"\bhtml/css\b",
+                r"\bjavascript developer\b", r"\btypescript developer\b",
+            ],
+            "ml_data": [
+                r"\bml\b", r"\bmachine learning\b", r"\bdata science\b", r"\bdata scientist\b",
+                r"\bмашинное обучение\b", r"\bдата саентист\b", r"\bnlp\b", r"\bcomputer vision\b",
+                r"\bdeep learning\b", r"\bнейросети\b", r"\bdata engineer\b", r"\bдата инженер\b",
+            ],
+        }
+
+        for spec, pats in spec_keywords.items():
+            for pat in pats:
+                if re.search(pat, header_text):
+                    scores[spec] += 3
+                elif re.search(pat, body_text):
+                    scores[spec] += 1
+
+        best_score = max(scores.values())
+        if best_score <= 0:
+            return None
+
+        # Check for tie among top scores
+        top_specs = [s for s, sc in scores.items() if sc == best_score]
+        if len(top_specs) > 1:
+            return None
+
+        return top_specs[0]
 
     def _extract_years_experience(self, lowered: str) -> float | None:
         """Extract experience in years from text."""
         # e.g. "опыт 3 года", "опыт работы: 5 лет", "4.5 года"
-        m = re.search(r"опыт(?:а|\s+работы)?\s*(?:составляет)?\s*[:—\-]?\s*(\d+(?:[.,]\d+)?)\s*(?:лет|года|год|г)", lowered)
+        m = re.search(r"опыт(?:а|\s+работы)?\s*(?:составляет)?\s*[:—\-]?\s*(\d+(?:[.,]\d+)?)\s*(?:лет|года|год|г\b)", lowered)
         if m:
             val = m.group(1).replace(",", ".")
             try:
-                return float(val)
+                years = float(val)
+                if 0 <= years <= 50:
+                    return years
             except ValueError:
                 pass
-
-        # "X лет опыта"
-        m2 = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:лет|года|год)\s+опыта", lowered)
-        if m2:
-            val = m2.group(1).replace(",", ".")
-            try:
-                return float(val)
-            except ValueError:
-                pass
-
-        # Date range e.g. 2019 — 2024
-        ranges = re.findall(r"\b(20[0-2]\d)\s*[-—–]\s*(20[0-2]\d|наст|по сей день|present)\b", lowered)
-        if ranges:
-            total_years = 0
-            for start_y, end_y in ranges:
-                try:
-                    s = int(start_y)
-                    e = 2026 if not end_y.isdigit() else int(end_y)
-                    if e >= s:
-                        total_years += (e - s)
-                except ValueError:
-                    continue
-            if total_years > 0:
-                return float(min(total_years, 30))
-
         return None
 
-    def _infer_grade(self, lowered: str, years: float | None) -> str:
-        """Infer intern | junior | middle | senior."""
-        if any(w in lowered for w in ("senior", "сеньор", "тимлид", "lead", "ведущий")):
+    def _infer_grade(self, text: str, years: float | None) -> str | None:
+        """Extract grade from header lines, or derive from years of experience."""
+        # Check header lines (first 5 lines) only
+        lines = [line.strip() for line in text.splitlines() if line.strip()][:5]
+        header_text = " ".join(lines)
+
+        # Exclude "под руководством senior"
+        sanitized_header = re.sub(r"под\s+руководством\s+\w+", "", header_text, flags=re.IGNORECASE)
+
+        if re.search(r"\b(?:senior|lead|тимлид|ведущий)\b", sanitized_header, re.IGNORECASE):
             return "senior"
-        if any(w in lowered for w in ("middle", "мидл", "миддл")):
+        if re.search(r"\b(?:middle|мидл)\b", sanitized_header, re.IGNORECASE):
             return "middle"
-        if any(w in lowered for w in ("junior", "джуниор", "джун")):
+        if re.search(r"\b(?:junior|джун|младший)\b", sanitized_header, re.IGNORECASE):
             return "junior"
-        if any(w in lowered for w in ("intern", "стажер", "стажёр")):
+        if re.search(r"\b(?:intern|стаж[её]р)\b", sanitized_header, re.IGNORECASE):
             return "intern"
 
-        # Experience fallback
+        # Otherwise derive from years
         if years is not None:
             if years >= 5.0:
                 return "senior"
@@ -204,119 +242,162 @@ class FakeLlm:
                 return "middle"
             if years >= 0.8:
                 return "junior"
-            return "intern"
+            if years > 0.0:
+                return "intern"
 
-        return "middle"
+        return None
 
-    def _extract_salary(self, lowered: str) -> tuple[int | None, int | None, str | None]:
-        """Extract salary_min, salary_max, salary_type (gross/net)."""
-        sal_type = "net" if any(w in lowered for w in ("на руки", "net", "чистыми")) else (
-            "gross" if any(w in lowered for w in ("до вычета", "gross", "грязными")) else "net"
-        )
+    def _extract_salary(self, text: str) -> tuple[int | None, int | None, str | None]:
+        """Extract salary bounds and type adhering strictly to AI-R6."""
+        sal_cues = [
+            "зарплат", "з/п", "зп", "оклад", "доход", "вилка", "компенсац",
+            "salary", "₽", "руб", "rub", "тыс", "к", "k",
+        ]
 
-        # Patterns like: "от 150 000 до 250 000", "150к - 250к", "от 200 000 руб"
-        # 1. Range: от X до Y
-        m_range = re.search(r"от\s*(\d[\d\s]*\d|\d+k?)\s*до\s*(\d[\d\s]*\d|\d+k?)", lowered)
-        if m_range:
-            s_min = self._parse_num(m_range.group(1))
-            s_max = self._parse_num(m_range.group(2))
-            return s_min, s_max, sal_type
+        # 1. Salary type: word-boundary only, guarded against dots and words
+        p_net = re.compile(r"(?<![.\w])net\b|на руки|чистыми|после\s+(?:вычета|налогов)", re.I)
+        p_gross = re.compile(r"(?<![.\w])gross\b|до\s+(?:вычета|налогов)|грязными|с уч[её]том ндфл", re.I)
+        sal_type: str | None = None
+        if p_gross.search(text):
+            sal_type = "gross"
+        elif p_net.search(text):
+            sal_type = "net"
 
-        # 2. Single "от X"
-        m_min = re.search(r"от\s*(\d[\d\s]*\d|\d+k?)\s*(?:руб|р|₽|k|\b)", lowered)
-        if m_min:
-            s_min = self._parse_num(m_min.group(1))
-            if s_min and s_min > 5000:
-                return s_min, None, sal_type
+        # 2. Amounts in cue lines
+        sal_min: int | None = None
+        sal_max: int | None = None
 
-        # 3. Single "до Y"
-        m_max = re.search(r"до\s*(\d[\d\s]*\d|\d+k?)\s*(?:руб|р|₽|k|\b)", lowered)
-        if m_max:
-            s_max = self._parse_num(m_max.group(1))
-            if s_max and s_max > 5000:
-                return None, s_max, sal_type
+        lines = text.splitlines()
+        cue_lines = []
+        for line in lines:
+            l_low = line.lower()
+            if any(c in l_low for c in sal_cues):
+                cue_lines.append(line)
 
-        return None, None, None
+        search_texts = cue_lines if cue_lines else [text]
 
-    def _parse_num(self, val: str) -> int | None:
-        val = val.strip().lower()
-        if "k" in val or "к" in val:
-            num = re.sub(r"[^\d.]", "", val)
+        def parse_num(s: str) -> int | None:
+            s_clean = s.strip().lower().replace(" ", "").replace("\xa0", "")
+            mult = 1
+            if s_clean.endswith("тыс"):
+                mult = 1000
+                s_clean = s_clean[:-3]
+            elif s_clean.endswith("k") or s_clean.endswith("к"):
+                mult = 1000
+                s_clean = s_clean[:-1]
             try:
-                return int(float(num) * 1000)
+                val = int(s_clean) * mult
+                if val >= 10000:
+                    return val
             except ValueError:
-                return None
-        cleaned = re.sub(r"\D", "", val)
-        return int(cleaned) if cleaned else None
+                pass
+            return None
+
+        num_pat = r"\d[\d\s\xa0]*(?:тыс|[kк])?"
+        range_p = re.compile(
+            rf"(?:от\s*)?({num_pat})\s*(?:до|-|–|—|\.\.\.)\s*({num_pat})(?!\s*(?:лет|года|год|years))",
+            re.I,
+        )
+        single_from_p = re.compile(rf"от\s*({num_pat})(?!\s*(?:лет|года|год|years))", re.I)
+        single_to_p = re.compile(rf"до\s*({num_pat})(?!\s*(?:лет|года|год|years))", re.I)
+
+        for st in search_texts:
+            m = range_p.search(st)
+            if m:
+                n1 = parse_num(m.group(1))
+                n2 = parse_num(m.group(2))
+                if n1 or n2:
+                    sal_min = n1
+                    sal_max = n2
+                    break
+            m_from = single_from_p.search(st)
+            if m_from:
+                sal_min = parse_num(m_from.group(1))
+            m_to = single_to_p.search(st)
+            if m_to:
+                sal_max = parse_num(m_to.group(1))
+            if sal_min or sal_max:
+                break
+
+        if sal_min is not None and sal_max is not None and sal_max < sal_min:
+            sal_min, sal_max = sal_max, sal_min
+
+        return sal_min, sal_max, sal_type
 
     def _extract_work_formats(self, lowered: str) -> list[str]:
         """Extract office, hybrid, remote formats."""
         formats: list[str] = []
-        if any(w in lowered for w in ("удаленка", "удаленно", "удаленный", "remote")):
+        if re.search(r"\b(?:удаленка|удалёнка|удаленно|удалённо|удаленный|удалённый|remote)\b", lowered):
             formats.append("remote")
-        if any(w in lowered for w in ("гибрид", "гибридный", "hybrid")):
+        if re.search(r"\b(?:гибрид|гибридный|hybrid)\b", lowered):
             formats.append("hybrid")
-        if any(w in lowered for w in ("офис", "office")):
+        if re.search(r"\b(?:офис|office)\b", lowered):
             formats.append("office")
-        return formats or ["remote"]
+        return formats
 
     def _extract_city(self, lowered: str) -> str | None:
-        """Extract Russian cities."""
+        """Extract Russian cities using whole-word matches."""
         cities = [
-            ("москва", "Москва"),
-            ("санкт-петербург", "Санкт-Петербург"),
-            ("питер", "Санкт-Петербург"),
-            ("новосибирск", "Новосибирск"),
-            ("екатеринбург", "Екатеринбург"),
-            ("казань", "Казань"),
-            ("нижний новгород", "Нижний Новгород"),
-            ("самара", "Самара"),
-            ("краснодар", "Краснодар"),
-            ("сочи", "Сочи"),
-            ("ростов-на-дону", "Ростов-на-Дону"),
-            ("минск", "Минск"),
+            (r"\bмоскв[аеыу]\b", "Москва"),
+            (r"\bсанкт-петербург\w*\b|\bпитер\w*\b|\bспб\b", "Санкт-Петербург"),
+            (r"\bновосибирск\w*\b", "Новосибирск"),
+            (r"\bекатеринбург\w*\b", "Екатеринбург"),
+            (r"\bказан[ьиея]\b", "Казань"),
+            (r"\bнижн(?:ий|ем|его)\s+новгород\w*\b", "Нижний Новгород"),
+            (r"\bсамар[аеыу]\b", "Самара"),
+            (r"\bкраснодар\w*\b", "Краснодар"),
+            (r"\bсочи\b", "Сочи"),
+            (r"\bростов-на-дону\b", "Ростов-на-Дону"),
+            (r"\bминск\w*\b", "Минск"),
         ]
         for c_pat, c_name in cities:
-            if c_pat in lowered:
+            if re.search(c_pat, lowered):
                 return c_name
         return None
 
-    def _extract_roles(self, text: str, spec: str) -> list[str]:
+    def _extract_roles(self, text: str, spec: str | None) -> list[str]:
         """Extract target roles from resume header/title."""
         for line in text.splitlines()[:5]:
             stripped = line.strip()
             if any(w in stripped.lower() for w in ("developer", "инженер", "разработчик", "специалист", "engineer")):
-                if len(stripped) < 60:
+                if len(stripped) < 60 and not stripped.startswith("["):
                     return [stripped]
         fallback_role = {
             "backend": "Backend Developer",
             "frontend": "Frontend Developer",
             "ml_data": "ML Engineer",
-        }.get(spec, "Software Engineer")
+        }.get(spec or "", "Software Engineer")
         return [fallback_role]
 
     def _extract_about(self, text: str) -> str | None:
-        """Extract a short <= 500 chars summary without PII placeholders."""
-        # Find 'обо мне' section or first descriptive paragraph
+        """Extract short <= 500 chars summary without PII placeholders."""
         m = re.search(r"(?:обо мне|about me)[:\s]+(.*?)(?=\n\s*\n|\n[А-ЯЁA-Z]|$)", text, re.IGNORECASE | re.DOTALL)
         if m:
             snippet = m.group(1).strip()
-            if snippet:
-                return snippet[:500]
+            # drop lines with placeholders
+            clean_lines = [line_item for line_item in snippet.splitlines() if not re.search(r"\[(NAME|PHONE|EMAIL|TG|URL)\]", line_item)]
+            clean_text = " ".join(clean_lines).strip()
+            if clean_text:
+                return clean_text[:500]
 
-        lines = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("[")]
-        for line in lines:
-            if len(line) > 30:
-                return line[:500]
         return None
+
+    def _extract_experience_text(self, text: str) -> str | None:
+        """Extract only 'Опыт работы' section, dropping placeholder lines, capped at 1500 chars."""
+        m = re.search(r"(?:опыт работы|experience)[:\s]+(.*?)(?=\n\s*(?:образование|обо мне|навыки|skills|education)|$)", text, re.IGNORECASE | re.DOTALL)
+        if m:
+            exp_raw = m.group(1).strip()
+            clean_lines = [line_item for line_item in exp_raw.splitlines() if not re.search(r"\[(NAME|PHONE|EMAIL|TG|URL)\]", line_item)]
+            clean_text = "\n".join(clean_lines).strip()
+            if clean_text:
+                return clean_text[:1500]
+        return ""
 
     def _extract_jd_skills(self, text: str) -> tuple[list[str], list[str]]:
         """Split skills into must-have and nice-to-have."""
         lowered = text.lower()
-        must_keywords = ["требования", "обязательно", "must have", "ожидаем от вас", "требуется"]
         nice_keywords = ["будет плюсом", "желательно", "nice to have", "плюсом будет", "приветствуется"]
 
-        # Split into blocks if keywords exist
         nice_split = -1
         for nk in nice_keywords:
             idx = lowered.find(nk)
@@ -336,23 +417,26 @@ class FakeLlm:
             all_matches, _ = extract_skills(text)
             return [m.name for m in all_matches], []
 
-    def _extract_jd_title(self, text: str) -> str:
-        """Extract job title from vacancy text."""
+    def _extract_jd_title(self, text: str) -> str | None:
+        """Extract job title from vacancy text if it contains a role word."""
+        role_words = ("developer", "инженер", "разработчик", "lead", "architect", "специалист", "engineer", "аналитик", "тестировщик", "qa")
         for line in text.splitlines()[:3]:
             stripped = line.strip()
             if stripped and len(stripped) < 80:
-                return stripped
-        return "Software Engineer"
+                if any(w in stripped.lower() for w in role_words):
+                    return stripped
+        return None
 
-    def _extract_jd_grades(self, lowered: str) -> list[str]:
-        """Extract applicable grades for the position."""
+    def _extract_jd_grades(self, text: str) -> list[str]:
+        """Extract applicable grades for the position without inventing defaults."""
+        lowered = text.lower()
         grades: list[str] = []
-        if any(w in lowered for w in ("senior", "сеньор", "ведущий")):
+        if re.search(r"\b(?:senior|сеньор|ведущий|lead)\b", lowered):
             grades.append("senior")
-        if any(w in lowered for w in ("middle", "мидл")):
+        if re.search(r"\b(?:middle|мидл)\b", lowered):
             grades.append("middle")
-        if any(w in lowered for w in ("junior", "джун")):
+        if re.search(r"\b(?:junior|джун)\b", lowered):
             grades.append("junior")
-        if any(w in lowered for w in ("intern", "стажер")):
+        if re.search(r"\b(?:intern|стаж[её]р)\b", lowered):
             grades.append("intern")
-        return grades or ["middle"]
+        return grades

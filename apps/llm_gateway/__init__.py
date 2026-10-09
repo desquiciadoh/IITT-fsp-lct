@@ -7,14 +7,15 @@ Exposes primary entry points:
 - redact
 - extract_text
 - get_gateway
-- UnreadablePdf
+- UnreadablePdf, LlmError, LlmUnavailable, LlmSchemaError
 """
 from __future__ import annotations
 
+import logging
 import os
-from typing import Any
+import threading
 
-from .base import Cache, GatewayConfig, LlmGateway
+from .base import Cache, GatewayConfig, LlmError, LlmGateway, LlmSchemaError, LlmUnavailable
 from .fake import FakeLlm
 from .jd import parse_jd
 from .pdf_text import extract_text
@@ -31,20 +32,24 @@ from .types import (
     UnreadablePdf,
 )
 
+logger = logging.getLogger(__name__)
+
+_GATEWAY_INSTANCES: dict[GatewayConfig, LlmGateway] = {}
+_GATEWAY_LOCK = threading.Lock()
+_NO_KEY_LOGGED = False
+
 
 def get_gateway(config: GatewayConfig | None = None) -> LlmGateway:
-    """Build or retrieve the configured LlmGateway instance.
+    """Build or retrieve the process-wide cached LlmGateway instance.
 
-    If config is not provided, attempts to read from django.conf.settings
-    or environment variables. Falls back to FakeLlm.
+    Per AI-R8 and AI-R14:
+    - Does not mutate environment via load_dotenv().
+    - Caches instances by GatewayConfig (frozen dataclass).
+    - Logs error once and returns FakeLlm if gigachat requested without GIGACHAT_AUTH_KEY.
     """
-    if config is None:
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-        except ImportError:
-            pass
+    global _NO_KEY_LOGGED
 
+    if config is None:
         provider = os.getenv("LLM_PROVIDER", "fake")
         auth_key = os.getenv("GIGACHAT_AUTH_KEY")
         scope = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
@@ -76,11 +81,17 @@ def get_gateway(config: GatewayConfig | None = None) -> LlmGateway:
         )
 
     if config.provider == "gigachat":
-        try:
-            from .gigachat import GigaChatLlm
-            return GigaChatLlm(config)
-        except Exception:
+        if not config.auth_key:
+            if not _NO_KEY_LOGGED:
+                logger.error("GigaChat provider requested but GIGACHAT_AUTH_KEY is missing. Using FakeLlm.")
+                _NO_KEY_LOGGED = True
             return FakeLlm()
+
+        with _GATEWAY_LOCK:
+            if config not in _GATEWAY_INSTANCES:
+                from .gigachat import GigaChatLlm
+                _GATEWAY_INSTANCES[config] = GigaChatLlm(config)
+            return _GATEWAY_INSTANCES[config]
 
     return FakeLlm()
 
@@ -90,7 +101,10 @@ __all__ = [
     "GatewayConfig",
     "JdDraft",
     "JdParseResult",
+    "LlmError",
     "LlmGateway",
+    "LlmSchemaError",
+    "LlmUnavailable",
     "Redacted",
     "ResumeDraft",
     "ResumeParseResult",

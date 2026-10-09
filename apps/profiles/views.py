@@ -259,15 +259,34 @@ class ResumeParseView(views.APIView):
         if not file_obj.name.lower().endswith('.pdf'):
             raise FSPAPIError('unreadable_pdf', 'Invalid file type', 'Only PDF files are supported', 422)
 
+        from llm_gateway import FakeLlm, UnreadablePdf, parse_resume
+
+        file_bytes = file_obj.read()
         try:
-            from llm_gateway import UnreadablePdf, get_gateway, parse_resume
-            file_bytes = file_obj.read()
-            gateway = get_gateway()
-            parse_res = parse_resume(file_bytes, gateway=gateway)
+            # Inline parsing uses FakeLlm until Celery N4 async worker is wired
+            parse_res = parse_resume(file_bytes, gateway=FakeLlm())
         except UnreadablePdf:
-            raise FSPAPIError('unreadable_pdf', 'Unreadable PDF', 'Unable to parse provided PDF file', 422)
+            raise FSPAPIError(
+                'unreadable_pdf',
+                'Не удалось прочитать PDF',
+                'Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.',
+                422,
+            )
         except Exception as e:
-            raise FSPAPIError('unreadable_pdf', 'Unreadable PDF', f'Unable to parse provided PDF file: {e}', 422)
+            import hashlib
+            file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
+            logger.error("Unexpected error in ResumeParseView (%s, sha=%s)", type(e).__name__, file_sha)
+            try:
+                parse_res = parse_resume(file_bytes, gateway=FakeLlm())
+            except UnreadablePdf:
+                raise FSPAPIError(
+                    'unreadable_pdf',
+                    'Не удалось прочитать PDF',
+                    'Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.',
+                    422,
+                )
+            except Exception:
+                raise
 
         return Response({
             'prefill': parse_res.prefill,
