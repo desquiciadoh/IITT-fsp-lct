@@ -5,10 +5,9 @@ These affect ranking (Profile Strength) but NEVER determine grades.
 """
 import uuid
 
+from core.enums import Discipline, PlacementTier, SportsRank, SyncStatus
 from django.conf import settings
 from django.db import models
-
-from core.enums import Discipline, PlacementTier, SportsRank, SyncStatus
 
 
 class FSPLink(models.Model):

@@ -1,42 +1,32 @@
 """Assessment views."""
-import hmac
-import hashlib
-from datetime import timedelta
-from django.conf import settings
-from django.utils import timezone
-from rest_framework import permissions, status, views
-from rest_framework.response import Response
-
-from assessment.models import AssessmentSession, AssessmentItem, ItemFamily, LeagueMembership
-from assessment.serializers import (
-    AssessmentSessionSerializer,
-    AssessmentResultSerializer,
-    AnswerRequestSerializer,
-    ItemViewSerializer,
-)
-from assessment.engine import FAMILIES_REGISTRY, score_assessment
 from core.enums import (
     AssessmentStatus,
     Grade,
-    GradeDecision,
     LeagueStatus,
     Specialization,
-    UserRole,
 )
-from core.errors import CooldownActive, AssessmentInProgress, ItemNotCurrent, FSPAPIError
+from core.errors import FSPAPIError
+from core.pagination import FSPPagination
 from core.permissions import IsCandidate
+from django.conf import settings
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import permissions, serializers, status, views
+from rest_framework.response import Response
 
+from assessment.models import AssessmentSession, LeagueMembership
+from assessment.serializers import (
+    AnswerRequestSerializer,
+    AssessmentResultSerializer,
+    AssessmentSessionSerializer,
+    FallbackRequestSerializer,
+    ItemViewSerializer,
+    LeagueShelfSerializer,
+    StartAssessmentSerializer,
+    ValidationReportSerializer,
+)
+from assessment.services import AssessmentService, get_current_time_for_user
 
-def get_current_time_for_user(user) -> timezone.datetime:
-    """Return current time adjusted for user's clock offset in DEMO_MODE."""
-    now = timezone.now()
-    if settings.DEMO_MODE and getattr(user, 'clock_offset_days', 0):
-        now += timedelta(days=user.clock_offset_days)
-    return now
-
-
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
 
 class EligibilityView(views.APIView):
     permission_classes = [IsCandidate]
@@ -79,92 +69,49 @@ class AssessmentListCreateView(views.APIView):
     permission_classes = [IsCandidate]
     serializer_class = AssessmentSessionSerializer
 
-    @extend_schema(responses={200: AssessmentResultSerializer(many=True)})
+    @extend_schema(responses={200: inline_serializer('AssessmentPaginatedResponse', fields={
+        'items': AssessmentResultSerializer(many=True),
+        'total': serializers.IntegerField(),
+        'page': serializers.IntegerField(),
+        'pages': serializers.IntegerField(),
+    })})
     def get(self, request):
         sessions = AssessmentSession.objects.filter(candidate=request.user).order_by('-started_at')
+        paginator = FSPPagination()
+        page = paginator.paginate_queryset(sessions, request, view=self)
+        if page is not None:
+            serializer = AssessmentResultSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
         serializer = AssessmentResultSerializer(sessions, many=True)
-        return Response(serializer.data)
+        return Response({
+            'items': serializer.data,
+            'total': len(serializer.data),
+            'page': 1,
+            'pages': 1,
+        })
 
     @extend_schema(
-        request=inline_serializer('StartAssessmentRequest', fields={
-            'specialization': serializers.CharField(default='backend'),
-            'claimed_grade': serializers.CharField(default='middle'),
-            'mode': serializers.CharField(default='full'),
-        }),
+        request=StartAssessmentSerializer,
         responses={201: AssessmentSessionSerializer}
     )
     def post(self, request):
-        user = request.user
-        now = get_current_time_for_user(user)
-        spec = request.data.get('specialization', Specialization.BACKEND)
-        claimed_grade = request.data.get('claimed_grade', Grade.MIDDLE)
-        mode = request.data.get('mode', 'full')
+        serializer = StartAssessmentSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
 
-        # Check cooldown
-        membership = LeagueMembership.objects.filter(candidate=user, specialization=spec).first()
-        if membership and membership.next_attempt_at and membership.next_attempt_at > now:
-            raise CooldownActive(membership.next_attempt_at.isoformat())
-
-        # Check active session
-        active = AssessmentSession.objects.filter(candidate=user, status=AssessmentStatus.IN_PROGRESS).first()
-        if active:
-            raise AssessmentInProgress()
-
-        # Create session
-        session = AssessmentSession.objects.create(
-            candidate=user,
-            specialization=spec,
-            claimed_grade=claimed_grade,
-            mode=mode,
-            status=AssessmentStatus.IN_PROGRESS,
+        data = serializer.validated_data
+        session = AssessmentService.start_assessment(
+            user=request.user,
+            specialization=data['specialization'],
+            claimed_grade=data['claimed_grade'],
+            mode=data.get('mode', 'full'),
         )
-
-        # Select families matching spec or shared
-        families = [
-            f for f in FAMILIES_REGISTRY.values()
-            if f.spec == spec or f.spec == 'backend'  # fallback
-        ]
-        if not families:
-            families = list(FAMILIES_REGISTRY.values())
-
-        # Seed items
-        for seq, family in enumerate(families[:3], start=1):
-            seed_raw = f"{settings.ITEM_SEED_SECRET}:{session.id}:{family.family_id}:{seq}"
-            seed = hashlib.sha256(seed_raw.encode()).hexdigest()
-            instance = family.generate(seed)
-
-            # Ensure ItemFamily DB row exists
-            item_family_obj, _ = ItemFamily.objects.get_or_create(
-                id=family.family_id,
-                defaults={
-                    'specs': [spec],
-                    'topic': family.topic,
-                    'format': 'choice',
-                    'a': family.discrimination_a,
-                    'b': family.difficulty_b,
-                    'c': family.guessing_c,
-                    'time_limit_s': family.time_limit_s,
-                }
-            )
-
-            deadline = now + timedelta(seconds=instance.time_limit_s)
-            AssessmentItem.objects.create(
-                assessment=session,
-                seq=seq,
-                family=item_family_obj,
-                seed=seed,
-                view={
-                    'stem_md': instance.stem_md,
-                    'code': instance.code,
-                    'options': instance.options,
-                    'input_type': instance.input_type,
-                    'time_limit_s': instance.time_limit_s,
-                },
-                key=instance.key,  # STRICTLY SERVER-SIDE!
-                fingerprint=instance.fingerprint,
-                deadline_at=deadline,
-            )
-
         serializer = AssessmentSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -178,7 +125,7 @@ class AssessmentDetailView(views.APIView):
         session = AssessmentSession.objects.filter(id=pk, candidate=request.user).first()
         if not session:
             raise FSPAPIError('not_found', 'Not found', 'Assessment session not found', 404)
-        
+
         serializer = AssessmentSessionSerializer(session)
         return Response(serializer.data)
 
@@ -196,109 +143,52 @@ class AssessmentAnswerView(views.APIView):
         })}
     )
     def post(self, request, pk):
-        session = AssessmentSession.objects.filter(id=pk, candidate=request.user).first()
-        if not session:
-            raise FSPAPIError('not_found', 'Not found', 'Assessment session not found', 404)
-
-        if session.status != AssessmentStatus.IN_PROGRESS:
-            raise FSPAPIError('assessment_expired', 'Assessment closed', 'Assessment is no longer in progress', 400)
-
         serializer = AnswerRequestSerializer(data=request.data)
         if not serializer.is_valid():
-            raise FSPAPIError('validation_failed', 'Validation failed', errors=serializer.errors, status_code=422)
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
 
         item_id = serializer.validated_data['item_id']
         chosen_opt = serializer.validated_data.get('option_id')
         user_val = serializer.validated_data.get('value')
         answer_val = chosen_opt or user_val
 
-        current_item = session.items.filter(answered_at__isnull=True).order_by('seq').first()
-        if not current_item or str(current_item.id) != str(item_id):
-            raise ItemNotCurrent()
+        session, next_item, is_done = AssessmentService.submit_answer(
+            user=request.user,
+            session_id=pk,
+            item_id=item_id,
+            answer_val=answer_val,
+            integrity=serializer.validated_data.get('integrity', {}),
+        )
 
-        now = get_current_time_for_user(request.user)
-
-        # Server-side evaluation against key
-        correct = (answer_val == current_item.key)
-
-        current_item.answer = {'value': answer_val}
-        current_item.correct = correct
-        current_item.answered_at = now
-        current_item.integrity = serializer.validated_data.get('integrity', {})
-        current_item.save()
-
-        # Check if more items exist
-        next_item = session.items.filter(answered_at__isnull=True).order_by('seq').first()
-        if next_item:
+        if not is_done:
             return Response({
                 'done': False,
-                'next': ItemViewSerializer(next_item).data
+                'next': ItemViewSerializer(next_item).data,
             })
-
-        # All items answered: compute IRT score and finalize
-        items_data = [
-            {'correct': it.correct, 'b': it.family.b, 'a': it.family.a}
-            for it in session.items.all()
-        ]
-        theta, se, rating, result_grade, _ = score_assessment(items_data)
-
-        # Decision rule: confirmed if result_grade >= claimed_grade, else unconfirmed
-        GRADE_ORDER = {Grade.INTERN: 1, Grade.JUNIOR: 2, Grade.MIDDLE: 3, Grade.SENIOR: 4}
-        claimed_val = GRADE_ORDER.get(session.claimed_grade, 2)
-        achieved_val = GRADE_ORDER.get(result_grade, 2)
-
-        if achieved_val >= claimed_val:
-            decision = GradeDecision.CONFIRMED
-            assigned_grade = session.claimed_grade
-            league_status = LeagueStatus.CONFIRMED
-        else:
-            decision = GradeDecision.UNCONFIRMED
-            assigned_grade = session.claimed_grade
-            # Profile NOT hidden! Unconfirmed status, stays visible but deranked
-            league_status = LeagueStatus.UNCONFIRMED
-
-        session.theta = theta
-        session.se = se
-        session.rating = rating
-        session.result_grade = assigned_grade
-        session.decision = decision
-        session.status = AssessmentStatus.FINISHED
-        session.finished_at = now
-        session.save()
-
-        # Update or create LeagueMembership
-        cooldown_days = settings.GRADE_RETRY_COOLDOWN_DAYS
-        next_attempt = now + timedelta(days=cooldown_days)
-
-        membership, _ = LeagueMembership.objects.get_or_create(
-            candidate=request.user,
-            specialization=session.specialization,
-            defaults={
-                'grade': assigned_grade,
-                'status': league_status,
-                'theta': theta,
-                'se': se,
-                'rating': rating,
-                'strength': max(0.0, min(100.0, 50.0 + theta * 25.0)),
-                'confirmed_at': now if decision == GradeDecision.CONFIRMED else None,
-                'next_attempt_at': next_attempt,
-            }
-        )
-        membership.grade = assigned_grade
-        membership.status = league_status
-        membership.theta = theta
-        membership.se = se
-        membership.rating = rating
-        membership.strength = max(0.0, min(100.0, 50.0 + theta * 25.0))
-        membership.next_attempt_at = next_attempt
-        if decision == GradeDecision.CONFIRMED:
-            membership.confirmed_at = now
-        membership.save()
 
         return Response({
             'done': True,
-            'result': AssessmentResultSerializer(session).data
+            'result': AssessmentResultSerializer(session).data,
         })
+
+
+class AssessmentFinishView(views.APIView):
+    """Abandon / finish early an in-progress assessment."""
+    permission_classes = [IsCandidate]
+    serializer_class = AssessmentResultSerializer
+
+    @extend_schema(request=None, responses={200: AssessmentResultSerializer})
+    def post(self, request, pk):
+        session = AssessmentService.abandon_assessment(
+            user=request.user,
+            session_id=pk,
+        )
+        return Response(AssessmentResultSerializer(session).data)
 
 
 class AssessmentResultView(views.APIView):
@@ -310,5 +200,162 @@ class AssessmentResultView(views.APIView):
         session = AssessmentSession.objects.filter(id=pk, candidate=request.user).first()
         if not session or session.status != AssessmentStatus.FINISHED:
             raise FSPAPIError('not_finished', 'Not finished', 'Assessment is not finished yet', 400)
-        
+
         return Response(AssessmentResultSerializer(session).data)
+
+
+class AssessmentFallbackView(views.APIView):
+    """Fallback to a lower grade or short-test after an unconfirmed assessment (G5)."""
+    permission_classes = [IsCandidate]
+    serializer_class = FallbackRequestSerializer
+
+    @extend_schema(
+        request=FallbackRequestSerializer,
+        responses={
+            200: AssessmentResultSerializer,
+            201: AssessmentSessionSerializer,
+        },
+    )
+    def post(self, request, pk):
+        serializer = FallbackRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError('validation_failed', 'Validation failed', errors=serializer.errors, status_code=422)
+
+        mode = serializer.validated_data.get('mode', 'instant')
+        session, is_new = AssessmentService.fallback(
+            user=request.user,
+            session_id=pk,
+            mode=mode,
+        )
+        if is_new:
+            return Response(AssessmentSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+        return Response(AssessmentResultSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class LeagueShelfView(views.APIView):
+    """League shelves with candidate counts and median salary expectation (G7)."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LeagueShelfSerializer
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='specialization',
+                description='Specialization to filter by',
+                required=False,
+                type=str,
+            ),
+        ],
+        responses={200: LeagueShelfSerializer(many=True)},
+    )
+    def get(self, request):
+        import statistics
+
+        from profiles.models import CandidateProfile
+
+        spec_param = request.query_params.get('specialization')
+        if spec_param:
+            specs = [spec_param]
+        else:
+            specs = [s.value for s in Specialization]
+
+        shelves = []
+        for spec in specs:
+            for grade in [Grade.INTERN, Grade.JUNIOR, Grade.MIDDLE, Grade.SENIOR]:
+                memberships = LeagueMembership.objects.filter(
+                    specialization=spec,
+                    grade=grade,
+                )
+                confirmed = memberships.filter(status=LeagueStatus.CONFIRMED).count()
+                unconfirmed = memberships.filter(status=LeagueStatus.UNCONFIRMED).count()
+
+                candidate_ids = memberships.values_list('candidate_id', flat=True)
+                salaries = list(
+                    CandidateProfile.objects.filter(
+                        user_id__in=candidate_ids,
+                        salary_min__isnull=False,
+                    ).values_list('salary_min', flat=True)
+                )
+                median_exp = int(round(statistics.median(salaries))) if salaries else None
+
+                shelves.append({
+                    'specialization': spec,
+                    'grade': grade,
+                    'confirmed': confirmed,
+                    'unconfirmed': unconfirmed,
+                    'median_expectation': median_exp,
+                })
+
+        return Response(shelves)
+
+
+class LabReportView(views.APIView):
+    """Validation Lab metrics report (G11).
+
+    Serves validation/out/report.json if present; otherwise serves
+    a synthetic fixture labeled with synthetic_fixture=True.
+    """
+    permission_classes = [permissions.AllowAny]
+    serializer_class = ValidationReportSerializer
+
+    @extend_schema(responses={200: ValidationReportSerializer})
+    def get(self, request):
+        import json
+        from pathlib import Path
+
+        report_file = Path(settings.BASE_DIR) / 'validation' / 'out' / 'report.json'
+        fixture_file = Path(settings.BASE_DIR) / 'validation' / 'out' / 'report.fixture.json'
+
+        for p in [report_file, fixture_file]:
+            if p.is_file():
+                try:
+                    with open(p, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    return Response(data)
+                except Exception:
+                    pass
+
+        synthetic_data = {
+            'generated_at': timezone.now().isoformat(),
+            'git_sha': 'dev-synthetic',
+            'synthetic_fixture': True,
+            'assessment': {
+                'simulees': 1000,
+                'exact_acc': 0.84,
+                'adjacent_acc': 0.98,
+                'qwk': 0.89,
+                'retest_same_grade': 0.88,
+                'retest_r': 0.92,
+                'median_len': 12.0,
+                'max_family_exposure': 0.15,
+                'collision_rate': 0.002,
+                'generator_errors': 0,
+                'confusion': [
+                    [230, 20, 0, 0],
+                    [15, 240, 25, 0],
+                    [0, 18, 220, 12],
+                    [0, 0, 15, 205],
+                ],
+                'tif': {
+                    'theta': [-2.0, -1.0, 0.0, 1.0, 2.0],
+                    'info': [1.5, 3.2, 4.8, 3.5, 1.8],
+                },
+                'leak_attack': [
+                    {'leak_share': 0.0, 'static_dtheta': 0.0, 'parametric_dtheta': 0.0},
+                    {'leak_share': 0.2, 'static_dtheta': 0.45, 'parametric_dtheta': 0.05},
+                    {'leak_share': 0.5, 'static_dtheta': 1.10, 'parametric_dtheta': 0.12},
+                ],
+            },
+            'matching': {
+                'candidates': 500,
+                'needs': 50,
+                'non_fsp_parity': 0.96,
+                'pool_p95_ms': 35.0,
+                'systems': [
+                    {'name': 'production', 'ndcg10': 0.89, 'p10': 0.82, 'r50': 0.91, 'mrr': 0.85},
+                    {'name': 'baseline_bm25', 'ndcg10': 0.65, 'p10': 0.58, 'r50': 0.70, 'mrr': 0.62},
+                ],
+            },
+        }
+        return Response(synthetic_data)
+

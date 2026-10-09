@@ -64,12 +64,13 @@ Caddy ─── auto-TLS, serves the SPA, proxies /api
    │
 API ───── Django + Django REST Framework modular monolith (Swagger at /api/docs)
    │      identity · profiles · assessment · matching · outreach
-   │      vacancies · microtasks · fsp · lab
+   │      vacancies · microtasks · fsp_sync · fsp_mock · lab
    ├── PostgreSQL 17 + pgvector   system of record, JSONB item params, vectors
-   ├── Redis-compatible broker     Celery broker/result backend and future SSE fan-out
-   ├── worker (same image, Celery) parsing, embeddings, LLM calls, FSP sync, cron
-   ├── LLM gateway                GigaChat → rule-based fallback, PII redacted first
-   ├── fsp-id-mock                OIDC on Keycloak-style paths + FSP Registry API
+   ├── Redis / in-memory bus      Celery broker/backend, Domain Event Bus & SSE stream
+   ├── worker (Celery)            FSP sync, offer expiration, background jobs
+   ├── worker-llm (Celery, -c 1)  parsing, embeddings, LLM gateway (dedicated 'llm' queue)
+   ├── beat (Celery Beat)         periodic tasks (expire-stale-offers every 5m)
+   ├── fsp-mock (built-in)        Keycloak-compatible OIDC IdP (PKCE, JWKS, discovery)
    └── Mailpit                    SMTP sink for email verification (local)
 ```
 
@@ -77,33 +78,39 @@ API ───── Django + Django REST Framework modular monolith (Swagger at 
 
 | Module | Owns | Core logic |
 |---|---|---|
-| identity | users, identities, sessions, consents, audit log | email verification, argon2id, OIDC (BFF), RBAC and ownership guards |
-| profiles | profile, skills, contact vault, privacy | PDF parse → prefill; Player Card PDF with a verification QR |
-| assessment | item families, attempts, results, cooldowns | generators, CAT/IRT, grade policy, leak monitor |
-| matching | leagues, strength, pools, search | scoring, explanations, counterfactuals |
-| outreach | positions, offers, credits, contact grants | offer state machine, SSE events, decline analytics |
-| vacancies | public vacancies, applications | pipeline statuses (secondary flow) |
-| microtasks | employer tasks, drops, submissions | auto-grading, employer review, invite from a submission |
-| fsp | FSP links, results, ranks | registry adapter, sync, FSP boost |
-| lab | validation report, demo tools | report API, Jury Mode personas, time travel |
+| core | enums, error hierarchy (RFC 7807), pagination, seed | Pure leaf module; zero dependencies on domain models |
+| identity | users, identities, sessions, consents, audit log | email verification, argon2id, OIDC client with PKCE, RBAC and ownership guards |
+| profiles | profile, skills, contact vault, privacy | PDF parse prefill, Player Card PDF with WeasyPrint & QR, candidate visibility selector |
+| assessment | item families, attempts, results, cooldowns | test sessions, deadline_at enforcement, CAT/IRT state persistence, clean ML adapter boundary |
+| matching | leagues, strength, pools, search | SQL prefilter, batched DTO hydration, clean ML scoring adapter boundary |
+| outreach | positions, offers, credits, contact grants, events | offer state machine (optimistic locking), ContactAccessService, Domain Event Bus, SSE view |
+| fsp_sync | FSP links, results, ranks | registry adapter, sync Celery tasks, idempotent strength recomputation |
+| fsp_mock | synthetic OIDC IdP & FSP registry | Keycloak-compatible OIDC discovery, JWKS (RS256), PKCE auth/token, participant achievements |
 
 ### 2.4 Target stack and current implementation
 
 | Layer | Choice | Why | License |
 |---|---|---|---|
 | Web | React 19 + TypeScript, Vite, Tailwind + shadcn/ui, TanStack Query, React Router, Recharts, Shiki | Planned frontend; no frontend source is present in this checkout | MIT |
-| API | Python 3.12, **Django 5.x + Django REST Framework**, drf-spectacular, Django ORM, WSGI | **Current implementation**: modular monolith with session-cookie auth, migrations, RFC 7807 errors and OpenAPI | BSD / MIT |
+| API | Python 3.12, **Django 5.x + Django REST Framework**, drf-spectacular, Django ORM, WSGI/ASGI | **Current implementation**: modular monolith with session-cookie auth, migrations, RFC 7807 errors and OpenAPI | BSD / MIT |
 | Data | PostgreSQL 17 + pgvector | One store for relational data, JSONB and vectors | PostgreSQL |
-| Queue / cache | Redis-compatible broker + Celery | **Current implementation**: FSP sync task queue and result backend; Valkey/arq remains a target option | BSD-3 / MIT |
-| Auth | Authlib (OIDC client), argon2-cffi, our own `fsp-id-mock` | Swap the mock for real Keycloak through env vars | BSD / MIT |
+| Queue / cache | Redis-compatible broker + Celery + Celery Beat | **Current implementation**: FSP sync, periodic offer expiration (`django_celery_beat`), and dedicated `llm` queue | BSD-3 / MIT |
+| Real-time | Domain Event Bus (Redis pub/sub + in-memory fallback) | **Current implementation**: SSE streaming endpoint (`GET /api/events`) with replay buffer | BSD / MIT |
+| Auth | Authlib (OIDC client), argon2-cffi, our own `fsp_mock` | Keycloak-compatible OIDC with PKCE, JWKS, and synthetic registry | BSD / MIT |
+| ML / AI Boundary | Pure Python adapters (`CatEngine`, `score_pool`, `ItemFamily`) | **Strict separation**: ML code has zero ORM dependencies; backend handles persistence, transactions, and event emission | BSD / MIT |
 | Psychometrics | numpy/scipy (in-house CAT/EAP, about 150 LOC), girth (calibration) | Small enough to understand and defend line by line | BSD / MIT |
 | NLP | pypdf + pdfplumber, rapidfuzz, sentence-transformers + `deepvk/USER-bge-m3` on CPU | Domestic RU/EN embedding model, ~0.4B params, no GPU | BSD / MIT / Apache-2.0 |
 | LLM | GigaChat API (`GigaChat-2` for runtime, `-Pro`/`-Max` for offline drafting) behind a provider-agnostic gateway; YandexGPT adapter optional | Domestic model, no cross-border personal data | Commercial API |
-| PDF | WeasyPrint + Jinja2 + qrcode | Standardized Player Card PDF | BSD |
+| PDF | WeasyPrint + Jinja2 + qrcode | Standardized Player Card PDF with SSRF-safe URL fetcher | BSD |
 | Edge / ops | Caddy 2, Docker Compose, Mailpit | Auto-HTTPS public link; one command to run | Apache-2.0 / MIT |
 | Quality | uv, pnpm, Ruff, pytest, Playwright, Locust, CycloneDX | Reproducible builds; BOM generated automatically | MIT / Apache-2.0 |
 
 Pin exact versions at kickoff (`uv.lock`, `pnpm-lock.yaml`). The BOM deliverable is a CycloneDX SBOM generated in CI (`make sbom`).
+
+**ML / AI Boundary and Stubs Policy:**
+- **Zero ORM dependencies in ML:** The assessment engine (`apps/assessment/engine.py`), matching algorithm (`apps/matching/scoring.py`), and item generators are designed as pure Python adapters and stubs.
+- **Backend responsibility:** The Django backend manages database transactions (`select_for_update`), CAT session state persistence (`AssessmentSession.state`), time-limit enforcement (`deadline_at`), candidate visibility filtering (`visible_candidates_for`), DTO hydration (`CandidateCtx`, `NeedCtx`), Celery task queuing (`llm` queue with `--concurrency=1`), and domain event broadcasting (`offer.created`, `offer.updated`, `league.updated`, `fsp.synced`).
+- **Clean hand-off:** When the ML team delivers the final psychometric model and matching weights, they replace the pure engine stubs without requiring any schema migrations, API contract changes, or backend refactoring.
 
 **Model usage register** (QA requires every model and use case to be documented):
 

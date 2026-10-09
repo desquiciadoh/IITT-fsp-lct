@@ -1,0 +1,143 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fsp_draft}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "False"
+      DEMO_MODE: "True"
+      AUTO_SEED: "True"
+      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
+      ALLOWED_HOSTS: "localhost,127.0.0.1,api,web"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:8000,http://127.0.0.1:8000"
+      PUBLIC_BASE_URL: "http://localhost:8000"
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/auth/csrf"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: celery -A config worker -l info -Q celery
+    environment:
+      DEBUG: "False"
+      DEMO_MODE: "True"
+      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  worker-llm:
+    build: .
+    restart: unless-stopped
+    command: celery -A config worker -l info -Q llm --concurrency=1
+    environment:
+      DEBUG: "False"
+      DEMO_MODE: "True"
+      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  beat:
+    build: .
+    restart: unless-stopped
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DEBUG: "False"
+      DEMO_MODE: "True"
+      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+volumes:
+  pgdata:
+  redisdata:

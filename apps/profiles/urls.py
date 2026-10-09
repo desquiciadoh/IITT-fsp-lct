@@ -1,8 +1,10 @@
 """Profiles URLs."""
 from django.urls import path
+
 from profiles import views
 
 urlpatterns = [
+    path('taxonomy', views.TaxonomyView.as_view(), name='taxonomy'),
     path('candidates/me', views.CandidateMeView.as_view(), name='candidate-me'),
     path('candidates/me/consents', views.ConsentsView.as_view(), name='candidate-consents'),
     path('candidates/me/card.pdf', views.PlayerCardPdfView.as_view(), name='candidate-card-pdf'),

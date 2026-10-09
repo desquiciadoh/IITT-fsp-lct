@@ -2,15 +2,39 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / '.env')
+
 sys.path.insert(0, str(BASE_DIR / 'apps'))
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-dev')
-ITEM_SEED_SECRET = os.environ.get('ITEM_SEED_SECRET', 'item-seed-secret-dev')
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1')
-DEMO_MODE = os.environ.get('DEMO_MODE', 'True').lower() in ('true', '1')
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1')
+DEMO_MODE = os.environ.get('DEMO_MODE', 'False').lower() in ('true', '1')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-default-key-for-dev'
+    else:
+        raise RuntimeError('SECRET_KEY environment variable is required in production')
+
+ITEM_SEED_SECRET = os.environ.get('ITEM_SEED_SECRET', 'item-seed-secret-dev')
+
+_hosts = os.environ.get('ALLOWED_HOSTS', '')
+if _hosts:
+    ALLOWED_HOSTS = [h.strip() for h in _hosts.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+else:
+    raise RuntimeError('ALLOWED_HOSTS environment variable is required in production')
+
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if o.strip()
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -23,6 +47,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'drf_spectacular',
+    'django_celery_beat',
     # Project apps
     'core.apps.CoreConfig',
     'identity.apps.IdentityConfig',
@@ -31,6 +56,7 @@ INSTALLED_APPS = [
     'matching.apps.MatchingConfig',
     'outreach.apps.OutreachConfig',
     'fsp_sync.apps.FspSyncConfig',
+    'fsp_mock.apps.FspMockConfig',
 ]
 
 MIDDLEWARE = [
@@ -94,6 +120,24 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_NAME = 'sid'
 
+TESTING = 'pytest' in sys.modules or any('pytest' in arg for arg in sys.argv) or 'test' in sys.argv
+SESSION_COOKIE_SECURE = not DEBUG and not TESTING
+CSRF_COOKIE_SECURE = not DEBUG and not TESTING
+CSRF_COOKIE_HTTPONLY = True
+
+# --- HTTPS hardening (production) ---
+_ssl_redirect_env = os.environ.get('SECURE_SSL_REDIRECT')
+if _ssl_redirect_env is not None:
+    SECURE_SSL_REDIRECT = _ssl_redirect_env.lower() in ('true', '1', 'yes')
+else:
+    SECURE_SSL_REDIRECT = not DEBUG and not TESTING
+
+if SECURE_SSL_REDIRECT:
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', 31536000))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # --- i18n & time ---
 LANGUAGE_CODE = 'ru'
 TIME_ZONE = 'UTC'
@@ -105,6 +149,23 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- DRF ---
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+        'register': '5/min',
+        'verify': '20/min',
+        'fsp_sync': '5/min',
+        'offers': '30/min',
+        'resume': '5/min',
+    },
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.FSPPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -134,6 +195,16 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_BEAT_SCHEDULE = {
+    'expire-stale-offers': {
+        'task': 'outreach.tasks.expire_offers',
+        'schedule': 300.0,  # every 5 minutes
+    },
+}
+CELERY_TASK_ROUTES = {
+    'llm_gateway.*': {'queue': 'llm'},
+    'ai.*': {'queue': 'llm'},
+}
 
 # --- FSP / OIDC ---
 OIDC_ISSUER = os.environ.get('OIDC_ISSUER', 'http://localhost:8090/realms/fsp')

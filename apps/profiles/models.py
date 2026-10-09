@@ -1,10 +1,5 @@
 """Profiles app models: CandidateProfile, CandidateContact, Skill, CandidateSkill."""
-import hashlib
 import uuid
-
-from django.conf import settings
-from django.contrib.postgres.fields import ArrayField
-from django.db import models
 
 from core.enums import (
     EvidenceSource,
@@ -13,6 +8,9 @@ from core.enums import (
     Specialization,
     WorkFormat,
 )
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
 
 
 def generate_public_id() -> str:

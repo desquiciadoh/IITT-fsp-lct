@@ -1,10 +1,6 @@
 """Assessment app models: ItemFamily, AssessmentSession, AssessmentItem, LeagueMembership."""
 import uuid
 
-from django.conf import settings
-from django.contrib.postgres.fields import ArrayField
-from django.db import models
-
 from core.enums import (
     AssessmentKind,
     AssessmentMode,
@@ -16,6 +12,9 @@ from core.enums import (
     LeagueStatus,
     Specialization,
 )
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
 
 
 class ItemFamily(models.Model):
@@ -159,7 +158,7 @@ class AssessmentItem(models.Model):
 
     INVARIANT: The `key` field contains the correct answer and MUST NEVER
     be included in any API response. It is used only by the server-side
-    grading logic. Tests verify this invariant (see tests/test_invariants.py).
+    grading logic. Tests verify this invariant (see tests/test_assessment_security.py).
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -250,6 +249,14 @@ class LeagueMembership(models.Model):
     strength = models.FloatField(
         default=0.0,
         help_text='Profile Strength 0-100 for ranking within the League',
+    )
+    base_strength = models.FloatField(
+        default=0.0,
+        help_text='Base strength computed from IRT theta (0-100)',
+    )
+    fsp_boost = models.FloatField(
+        default=0.0,
+        help_text='Current FSP boost applied to strength (0-15)',
     )
 
     confirmed_at = models.DateTimeField(null=True, blank=True)

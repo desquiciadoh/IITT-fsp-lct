@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-from core.enums import Grade, GradeDecision, ItemFormat, Specialization
+from core.enums import Grade, GradeDecision, Specialization
 
 
 @dataclass
@@ -55,7 +55,6 @@ class BackendSqlAggregationFamily(BaseItemFamily):
         rng = random.Random(seed)
         threshold = rng.choice([2, 3, 4, 5])
         dept_names = rng.sample(['Engineering', 'Marketing', 'Sales', 'HR', 'Support'], 3)
-        salaries = [rng.randint(50, 150) * 1000 for _ in range(6)]
 
         # Problem setup
         sql_query = f"""SELECT department, COUNT(*) as cnt, AVG(salary) as avg_sal

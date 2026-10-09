@@ -1,9 +1,13 @@
 """Player Card PDF generator service with QR code validation."""
-import io
 import base64
+import io
+import logging
+from html import escape as html_escape
+
 import qrcode
 from django.conf import settings
-from django.template.loader import render_to_string
+
+logger = logging.getLogger(__name__)
 
 
 def generate_qr_code_base64(url: str) -> str:
@@ -30,23 +34,25 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
     # Get league membership
     league = candidate_profile.user.league_memberships.first()
     rating = league.rating if league else 1000
-    grade = league.grade.upper() if league else "UNRATED"
-    spec = league.specialization.upper() if league else "IT"
-    status_label = league.status.upper() if league else "PENDING"
+    grade = html_escape(str(league.grade).upper() if league else "UNRATED")
+    spec = html_escape(str(league.specialization).upper() if league else "IT")
+    status_label = html_escape(str(league.status).upper() if league else "PENDING")
 
     # Get FSP achievements
     fsp_results = list(candidate_profile.user.fsp_results.all())
     fsp_rank = ""
     if hasattr(candidate_profile.user, 'fsp_link'):
-        fsp_rank = candidate_profile.user.fsp_link.sports_rank.upper()
+        fsp_rank = html_escape(str(candidate_profile.user.fsp_link.sports_rank).upper())
 
-    skills = [cs.skill.name for cs in candidate_profile.skills.all()[:10]]
+    skills = [html_escape(cs.skill.name) for cs in candidate_profile.skills.all()[:10]]
+    public_id = html_escape(str(candidate_profile.public_id))
+    full_name = html_escape(str(candidate_profile.full_name or "Кандидат"))
 
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Player Card - {candidate_profile.public_id}</title>
+<title>Player Card - {public_id}</title>
 <style>
     body {{
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -163,7 +169,7 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
             <h1 class="title">FSP DRAFT · КАРТОЧКА ИГРОКА</h1>
             <div class="subtitle">Федерация спортивного программирования</div>
         </div>
-        <div class="public-id">{candidate_profile.public_id}</div>
+        <div class="public-id">{public_id}</div>
     </div>
 
     <div class="stats-grid">
@@ -188,7 +194,7 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
 
     <div class="footer">
         <div>
-            <div style="font-weight: 600;">{candidate_profile.full_name or "Кандидат"}</div>
+            <div style="font-weight: 600;">{full_name}</div>
             <div class="verify-note">Верифицированный профиль FSP Draft</div>
             <div class="verify-note">Сканируйте QR-код для онлайн-проверки</div>
         </div>
@@ -202,7 +208,20 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
 
     try:
         from weasyprint import HTML
-        return HTML(string=html_content).write_pdf()
-    except Exception:
-        # Fallback to returning the HTML encoded as bytes if weasyprint's C libraries are missing
+
+        def _safe_url_fetcher(url, timeout=10, ssl_context=None):
+            """Only allow data: URIs to prevent SSRF."""
+            if url.startswith('data:'):
+                from weasyprint import default_url_fetcher
+                return default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
+            raise ValueError(f"External URL fetching is disabled: {url}")
+
+        return HTML(string=html_content, url_fetcher=_safe_url_fetcher).write_pdf()
+    except ImportError:
+        logger.warning("weasyprint not installed, returning HTML fallback")
         return html_content.encode('utf-8')
+    except Exception:
+        logger.exception("PDF generation failed")
+        from core.errors import FSPAPIError
+        raise FSPAPIError('pdf_generation_failed', 'PDF Error',
+                          'Player card PDF generation failed', 503)

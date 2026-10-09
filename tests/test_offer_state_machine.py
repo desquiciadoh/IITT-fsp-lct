@@ -7,16 +7,15 @@ INVARIANTS:
 4. Salary constraints: salary_min > 0 and salary_max >= salary_min
 """
 import pytest
+from core.enums import OfferStatus, SalaryType, UserRole
+from core.errors import InvalidTransition, VersionConflict
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.utils import timezone
-
 from identity.models import User
-from matching.models import Company, CompanyMember, Position
+from matching.models import Company, CompanyMember
 from outreach.models import Offer
 from outreach.services import OfferService
-from core.enums import OfferStatus, SalaryType, UserRole
-from core.errors import InvalidTransition, VersionConflict
 
 
 @pytest.fixture
