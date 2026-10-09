@@ -9,8 +9,14 @@
 export interface VerifyPublicIdResponse {
   public_id: string;
   valid: boolean;
-  specialization: string;
-  grade: string;
-  status: string;
-  rating: number;
+  /** @nullable */
+  specialization: string | null;
+  /** @nullable */
+  grade: string | null;
+  /** @nullable */
+  status: string | null;
+  /** @nullable */
+  rating: number | null;
+  /** @nullable */
+  issued_at: string | null;
 }

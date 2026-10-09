@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface OfferViewRequest {
-  version: number;
+export interface AssessmentTopic {
+  topic: string;
+  level: string;
 }

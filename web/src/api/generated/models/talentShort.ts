@@ -7,10 +7,14 @@
  */
 import type { WorkFormatsEnum } from './workFormatsEnum';
 import type { TalentShortSalaryType } from './talentShortSalaryType';
+import type { TalentLeague } from './talentLeague';
+import type { TalentFSP } from './talentFSP';
+import type { TalentSkill } from './talentSkill';
 
 export interface TalentShort {
   /** @maxLength 10 */
   public_id?: string;
+  readonly display_name: string;
   /** @maxLength 100 */
   city?: string;
   work_formats?: WorkFormatsEnum[];
@@ -27,9 +31,10 @@ export interface TalentShort {
    */
   salary_max?: number | null;
   salary_type?: typeof TalentShortSalaryType[keyof typeof TalentShortSalaryType] ;
-  readonly league: string;
-  readonly fsp: string;
-  readonly skills: string;
+  readonly league: TalentLeague;
+  readonly fsp: TalentFSP;
+  readonly skills: readonly TalentSkill[];
+  readonly verified_topics: readonly string[];
   /** @nullable */
   last_active_at?: string | null;
 }

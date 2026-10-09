@@ -8,8 +8,10 @@
  * still to be shipped, each tagged with a comment.
  */
 import type {
+  AssessmentEvidence,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
+  AssessmentTopic,
   CandidateProfile as GeneratedCandidateProfile,
   ConsentsResponse,
   ContactChannelEnum,
@@ -20,7 +22,7 @@ import type {
   GradesEnum,
   KindEnum,
   MeResponse,
-  ModeEnum,
+  ModeDf0Enum,
   Offer as GeneratedOffer,
   OfferStatusEnum,
   ResumeParseResponse,
@@ -39,7 +41,7 @@ export type WorkFormat = WorkFormatsEnum
 export type SalaryType = SalaryTypeEnum
 export type OfferStatus = OfferStatusEnum
 export type AssessmentKind = KindEnum
-export type AssessmentMode = ModeEnum
+export type AssessmentMode = ModeDf0Enum
 export type AssessmentStatus = Status61dEnum
 export type DeclineReason = (typeof DeclineReasonEnum)[keyof typeof DeclineReasonEnum]
 export type GradeDecision = (typeof DecisionEnum)[keyof typeof DecisionEnum] | ''
@@ -85,7 +87,10 @@ export type ScoreComponentsDict = Partial<
   Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
 >
 
-export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
+export type TalentShort = Omit<
+  GeneratedTalentShort,
+  'public_id' | 'league' | 'fsp' | 'skills' | 'verified_topics'
+> & {
   public_id: string
   /** present at runtime; the schema does not declare it */
   display_name?: string
@@ -93,6 +98,7 @@ export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'f
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
   /** the schema flattens this nested list to `string` */
   skills?: string[]
+  verified_topics?: string[]
 }
 
 export type Offer = Omit<
@@ -106,6 +112,8 @@ export type Offer = Omit<
   | 'decline_reason'
   | 'decline_comment'
   | 'expires_at'
+  | 'talent'
+  | 'decline'
 > & {
   description?: string
   company?: { id: string; name: string; trust_level?: TrustLevel }
@@ -188,10 +196,10 @@ export type Taxonomy = {
   skills: string[]
 }
 
-export type ResultTopic = { key: string; label: string; correct: number; total: number }
-export type EvidencePoint = { seq: number; correct: boolean | null }
+export type ResultTopic = AssessmentTopic
+export type EvidencePoint = AssessmentEvidence
 
-/** GET /api/assessments/{id}/result. G5 fields are optional (mocked until BE adds them). */
+/** GET /api/assessments/{id}/result. G5 fields are real since 2026-10-09. */
 export type AssessmentResult = Omit<
   GeneratedAssessmentResult,
   'kind' | 'mode' | 'status' | 'theta' | 'se' | 'rating' | 'result_grade' | 'decision' | 'started_at'
@@ -205,13 +213,7 @@ export type AssessmentResult = Omit<
   result_grade: Grade | ''
   decision: GradeDecision
   started_at: string | null
-  // gap G5 — hidden while the backend omits them
-  rating_ci?: number | null
   percentile?: number | null
-  topics?: ResultTopic[]
-  evidence?: EvidencePoint[]
-  fallback?: { kind: 'instant' | 'short_test'; reason?: string } | null
-  next_attempt_at?: string | null
 }
 
 /** GET /api/assessments/eligibility?specialization= */

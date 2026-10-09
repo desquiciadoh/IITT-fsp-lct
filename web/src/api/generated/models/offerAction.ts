@@ -5,9 +5,10 @@
  * Reverse IT recruitment platform with verified achievement profiles (FSP)
  * OpenAPI spec version: 1.0.0
  */
+import type { OfferActionReason } from './offerActionReason';
 
-export interface OfferDeclineRequest {
+export interface OfferAction {
   version: number;
-  reason?: string;
+  reason?: typeof OfferActionReason[keyof typeof OfferActionReason] ;
   comment?: string;
 }

@@ -8,8 +8,9 @@
 import type { SpecializationEnum } from './specializationEnum';
 import type { GradesEnum } from './gradesEnum';
 import type { KindEnum } from './kindEnum';
-import type { ModeEnum } from './modeEnum';
+import type { ModeDf0Enum } from './modeDf0Enum';
 import type { Status61dEnum } from './status61dEnum';
+import type { ItemView } from './itemView';
 import type { AssessmentSessionResultGrade } from './assessmentSessionResultGrade';
 import type { AssessmentSessionDecision } from './assessmentSessionDecision';
 
@@ -18,9 +19,9 @@ export interface AssessmentSession {
   specialization: SpecializationEnum;
   claimed_grade: GradesEnum;
   kind?: KindEnum;
-  mode?: ModeEnum;
+  mode?: ModeDf0Enum;
   status?: Status61dEnum;
-  readonly current: string;
+  readonly current: ItemView;
   /**
    * θ estimate (EAP) on the IRT scale
    * @nullable

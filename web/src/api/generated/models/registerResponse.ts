@@ -11,4 +11,5 @@ export interface RegisterResponse {
   email: string;
   role: string;
   email_verified: boolean;
+  verify_link?: string;
 }

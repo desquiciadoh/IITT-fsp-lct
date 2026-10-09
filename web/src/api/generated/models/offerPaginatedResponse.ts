@@ -5,9 +5,11 @@
  * Reverse IT recruitment platform with verified achievement profiles (FSP)
  * OpenAPI spec version: 1.0.0
  */
+import type { Offer } from './offer';
 
-export interface StartAssessmentRequest {
-  specialization?: string;
-  claimed_grade?: string;
-  mode?: string;
+export interface OfferPaginatedResponse {
+  items: Offer[];
+  total: number;
+  page: number;
+  pages: number;
 }

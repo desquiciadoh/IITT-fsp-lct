@@ -6,9 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { TalentShort } from './talentShort';
+import type { TalentSearchResponseFacets } from './talentSearchResponseFacets';
 
 export interface TalentSearchResponse {
   items: TalentShort[];
   total: number;
   page: number;
+  pages: number;
+  facets: TalentSearchResponseFacets;
 }

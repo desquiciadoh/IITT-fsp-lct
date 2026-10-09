@@ -6,4 +6,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PoolItemComponents = {[key: string]: unknown};
+export type PositionPoolResponseFacets = {[key: string]: unknown};

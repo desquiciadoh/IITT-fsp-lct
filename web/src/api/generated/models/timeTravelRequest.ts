@@ -7,5 +7,9 @@
  */
 
 export interface TimeTravelRequest {
-  days?: number;
+  /**
+   * @minimum 0
+   * @maximum 365
+   */
+  days: number;
 }

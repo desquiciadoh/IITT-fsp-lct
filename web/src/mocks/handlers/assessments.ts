@@ -21,21 +21,21 @@ const problem = (status: number, code: string, detail: string) =>
   )
 
 const TOPICS = [
-  { key: 'architecture', label: 'Архитектура', correct: 3, total: 3 },
-  { key: 'performance', label: 'Производительность', correct: 2, total: 3 },
-  { key: 'testing', label: 'Тестирование', correct: 2, total: 2 },
-  { key: 'security', label: 'Безопасность', correct: 1, total: 2 },
+  { topic: 'Архитектура', level: 'strong' },
+  { topic: 'Производительность', level: 'moderate' },
+  { topic: 'Тестирование', level: 'strong' },
+  { topic: 'Безопасность', level: 'limited' },
 ]
 
 const EVIDENCE = [
-  { seq: 1, correct: true },
-  { seq: 2, correct: true },
-  { seq: 3, correct: true },
-  { seq: 4, correct: false },
-  { seq: 5, correct: true },
-  { seq: 6, correct: true },
-  { seq: 7, correct: false },
-  { seq: 8, correct: true },
+  { seq: 1, level: 'middle', correct: true },
+  { seq: 2, level: 'middle', correct: true },
+  { seq: 3, level: 'middle', correct: true },
+  { seq: 4, level: 'middle', correct: false },
+  { seq: 5, level: 'middle', correct: true },
+  { seq: 6, level: 'middle', correct: true },
+  { seq: 7, level: 'middle', correct: false },
+  { seq: 8, level: 'middle', correct: true },
 ]
 
 const started = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -84,7 +84,7 @@ const resultFixtures: Record<string, Record<string, unknown>> = {
     promotion_unlocked: false,
     topics: TOPICS,
     evidence: EVIDENCE,
-    fallback: { kind: 'short_test', reason: 'doubtful_se' },
+    fallback: { grade: 'middle', mode: 'short_test' },
     next_attempt_at: in48h,
   },
   'demo-promotion': {

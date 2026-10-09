@@ -13,7 +13,7 @@ import type { PositionStatusEnum } from './positionStatusEnum';
 
 export interface Position {
   readonly id: string;
-  company: string;
+  readonly company: string;
   /** @maxLength 255 */
   title: string;
   specialization: SpecializationEnum;

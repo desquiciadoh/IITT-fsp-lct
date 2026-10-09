@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface OfferAcceptRequest {
-  version: number;
+export interface CompanyMinimal {
+  readonly id: string;
+  /** @maxLength 255 */
+  name: string;
 }

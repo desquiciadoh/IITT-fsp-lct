@@ -19,12 +19,18 @@ export interface ItemView {
    * @maximum 2147483647
    */
   seq: number;
+  readonly max_items: number;
+  readonly level: string;
+  readonly format: string;
   readonly stem_md: string;
   readonly code: unknown;
   readonly options: unknown;
   readonly input_type: string;
   readonly time_limit_s: number;
-  /** Item-level time limit deadline */
-  deadline_at: string;
+  /**
+   * Item-level deadline; set when the item becomes current, NULL until served
+   * @nullable
+   */
+  deadline_at?: string | null;
   readonly served_at: string;
 }

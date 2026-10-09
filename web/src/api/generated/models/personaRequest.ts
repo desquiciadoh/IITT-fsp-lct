@@ -5,7 +5,8 @@
  * Reverse IT recruitment platform with verified achievement profiles (FSP)
  * OpenAPI spec version: 1.0.0
  */
+import type { PersonaEnum } from './personaEnum';
 
 export interface PersonaRequest {
-  persona?: string;
+  persona: PersonaEnum;
 }

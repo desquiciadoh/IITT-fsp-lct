@@ -6,13 +6,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { TalentShort } from './talentShort';
-import type { PoolItemComponents } from './poolItemComponents';
+import type { PoolComponent } from './poolComponent';
 import type { PoolItemReasonsItem } from './poolItemReasonsItem';
 
 export interface PoolItem {
   talent: TalentShort;
   score: number;
-  components: PoolItemComponents;
+  components: PoolComponent[];
   reasons: PoolItemReasonsItem[];
+  gaps: string[];
   shortlisted: boolean;
 }

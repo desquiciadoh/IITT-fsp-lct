@@ -9,6 +9,11 @@ import type { CandidateProfileSpecialization } from './candidateProfileSpecializ
 import type { CandidateProfileClaimedGrade } from './candidateProfileClaimedGrade';
 import type { WorkFormatsEnum } from './workFormatsEnum';
 import type { CandidateProfileSalaryType } from './candidateProfileSalaryType';
+import type { CandidateContact } from './candidateContact';
+import type { CandidateSkill } from './candidateSkill';
+import type { CandidateLeague } from './candidateLeague';
+import type { CandidateFSP } from './candidateFSP';
+import type { ConsentsResponse } from './consentsResponse';
 
 export interface CandidateProfile {
   readonly public_id: string;
@@ -56,9 +61,9 @@ export interface CandidateProfile {
   experience_text?: string;
   /** Profile completeness 0-100 */
   readonly completeness: number;
-  readonly contacts: string;
-  readonly skills: string;
-  readonly league: string;
-  readonly fsp: string;
-  readonly consents: string;
+  readonly contacts: CandidateContact;
+  readonly skills: readonly CandidateSkill[];
+  readonly league: CandidateLeague;
+  readonly fsp: CandidateFSP;
+  readonly consents: ConsentsResponse;
 }

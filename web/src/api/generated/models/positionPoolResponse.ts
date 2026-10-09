@@ -6,9 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PoolItem } from './poolItem';
+import type { PositionPoolResponseFacets } from './positionPoolResponseFacets';
 
 export interface PositionPoolResponse {
   items: PoolItem[];
   total: number;
   page: number;
+  pages: number;
+  facets: PositionPoolResponseFacets;
+  relaxations: string[];
 }

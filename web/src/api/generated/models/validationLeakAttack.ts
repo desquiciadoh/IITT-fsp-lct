@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface OfferWithdrawRequest {
-  version: number;
+export interface ValidationLeakAttack {
+  leak_share: number;
+  static_dtheta: number;
+  parametric_dtheta: number;
 }

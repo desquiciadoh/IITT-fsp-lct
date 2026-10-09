@@ -6,10 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { Company } from './company';
+import type { TalentShort } from './talentShort';
 import type { SalaryTypeEnum } from './salaryTypeEnum';
 import type { ContactChannelEnum } from './contactChannelEnum';
 import type { OfferStatusEnum } from './offerStatusEnum';
 import type { OfferDeclineReason } from './offerDeclineReason';
+import type { OfferDecline } from './offerDecline';
+import type { CandidateContactsDisplay } from './candidateContactsDisplay';
 
 export interface Offer {
   readonly id: string;
@@ -17,6 +20,7 @@ export interface Offer {
   /** @nullable */
   position?: string | null;
   candidate_public_id?: string;
+  readonly talent: TalentShort;
   /** @maxLength 255 */
   title: string;
   description: string;
@@ -39,10 +43,11 @@ export interface Offer {
   readonly status: OfferStatusEnum;
   decline_reason?: typeof OfferDeclineReason[keyof typeof OfferDeclineReason] ;
   decline_comment?: string;
+  readonly decline: OfferDecline;
   readonly why_you: unknown;
   /** Incremented on every status change for optimistic locking */
   readonly version: number;
-  readonly candidate_contacts: string;
+  readonly candidate_contacts: CandidateContactsDisplay;
   /** Auto-expire after 14 days by default */
   readonly expires_at: string;
   readonly created_at: string;

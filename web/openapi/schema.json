@@ -8,16 +8,13 @@
   "paths": {
     "/api/assessments": {
       "get": {
-        "operationId": "assessments_list",
+        "operationId": "assessments_retrieve",
         "tags": [
           "assessments"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -25,10 +22,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AssessmentResult"
-                  }
+                  "$ref": "#/components/schemas/AssessmentPaginatedResponse"
                 }
               }
             },
@@ -45,12 +39,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StartAssessmentRequest"
+                "$ref": "#/components/schemas/StartAssessment"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/StartAssessmentRequest"
+                "$ref": "#/components/schemas/StartAssessment"
               }
             }
           }
@@ -58,9 +52,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -79,7 +70,7 @@
     },
     "/api/assessments/{id}": {
       "get": {
-        "operationId": "assessments_retrieve",
+        "operationId": "assessments_retrieve_2",
         "parameters": [
           {
             "in": "path",
@@ -97,9 +88,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -151,9 +139,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -162,6 +147,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/assessments/{id}/fallback": {
+      "post": {
+        "operationId": "assessments_fallback_create",
+        "description": "Fallback to a lower grade or short-test after an unconfirmed assessment (G5).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "assessments"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FallbackRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FallbackRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult"
+                }
+              }
+            },
+            "description": ""
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentSession"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/assessments/{id}/finish": {
+      "post": {
+        "operationId": "assessments_finish_create",
+        "description": "Abandon / finish early an in-progress assessment.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "assessments"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult"
                 }
               }
             },
@@ -190,9 +273,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -218,9 +298,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -233,6 +310,96 @@
               }
             },
             "description": ""
+          }
+        }
+      }
+    },
+    "/api/auth/csrf": {
+      "get": {
+        "operationId": "auth_csrf_retrieve",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/api/auth/fsp-id/callback": {
+      "get": {
+        "operationId": "auth_fsp_id_callback_retrieve",
+        "description": "OIDC callback endpoint for FSP ID flow",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authorization code",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            },
+            "description": "State parameter",
+            "required": true
+          }
+        ],
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "302": {
+            "description": "No response body"
+          },
+          "409": {
+            "description": "FSP ID already linked to another account"
+          }
+        }
+      }
+    },
+    "/api/auth/fsp-id/login": {
+      "get": {
+        "operationId": "auth_fsp_id_login_retrieve",
+        "description": "Initiate OIDC flow for FSP ID login or linking",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "intent",
+            "schema": {
+              "type": "string",
+              "default": "login"
+            },
+            "description": "Intent: login or link"
+          }
+        ],
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "302": {
+            "description": "No response body"
           }
         }
       }
@@ -262,9 +429,6 @@
           {
             "cookieAuth": []
           },
-          {
-            "basicAuth": []
-          },
           {}
         ],
         "responses": {
@@ -290,9 +454,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -327,9 +488,6 @@
           {
             "cookieAuth": []
           },
-          {
-            "basicAuth": []
-          },
           {}
         ],
         "responses": {
@@ -346,6 +504,40 @@
         }
       }
     },
+    "/api/auth/verify-email": {
+      "post": {
+        "operationId": "auth_verify_email_create",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
     "/api/candidates/me": {
       "get": {
         "operationId": "candidates_me_retrieve",
@@ -355,9 +547,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -395,9 +584,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -417,25 +603,54 @@
     "/api/candidates/me/card.pdf": {
       "get": {
         "operationId": "candidates_me_card.pdf_retrieve",
+        "description": "Generate candidate player card PDF",
         "tags": [
           "candidates"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
           "200": {
-            "description": "No response body"
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "description": ""
           }
         }
       }
     },
     "/api/candidates/me/consents": {
+      "get": {
+        "operationId": "candidates_me_consents_retrieve",
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentsResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
       "put": {
         "operationId": "candidates_me_consents_update",
         "tags": [
@@ -445,12 +660,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConsentsRequest"
+                "$ref": "#/components/schemas/ConsentUpdate"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/ConsentsRequest"
+                "$ref": "#/components/schemas/ConsentUpdate"
               }
             }
           }
@@ -458,9 +673,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -483,12 +695,27 @@
         "tags": [
           "candidates"
         ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -497,6 +724,82 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResumeParseResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/companies": {
+      "get": {
+        "operationId": "companies_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search companies by name for candidate blocklist"
+          }
+        ],
+        "tags": [
+          "companies"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyMinimal"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "companies_create",
+        "tags": [
+          "companies"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Company"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Company"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
                 }
               }
             },
@@ -514,9 +817,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -555,9 +855,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -593,14 +890,12 @@
                 "$ref": "#/components/schemas/PersonaRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           },
           {}
         ],
@@ -610,6 +905,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/demo/reset": {
+      "post": {
+        "operationId": "demo_reset_create",
+        "description": "Resets the caller's persona data and clock offset in DEMO_MODE.",
+        "tags": [
+          "demo"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoResetResponse"
                 }
               }
             },
@@ -637,14 +958,12 @@
                 "$ref": "#/components/schemas/TimeTravelRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -664,21 +983,25 @@
     "/api/events": {
       "get": {
         "operationId": "events_retrieve",
-        "description": "Server-Sent Events (SSE) endpoint for real-time notifications.",
+        "description": "Server-Sent Events (SSE) notification stream",
         "tags": [
           "events"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
           "200": {
-            "description": "No response body"
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
           }
         }
       }
@@ -707,9 +1030,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -736,9 +1056,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -747,6 +1064,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FSPSyncResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/lab/report": {
+      "get": {
+        "operationId": "lab_report_retrieve",
+        "description": "Validation Lab metrics report (G11).\n\nServes validation/out/report.json if present; otherwise serves\na synthetic fixture labeled with synthetic_fixture=True.",
+        "tags": [
+          "lab"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/leagues": {
+      "get": {
+        "operationId": "leagues_list",
+        "description": "League shelves with candidate counts and median salary expectation (G7).",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specialization to filter by"
+          }
+        ],
+        "tags": [
+          "leagues"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LeagueShelf"
+                  }
                 }
               }
             },
@@ -764,9 +1147,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -785,16 +1165,13 @@
     },
     "/api/offers": {
       "get": {
-        "operationId": "offers_list",
+        "operationId": "offers_retrieve",
         "tags": [
           "offers"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -802,10 +1179,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Offer"
-                  }
+                  "$ref": "#/components/schemas/OfferPaginatedResponse"
                 }
               }
             },
@@ -822,12 +1196,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Offer"
+                "$ref": "#/components/schemas/CreateOffer"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Offer"
+                "$ref": "#/components/schemas/CreateOffer"
               }
             }
           },
@@ -836,9 +1210,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -857,7 +1228,7 @@
     },
     "/api/offers/{id}": {
       "get": {
-        "operationId": "offers_retrieve",
+        "operationId": "offers_retrieve_2",
         "parameters": [
           {
             "in": "path",
@@ -875,9 +1246,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -915,12 +1283,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferAcceptRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferAcceptRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -929,9 +1297,57 @@
         "security": [
           {
             "cookieAuth": []
-          },
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/close": {
+      "post": {
+        "operationId": "offers_close_create",
+        "parameters": [
           {
-            "basicAuth": []
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -969,12 +1385,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferDeclineRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferDeclineRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -983,9 +1399,108 @@
         "security": [
           {
             "cookieAuth": []
-          },
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/hired": {
+      "post": {
+        "operationId": "offers_hired_create",
+        "parameters": [
           {
-            "basicAuth": []
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/interview": {
+      "post": {
+        "operationId": "offers_interview_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1023,12 +1538,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferViewRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferViewRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -1037,9 +1552,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1077,12 +1589,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferWithdrawRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferWithdrawRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -1091,9 +1603,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1119,9 +1628,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1163,9 +1669,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1202,9 +1705,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1254,9 +1754,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1279,6 +1776,115 @@
         "description": "Scouted talent pool for a position with explainable scores and reason chips.",
         "parameters": [
           {
+            "in": "query",
+            "name": "confirmed_only",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true to show only verified league grades"
+          },
+          {
+            "in": "query",
+            "name": "formats",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated work formats: remote,hybrid,office"
+          },
+          {
+            "in": "query",
+            "name": "fsp",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true/false filter for FSP achievements"
+          },
+          {
+            "in": "query",
+            "name": "grades",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated grades, e.g. junior,middle"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "preset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Preset filter: fsp_stars, confirmed"
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Max salary expectations"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20)"
+          },
+          {
+            "in": "query",
+            "name": "skills",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated skill IDs or names"
+          }
+        ],
+        "tags": [
+          "positions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionPoolResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/shortlist": {
+      "get": {
+        "operationId": "positions_shortlist_list",
+        "description": "List shortlisted talent for a position.",
+        "parameters": [
+          {
             "in": "path",
             "name": "id",
             "schema": {
@@ -1294,9 +1900,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1304,7 +1907,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PositionPoolResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TalentShort"
+                  }
                 }
               }
             },
@@ -1341,9 +1947,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1379,9 +1982,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1391,10 +1991,50 @@
         }
       }
     },
+    "/api/positions/parse": {
+      "post": {
+        "operationId": "positions_parse_create",
+        "description": "Parse a job description into a position draft.",
+        "tags": [
+          "positions"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JdParseRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/JdParseRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JdParseResult"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/talent/{public_id}": {
       "get": {
         "operationId": "talent_retrieve",
-        "description": "Talent card view for employers.\n\nSECURITY INVARIANT: Contacts are only unmasked if an active ContactGrant exists!",
+        "description": "Talent card view for employers.\n\nSECURITY INVARIANT: Only visible candidates are shown.\nContacts are only unmasked if an active ContactGrant exists!",
         "parameters": [
           {
             "in": "path",
@@ -1411,9 +2051,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1434,15 +2071,86 @@
       "get": {
         "operationId": "talent_search_retrieve",
         "description": "General talent search without a specific position.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "confirmed_only",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true to show only verified league grades"
+          },
+          {
+            "in": "query",
+            "name": "formats",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated work formats: remote,hybrid,office"
+          },
+          {
+            "in": "query",
+            "name": "fsp",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true/false filter for FSP achievements"
+          },
+          {
+            "in": "query",
+            "name": "grades",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated grades, e.g. junior,middle"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "preset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Preset filter: fsp_stars, confirmed"
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Max salary expectations"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20)"
+          },
+          {
+            "in": "query",
+            "name": "skills",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated skill IDs or names"
+          }
+        ],
         "tags": [
           "talent"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1451,6 +2159,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TalentSearchResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/taxonomy": {
+      "get": {
+        "operationId": "taxonomy_retrieve",
+        "description": "Platform taxonomy: specializations, grades, skills, and decline reasons (G3).",
+        "tags": [
+          "taxonomy"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Taxonomy"
                 }
               }
             },
@@ -1470,6 +2205,14 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specialization filter"
           }
         ],
         "tags": [
@@ -1478,9 +2221,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           },
           {}
         ],
@@ -1537,6 +2277,66 @@
           "done"
         ]
       },
+      "AssessmentEvidence": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer"
+          },
+          "level": {
+            "type": "string"
+          },
+          "correct": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "correct",
+          "level",
+          "seq"
+        ]
+      },
+      "AssessmentFallback": {
+        "type": "object",
+        "properties": {
+          "grade": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grade",
+          "mode"
+        ]
+      },
+      "AssessmentPaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentResult"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
+        ]
+      },
       "AssessmentResult": {
         "type": "object",
         "properties": {
@@ -1545,17 +2345,17 @@
             "format": "uuid",
             "readOnly": true
           },
+          "kind": {
+            "$ref": "#/components/schemas/KindEnum"
+          },
           "specialization": {
             "$ref": "#/components/schemas/SpecializationEnum"
           },
           "claimed_grade": {
             "$ref": "#/components/schemas/GradesEnum"
           },
-          "kind": {
-            "$ref": "#/components/schemas/KindEnum"
-          },
           "mode": {
-            "$ref": "#/components/schemas/ModeEnum"
+            "$ref": "#/components/schemas/ModeDf0Enum"
           },
           "status": {
             "$ref": "#/components/schemas/Status61dEnum"
@@ -1578,6 +2378,10 @@
             "minimum": -2147483648,
             "nullable": true,
             "description": "Sport-style rating: 1000 + 200θ"
+          },
+          "rating_ci": {
+            "type": "integer",
+            "readOnly": true
           },
           "result_grade": {
             "oneOf": [
@@ -1606,6 +2410,34 @@
             "type": "boolean",
             "description": "False for fallback tests — failing does not burn a retake"
           },
+          "fallback": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentFallback"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentTopic"
+            },
+            "readOnly": true
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentEvidence"
+            },
+            "readOnly": true
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
           "started_at": {
             "type": "string",
             "format": "date-time",
@@ -1619,9 +2451,14 @@
         },
         "required": [
           "claimed_grade",
+          "evidence",
+          "fallback",
           "id",
+          "next_attempt_at",
+          "rating_ci",
           "specialization",
-          "started_at"
+          "started_at",
+          "topics"
         ]
       },
       "AssessmentSession": {
@@ -1642,13 +2479,17 @@
             "$ref": "#/components/schemas/KindEnum"
           },
           "mode": {
-            "$ref": "#/components/schemas/ModeEnum"
+            "$ref": "#/components/schemas/ModeDf0Enum"
           },
           "status": {
             "$ref": "#/components/schemas/Status61dEnum"
           },
           "current": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemView"
+              }
+            ],
             "readOnly": true
           },
           "theta": {
@@ -1712,6 +2553,21 @@
           "started_at"
         ]
       },
+      "AssessmentTopic": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "topic"
+        ]
+      },
       "BlankEnum": {
         "enum": [
           ""
@@ -1742,6 +2598,88 @@
             "maxLength": 100
           }
         }
+      },
+      "CandidateContactsDisplay": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "telegram": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "CandidateFSP": {
+        "type": "object",
+        "properties": {
+          "participant_id": {
+            "type": "string"
+          },
+          "sports_rank": {
+            "type": "string",
+            "nullable": true
+          },
+          "sync_status": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FSPResult"
+            }
+          }
+        },
+        "required": [
+          "participant_id",
+          "results",
+          "sports_rank",
+          "sync_status"
+        ]
+      },
+      "CandidateLeague": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "percentile": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "strength": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "grade",
+          "percentile",
+          "rating",
+          "specialization",
+          "status",
+          "strength"
+        ]
       },
       "CandidateProfile": {
         "type": "object",
@@ -1857,23 +2795,42 @@
             "description": "Profile completeness 0-100"
           },
           "contacts": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateContact"
+              }
+            ],
             "readOnly": true
           },
           "skills": {
-            "type": "string",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CandidateSkill"
+            },
             "readOnly": true
           },
           "league": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateLeague"
+              }
+            ],
             "readOnly": true
           },
           "fsp": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateFSP"
+              }
+            ],
             "readOnly": true
           },
           "consents": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConsentsResponse"
+              }
+            ],
             "readOnly": true
           }
         },
@@ -2002,6 +2959,32 @@
           }
         }
       },
+      "CandidateSkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "readOnly": true
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceEnum"
+          },
+          "level": {
+            "type": "number",
+            "format": "double",
+            "description": "Skill level 0.0-1.0"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source"
+        ]
+      },
       "Company": {
         "type": "object",
         "properties": {
@@ -2077,7 +3060,25 @@
           "trust_level"
         ]
       },
-      "ConsentsRequest": {
+      "CompanyMinimal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ConsentUpdate": {
         "type": "object",
         "properties": {
           "processing": {
@@ -2124,6 +3125,54 @@
         "type": "string",
         "description": "* `email` - Email\n* `phone` - Phone\n* `telegram` - Telegram\n* `platform` - Platform"
       },
+      "CreateOffer": {
+        "type": "object",
+        "properties": {
+          "candidate_public_id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "default": "Draft Offer",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "default": ""
+          },
+          "salary_min": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "salary_max": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "salary_type": {
+            "$ref": "#/components/schemas/SalaryTypeEnum"
+          },
+          "contact_channel": {
+            "$ref": "#/components/schemas/ContactChannelEnum"
+          },
+          "contact_value": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "candidate_public_id",
+          "contact_channel",
+          "contact_value",
+          "salary_max",
+          "salary_min",
+          "salary_type"
+        ]
+      },
       "DecisionEnum": {
         "enum": [
           "confirmed",
@@ -2144,6 +3193,21 @@
         ],
         "type": "string",
         "description": "* `salary` - Salary\n* `stack` - Stack\n* `format` - Format\n* `company` - Company\n* `timing` - Timing\n* `not_looking` - Not Looking\n* `other` - Other"
+      },
+      "DemoResetResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "clock_offset_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clock_offset_days",
+          "status"
+        ]
       },
       "EligibilityResponse": {
         "type": "object",
@@ -2204,6 +3268,41 @@
           "sync_status"
         ]
       },
+      "FSPResult": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "event_name": {
+            "type": "string"
+          },
+          "discipline": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "integer"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "participants_total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "discipline",
+          "event_id",
+          "event_name",
+          "participants_total",
+          "placement",
+          "tier"
+        ]
+      },
       "FSPSyncResponse": {
         "type": "object",
         "properties": {
@@ -2218,6 +3317,27 @@
           "status",
           "synced_at"
         ]
+      },
+      "FallbackRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FallbackRequestModeEnum"
+              }
+            ],
+            "default": "instant"
+          }
+        }
+      },
+      "FallbackRequestModeEnum": {
+        "enum": [
+          "instant",
+          "short_test"
+        ],
+        "type": "string",
+        "description": "* `instant` - instant\n* `short_test` - short_test"
       },
       "GradesEnum": {
         "enum": [
@@ -2244,6 +3364,18 @@
             "minimum": -2147483648,
             "description": "Item sequence number within the assessment"
           },
+          "max_items": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "level": {
+            "type": "string",
+            "readOnly": true
+          },
+          "format": {
+            "type": "string",
+            "readOnly": true
+          },
           "stem_md": {
             "type": "string",
             "readOnly": true
@@ -2265,7 +3397,8 @@
           "deadline_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Item-level time limit deadline"
+            "nullable": true,
+            "description": "Item-level deadline; set when the item becomes current, NULL until served"
           },
           "served_at": {
             "type": "string",
@@ -2275,14 +3408,136 @@
         },
         "required": [
           "code",
-          "deadline_at",
+          "format",
           "input_type",
           "item_id",
+          "level",
+          "max_items",
           "options",
           "seq",
           "served_at",
           "stem_md",
           "time_limit_s"
+        ]
+      },
+      "JdDraft": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "default": ""
+          },
+          "specialization": {
+            "type": "string",
+            "default": "backend"
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "must_skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nice_skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "location": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          },
+          "salary_min": {
+            "type": "integer",
+            "nullable": true
+          },
+          "salary_max": {
+            "type": "integer",
+            "nullable": true
+          },
+          "salary_type": {
+            "type": "string",
+            "default": "gross"
+          },
+          "team_context": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          }
+        }
+      },
+      "JdParseBlueprintItem": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "topic",
+          "weight"
+        ]
+      },
+      "JdParseRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 10
+          },
+          "raw_text": {
+            "type": "string",
+            "minLength": 10
+          }
+        }
+      },
+      "JdParseResult": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/JdDraft"
+          },
+          "unknown_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blueprint": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JdParseBlueprintItem"
+            }
+          },
+          "source": {
+            "type": "string",
+            "default": "rules"
+          }
+        },
+        "required": [
+          "draft"
         ]
       },
       "KindEnum": {
@@ -2294,6 +3549,33 @@
         ],
         "type": "string",
         "description": "* `initial` - Initial\n* `fallback` - Fallback\n* `promotion` - Promotion\n* `screening` - Screening"
+      },
+      "LeagueShelf": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "integer"
+          },
+          "unconfirmed": {
+            "type": "integer"
+          },
+          "median_expectation": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "confirmed",
+          "grade",
+          "specialization",
+          "unconfirmed"
+        ]
       },
       "Login": {
         "type": "object",
@@ -2384,7 +3666,7 @@
           "role"
         ]
       },
-      "ModeEnum": {
+      "ModeDf0Enum": {
         "enum": [
           "full",
           "express"
@@ -2416,6 +3698,14 @@
           "candidate_public_id": {
             "type": "string",
             "writeOnly": true
+          },
+          "talent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentShort"
+              }
+            ],
+            "readOnly": true
           },
           "title": {
             "type": "string",
@@ -2469,6 +3759,14 @@
           "decline_comment": {
             "type": "string"
           },
+          "decline": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OfferDecline"
+              }
+            ],
+            "readOnly": true
+          },
           "why_you": {
             "readOnly": true
           },
@@ -2478,7 +3776,11 @@
             "description": "Incremented on every status change for optimistic locking"
           },
           "candidate_contacts": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateContactsDisplay"
+              }
+            ],
             "readOnly": true
           },
           "expires_at": {
@@ -2504,6 +3806,7 @@
           "contact_channel",
           "contact_value",
           "created_at",
+          "decline",
           "description",
           "expires_at",
           "id",
@@ -2511,39 +3814,77 @@
           "salary_min",
           "salary_type",
           "status",
+          "talent",
           "title",
           "updated_at",
           "version",
           "why_you"
         ]
       },
-      "OfferAcceptRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version"
-        ]
-      },
-      "OfferDeclineRequest": {
+      "OfferAction": {
         "type": "object",
         "properties": {
           "version": {
             "type": "integer"
           },
           "reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReasonEnum"
+              },
+              {
+                "$ref": "#/components/schemas/BlankEnum"
+              }
+            ]
+          },
+          "comment": {
             "type": "string",
-            "default": "salary"
+            "default": ""
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "OfferDecline": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
           },
           "comment": {
             "type": "string"
           }
         },
         "required": [
-          "version"
+          "comment",
+          "reason"
+        ]
+      },
+      "OfferPaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
         ]
       },
       "OfferStatusEnum": {
@@ -2561,36 +3902,51 @@
         "type": "string",
         "description": "* `sent` - Sent\n* `viewed` - Viewed\n* `accepted` - Accepted\n* `declined` - Declined\n* `expired` - Expired\n* `withdrawn` - Withdrawn\n* `interview` - Interview\n* `hired` - Hired\n* `closed` - Closed"
       },
-      "OfferViewRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version"
-        ]
-      },
-      "OfferWithdrawRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version"
-        ]
+      "PersonaEnum": {
+        "enum": [
+          "candidate_fsp",
+          "candidate_plain",
+          "employer"
+        ],
+        "type": "string",
+        "description": "* `candidate_fsp` - candidate_fsp\n* `candidate_plain` - candidate_plain\n* `employer` - employer"
       },
       "PersonaRequest": {
         "type": "object",
         "properties": {
           "persona": {
-            "type": "string",
-            "default": "candidate_fsp"
+            "$ref": "#/components/schemas/PersonaEnum"
           }
-        }
+        },
+        "required": [
+          "persona"
+        ]
+      },
+      "PoolComponent": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          },
+          "contribution": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "contribution",
+          "key",
+          "value",
+          "weight"
+        ]
       },
       "PoolItem": {
         "type": "object",
@@ -2603,8 +3959,10 @@
             "format": "double"
           },
           "components": {
-            "type": "object",
-            "additionalProperties": {}
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolComponent"
+            }
           },
           "reasons": {
             "type": "array",
@@ -2613,12 +3971,19 @@
               "additionalProperties": {}
             }
           },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "shortlisted": {
             "type": "boolean"
           }
         },
         "required": [
           "components",
+          "gaps",
           "reasons",
           "score",
           "shortlisted",
@@ -2635,7 +4000,8 @@
           },
           "company": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "readOnly": true
           },
           "title": {
             "type": "string",
@@ -2746,11 +4112,27 @@
           },
           "page": {
             "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "relaxations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
+          "facets",
           "items",
           "page",
+          "pages",
+          "relaxations",
           "total"
         ]
       },
@@ -2761,6 +4143,19 @@
         ],
         "type": "string",
         "description": "* `open` - Open\n* `closed` - Closed"
+      },
+      "ReasonEnum": {
+        "enum": [
+          "salary",
+          "stack",
+          "format",
+          "company",
+          "timing",
+          "not_looking",
+          "other"
+        ],
+        "type": "string",
+        "description": "* `salary` - Salary\n* `stack` - Stack\n* `format` - Format\n* `company` - Company\n* `timing` - Timing\n* `not_looking` - Not Looking\n* `other` - Other"
       },
       "Register": {
         "type": "object",
@@ -2804,6 +4199,9 @@
           },
           "email_verified": {
             "type": "boolean"
+          },
+          "verify_link": {
+            "type": "string"
           }
         },
         "required": [
@@ -2836,11 +4234,10 @@
       "RoleEnum": {
         "enum": [
           "candidate",
-          "employer",
-          "admin"
+          "employer"
         ],
         "type": "string",
-        "description": "* `candidate` - Candidate\n* `employer` - Employer\n* `admin` - Admin"
+        "description": "* `candidate` - Candidate\n* `employer` - Employer"
       },
       "SalaryTypeEnum": {
         "enum": [
@@ -2849,6 +4246,16 @@
         ],
         "type": "string",
         "description": "* `gross` - Gross\n* `net` - Net"
+      },
+      "SourceEnum": {
+        "enum": [
+          "test",
+          "fsp",
+          "microtask",
+          "declared"
+        ],
+        "type": "string",
+        "description": "* `test` - Verified by test\n* `fsp` - Verified by FSP\n* `microtask` - Verified by micro-task\n* `declared` - Declared"
       },
       "SpecializationEnum": {
         "enum": [
@@ -2859,22 +4266,42 @@
         "type": "string",
         "description": "* `backend` - Backend\n* `frontend` - Frontend\n* `ml_data` - ML & Data"
       },
-      "StartAssessmentRequest": {
+      "StartAssessment": {
         "type": "object",
         "properties": {
           "specialization": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SpecializationEnum"
+              }
+            ],
             "default": "backend"
           },
           "claimed_grade": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GradesEnum"
+              }
+            ],
             "default": "middle"
           },
           "mode": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StartAssessmentModeEnum"
+              }
+            ],
             "default": "full"
           }
         }
+      },
+      "StartAssessmentModeEnum": {
+        "enum": [
+          "full",
+          "trial"
+        ],
+        "type": "string",
+        "description": "* `full` - full\n* `trial` - trial"
       },
       "Status61dEnum": {
         "enum": [
@@ -2890,6 +4317,9 @@
         "type": "object",
         "properties": {
           "public_id": {
+            "type": "string"
+          },
+          "display_name": {
             "type": "string"
           },
           "city": {
@@ -2928,6 +4358,39 @@
               "additionalProperties": {}
             }
           },
+          "verified_topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "fsp_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "assessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "integrity_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "about": {
             "type": "string"
           },
@@ -2942,17 +4405,77 @@
         },
         "required": [
           "about",
+          "assessments",
           "city",
           "contacts",
+          "display_name",
           "experience_text",
           "fsp",
+          "fsp_results",
+          "integrity_flags",
           "league",
           "public_id",
           "salary_max",
           "salary_min",
           "salary_type",
           "skills",
+          "topics",
+          "verified_topics",
           "work_formats"
+        ]
+      },
+      "TalentFSP": {
+        "type": "object",
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "results_count": {
+            "type": "integer"
+          },
+          "sports_rank": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "linked",
+          "results_count",
+          "sports_rank"
+        ]
+      },
+      "TalentLeague": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "percentile": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "strength": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "grade",
+          "percentile",
+          "rating",
+          "specialization",
+          "status",
+          "strength"
         ]
       },
       "TalentSearchResponse": {
@@ -2969,11 +4492,20 @@
           },
           "page": {
             "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {}
           }
         },
         "required": [
+          "facets",
           "items",
           "page",
+          "pages",
           "total"
         ]
       },
@@ -2983,6 +4515,10 @@
           "public_id": {
             "type": "string",
             "maxLength": 10
+          },
+          "display_name": {
+            "type": "string",
+            "readOnly": true
           },
           "city": {
             "type": "string",
@@ -3017,15 +4553,33 @@
             ]
           },
           "league": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentLeague"
+              }
+            ],
             "readOnly": true
           },
           "fsp": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentFSP"
+              }
+            ],
             "readOnly": true
           },
           "skills": {
-            "type": "string",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TalentSkill"
+            },
+            "readOnly": true
+          },
+          "verified_topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
             "readOnly": true
           },
           "last_active_at": {
@@ -3035,9 +4589,151 @@
           }
         },
         "required": [
+          "display_name",
           "fsp",
           "league",
-          "skills"
+          "skills",
+          "verified_topics"
+        ]
+      },
+      "TalentSkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source"
+        ]
+      },
+      "Taxonomy": {
+        "type": "object",
+        "properties": {
+          "specializations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomySpecialization"
+            }
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyGrade"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomySkill"
+            }
+          },
+          "decline_reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyDeclineReason"
+            }
+          }
+        },
+        "required": [
+          "decline_reasons",
+          "grades",
+          "skills",
+          "specializations"
+        ]
+      },
+      "TaxonomyDeclineReason": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "TaxonomyGrade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "descriptor": {
+            "type": "string"
+          },
+          "rating_cut": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "descriptor",
+          "id",
+          "name",
+          "rating_cut"
+        ]
+      },
+      "TaxonomySkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aliases",
+          "id",
+          "name",
+          "topic"
+        ]
+      },
+      "TaxonomySpecialization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "topics"
         ]
       },
       "TimeTravelRequest": {
@@ -3045,9 +4741,13 @@
         "properties": {
           "days": {
             "type": "integer",
-            "default": 30
+            "maximum": 365,
+            "minimum": 0
           }
-        }
+        },
+        "required": [
+          "days"
+        ]
       },
       "TimeTravelResponse": {
         "type": "object",
@@ -3069,6 +4769,228 @@
         "type": "string",
         "description": "* `none` - None\n* `domain` - Domain verified\n* `verified` - Verified"
       },
+      "ValidationAssessmentMetrics": {
+        "type": "object",
+        "properties": {
+          "simulees": {
+            "type": "integer"
+          },
+          "exact_acc": {
+            "type": "number",
+            "format": "double"
+          },
+          "adjacent_acc": {
+            "type": "number",
+            "format": "double"
+          },
+          "qwk": {
+            "type": "number",
+            "format": "double"
+          },
+          "retest_same_grade": {
+            "type": "number",
+            "format": "double"
+          },
+          "retest_r": {
+            "type": "number",
+            "format": "double"
+          },
+          "median_len": {
+            "type": "number",
+            "format": "double"
+          },
+          "max_family_exposure": {
+            "type": "number",
+            "format": "double"
+          },
+          "collision_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "generator_errors": {
+            "type": "integer"
+          },
+          "confusion": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          "tif": {
+            "$ref": "#/components/schemas/ValidationTif"
+          },
+          "leak_attack": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationLeakAttack"
+            }
+          }
+        },
+        "required": [
+          "adjacent_acc",
+          "collision_rate",
+          "confusion",
+          "exact_acc",
+          "generator_errors",
+          "leak_attack",
+          "max_family_exposure",
+          "median_len",
+          "qwk",
+          "retest_r",
+          "retest_same_grade",
+          "simulees",
+          "tif"
+        ]
+      },
+      "ValidationLeakAttack": {
+        "type": "object",
+        "properties": {
+          "leak_share": {
+            "type": "number",
+            "format": "double"
+          },
+          "static_dtheta": {
+            "type": "number",
+            "format": "double"
+          },
+          "parametric_dtheta": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "leak_share",
+          "parametric_dtheta",
+          "static_dtheta"
+        ]
+      },
+      "ValidationMatchingMetrics": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "integer"
+          },
+          "needs": {
+            "type": "integer"
+          },
+          "non_fsp_parity": {
+            "type": "number",
+            "format": "double"
+          },
+          "pool_p95_ms": {
+            "type": "number",
+            "format": "double"
+          },
+          "systems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationMatchingSystem"
+            }
+          }
+        },
+        "required": [
+          "candidates",
+          "needs",
+          "non_fsp_parity",
+          "pool_p95_ms",
+          "systems"
+        ]
+      },
+      "ValidationMatchingSystem": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ndcg10": {
+            "type": "number",
+            "format": "double"
+          },
+          "p10": {
+            "type": "number",
+            "format": "double"
+          },
+          "r50": {
+            "type": "number",
+            "format": "double"
+          },
+          "mrr": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "mrr",
+          "name",
+          "ndcg10",
+          "p10",
+          "r50"
+        ]
+      },
+      "ValidationReport": {
+        "type": "object",
+        "properties": {
+          "generated_at": {
+            "type": "string"
+          },
+          "git_sha": {
+            "type": "string"
+          },
+          "synthetic_fixture": {
+            "type": "boolean"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/ValidationAssessmentMetrics"
+          },
+          "matching": {
+            "$ref": "#/components/schemas/ValidationMatchingMetrics"
+          }
+        },
+        "required": [
+          "assessment",
+          "generated_at",
+          "git_sha",
+          "matching",
+          "synthetic_fixture"
+        ]
+      },
+      "ValidationTif": {
+        "type": "object",
+        "properties": {
+          "theta": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "info": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "required": [
+          "info",
+          "theta"
+        ]
+      },
+      "VerifyEmailRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
       "VerifyPublicIdResponse": {
         "type": "object",
         "properties": {
@@ -3079,20 +5001,30 @@
             "type": "boolean"
           },
           "specialization": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "grade": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "rating": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
           "grade",
+          "issued_at",
           "public_id",
           "rating",
           "specialization",
@@ -3111,10 +5043,6 @@
       }
     },
     "securitySchemes": {
-      "basicAuth": {
-        "type": "http",
-        "scheme": "basic"
-      },
       "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",

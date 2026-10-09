@@ -7,14 +7,14 @@
  */
 
 /**
- * * `full` - Full
-* `express` - Express
+ * * `instant` - instant
+* `short_test` - short_test
  */
-export type ModeEnum = typeof ModeEnum[keyof typeof ModeEnum];
+export type FallbackRequestModeEnum = typeof FallbackRequestModeEnum[keyof typeof FallbackRequestModeEnum];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ModeEnum = {
-  full: 'full',
-  express: 'express',
+export const FallbackRequestModeEnum = {
+  instant: 'instant',
+  short_test: 'short_test',
 } as const;

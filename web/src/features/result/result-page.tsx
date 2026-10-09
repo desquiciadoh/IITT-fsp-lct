@@ -14,7 +14,7 @@ import { errorMessage } from '@/i18n/errors'
 import { cn } from '@/lib/utils'
 import { useCountdown } from '@/lib/hooks/useCountdown'
 import { formatDate, formatDuration } from '@/lib/format'
-import { GRADE_LABEL, SPEC_LABEL } from '@/lib/labels'
+import { GRADE_LABEL, SPEC_LABEL, TOPIC_LEVEL_LABEL } from '@/lib/labels'
 import { RatingBadge } from '@/components/domain/rating-badge'
 import { ErrorState, EmptyState } from '@/components/domain/states'
 import { CardSkeleton } from '@/components/ui/skeleton'
@@ -45,21 +45,22 @@ function Cooldown({ deadline }: { deadline: string }) {
   )
 }
 
-function TopicsChart({ topics }: { topics: NonNullable<AssessmentResult['topics']> }) {
+function TopicsChart({ topics }: { topics: AssessmentResult['topics'] }) {
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="text-sm font-semibold">Темы</h3>
       {topics.map((topic) => {
-        const pct = topic.total > 0 ? Math.round((topic.correct / topic.total) * 100) : 0
+        const levelLabel = TOPIC_LEVEL_LABEL[topic.level] ?? topic.level
+        const pct = topic.level === 'strong' ? 90 : topic.level === 'moderate' ? 60 : 30
         return (
-          <div key={topic.key} className="flex items-center gap-3">
+          <div key={topic.topic} className="flex items-center gap-3">
             <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
-              {topic.label}
+              {topic.topic}
             </span>
             <div
               className="h-3 flex-1 overflow-hidden rounded-full bg-secondary"
               role="img"
-              aria-label={`${topic.label}: ${topic.correct} из ${topic.total}`}
+              aria-label={`${topic.topic}: ${levelLabel}`}
             >
               <div
                 className={cn(
@@ -69,8 +70,8 @@ function TopicsChart({ topics }: { topics: NonNullable<AssessmentResult['topics'
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-              {topic.correct}/{topic.total}
+            <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
+              {levelLabel}
             </span>
           </div>
         )
@@ -79,24 +80,20 @@ function TopicsChart({ topics }: { topics: NonNullable<AssessmentResult['topics'
   )
 }
 
-function EvidenceChart({ evidence }: { evidence: NonNullable<AssessmentResult['evidence']> }) {
+function EvidenceChart({ evidence }: { evidence: AssessmentResult['evidence'] }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <h3 className="text-sm font-semibold">Задания: уровень × верно</h3>
+      <h3 className="text-sm font-semibold">Задания: верно / неверно</h3>
       <div className="flex flex-wrap gap-1.5">
         {evidence.map((point) => (
           <span
             key={point.seq}
-            title={`Задание ${point.seq}: ${
-              point.correct === null ? 'нет данных' : point.correct ? 'верно' : 'неверно'
-            }`}
+            title={`Задание ${point.seq}: ${point.correct ? 'верно' : 'неверно'}`}
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded text-[11px] font-semibold tabular-nums',
-              point.correct === null
-                ? 'bg-secondary text-muted-foreground'
-                : point.correct
-                  ? 'bg-[var(--fsp-league-confirmed)]/15 text-[var(--fsp-league-confirmed)]'
-                  : 'bg-destructive/15 text-destructive',
+              point.correct
+                ? 'bg-[var(--fsp-league-confirmed)]/15 text-[var(--fsp-league-confirmed)]'
+                : 'bg-destructive/15 text-destructive',
             )}
           >
             {point.seq}
@@ -106,7 +103,6 @@ function EvidenceChart({ evidence }: { evidence: NonNullable<AssessmentResult['e
       <div className="flex gap-3 text-[11px] text-muted-foreground">
         <span>зелёный — верно</span>
         <span>красный — неверно</span>
-        <span>серый — без ответа</span>
       </div>
     </div>
   )
@@ -216,9 +212,9 @@ export function ResultPage() {
   const cooldown = eligibility?.next_attempt_at || result.next_attempt_at || null
   const canStart = eligibility ? eligibility.can_start : !cooldown
   const fallbackLabel =
-    result.fallback?.kind === 'instant'
+    result.fallback?.mode === 'instant'
       ? 'Экспресс-тест'
-      : result.fallback?.kind === 'short_test'
+      : result.fallback?.mode === 'short_test'
         ? 'Короткий тест'
         : null
   const startParams = new URLSearchParams({
@@ -292,7 +288,7 @@ export function ResultPage() {
         {fallbackLabel && (
           <Button variant="outline" asChild>
             <Link
-              to={`/candidate/qualification/start?${startParams.toString()}&mode=fallback&kind=${result.fallback?.kind}`}
+              to={`/candidate/qualification/start?${startParams.toString()}&mode=fallback&kind=${result.fallback?.mode}`}
             >
               <Flag className="h-4 w-4" /> {fallbackLabel}
             </Link>

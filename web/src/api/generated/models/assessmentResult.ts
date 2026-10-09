@@ -5,20 +5,23 @@
  * Reverse IT recruitment platform with verified achievement profiles (FSP)
  * OpenAPI spec version: 1.0.0
  */
+import type { KindEnum } from './kindEnum';
 import type { SpecializationEnum } from './specializationEnum';
 import type { GradesEnum } from './gradesEnum';
-import type { KindEnum } from './kindEnum';
-import type { ModeEnum } from './modeEnum';
+import type { ModeDf0Enum } from './modeDf0Enum';
 import type { Status61dEnum } from './status61dEnum';
 import type { AssessmentResultResultGrade } from './assessmentResultResultGrade';
 import type { AssessmentResultDecision } from './assessmentResultDecision';
+import type { AssessmentResultFallback } from './assessmentResultFallback';
+import type { AssessmentTopic } from './assessmentTopic';
+import type { AssessmentEvidence } from './assessmentEvidence';
 
 export interface AssessmentResult {
   readonly id: string;
+  kind?: KindEnum;
   specialization: SpecializationEnum;
   claimed_grade: GradesEnum;
-  kind?: KindEnum;
-  mode?: ModeEnum;
+  mode?: ModeDf0Enum;
   status?: Status61dEnum;
   /**
    * θ estimate (EAP) on the IRT scale
@@ -37,11 +40,18 @@ export interface AssessmentResult {
    * @nullable
    */
   rating?: number | null;
+  readonly rating_ci: number;
   result_grade?: typeof AssessmentResultResultGrade[keyof typeof AssessmentResultResultGrade] ;
   decision?: typeof AssessmentResultDecision[keyof typeof AssessmentResultDecision] ;
   promotion_unlocked?: boolean;
   /** False for fallback tests — failing does not burn a retake */
   counts_as_attempt?: boolean;
+  /** @nullable */
+  readonly fallback: AssessmentResultFallback;
+  readonly topics: readonly AssessmentTopic[];
+  readonly evidence: readonly AssessmentEvidence[];
+  /** @nullable */
+  readonly next_attempt_at: string | null;
   readonly started_at: string;
   /** @nullable */
   finished_at?: string | null;

@@ -26,8 +26,14 @@ async function fromBackend() {
 }
 
 async function fromDocsFile() {
-  const docs = join(root, '..', 'docs', 'openapi.json')
-  if (!existsSync(docs)) return null
+  // The repo keeps the export in <repo>/docs/openapi.json; `web/` is nested,
+  // so look one and two levels up to survive both layouts.
+  const candidates = [
+    join(root, '..', '..', 'docs', 'openapi.json'),
+    join(root, '..', 'docs', 'openapi.json'),
+  ]
+  const docs = candidates.find((p) => existsSync(p))
+  if (!docs) return null
   const yaml = await import('js-yaml')
   return yaml.load(readFileSync(docs, 'utf8'))
 }

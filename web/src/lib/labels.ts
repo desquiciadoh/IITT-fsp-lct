@@ -92,3 +92,10 @@ export const PLACEMENT_TIER_LABEL: Record<string, string> = {
   finalist: 'финалист',
   participant: 'участник',
 }
+
+/** Per-topic mastery bands the backend derives from item accuracy (result page). */
+export const TOPIC_LEVEL_LABEL: Record<string, string> = {
+  strong: 'сильная',
+  moderate: 'средняя',
+  limited: 'слабая',
+}

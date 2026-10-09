@@ -6,9 +6,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface ConsentsRequest {
-  processing?: boolean;
-  publication?: boolean;
-  fsp_sync?: boolean;
-  version?: string;
-}
+export type TalentDetailResponseAssessmentsItem = {[key: string]: unknown};

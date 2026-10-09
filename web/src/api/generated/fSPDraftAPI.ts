@@ -8,37 +8,55 @@
 import type {
   AnswerRequest,
   AnswerResponse,
+  AssessmentPaginatedResponse,
   AssessmentResult,
   AssessmentSession,
+  AuthFspIdCallbackRetrieveParams,
+  AuthFspIdLoginRetrieveParams,
   CandidateProfile,
   CandidateProfileUpdate,
+  CandidatesMeResumeCreateBody,
+  CompaniesListParams,
   Company,
-  ConsentsRequest,
+  CompanyMinimal,
+  ConsentUpdate,
   ConsentsResponse,
+  CreateOffer,
+  DemoResetResponse,
   EligibilityResponse,
   FSPLinkRequest,
   FSPLinkResponse,
   FSPSyncResponse,
+  FallbackRequest,
+  JdParseRequest,
+  JdParseResult,
+  LeagueShelf,
+  LeaguesListParams,
   Login,
   LoginResponse,
   MeResponse,
   Offer,
-  OfferAcceptRequest,
-  OfferDeclineRequest,
-  OfferViewRequest,
-  OfferWithdrawRequest,
+  OfferAction,
+  OfferPaginatedResponse,
   PersonaRequest,
   Position,
   PositionPoolResponse,
+  PositionsPoolRetrieveParams,
   Register,
   RegisterResponse,
   ResumeParseResponse,
-  StartAssessmentRequest,
+  StartAssessment,
   TalentDetailResponse,
   TalentSearchResponse,
+  TalentSearchRetrieveParams,
+  TalentShort,
+  Taxonomy,
   TimeTravelRequest,
   TimeTravelResponse,
-  VerifyPublicIdResponse
+  ValidationReport,
+  VerifyEmailRequest,
+  VerifyPublicIdResponse,
+  VerifyRetrieveParams
 } from './models';
 
 
@@ -68,19 +86,19 @@ type NonReadonly<T> = [T] extends [UnionToIntersection<T>] ? {
     : T[P];
 } : DistributeReadOnlyOverUnions<T>;
 
-export type assessmentsListResponse200 = {
-  data: AssessmentResult[]
+export type assessmentsRetrieveResponse200 = {
+  data: AssessmentPaginatedResponse
   status: 200
 }
     
-export type assessmentsListResponseSuccess = (assessmentsListResponse200) & {
+export type assessmentsRetrieveResponseSuccess = (assessmentsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type assessmentsListResponse = (assessmentsListResponseSuccess)
+export type assessmentsRetrieveResponse = (assessmentsRetrieveResponseSuccess)
 
-export const getAssessmentsListUrl = () => {
+export const getAssessmentsRetrieveUrl = () => {
 
 
   
@@ -88,9 +106,9 @@ export const getAssessmentsListUrl = () => {
   return `/api/assessments`
 }
 
-export const assessmentsList = async ( options?: RequestInit): Promise<assessmentsListResponse> => {
+export const assessmentsRetrieve = async ( options?: RequestInit): Promise<assessmentsRetrieveResponse> => {
   
-  const res = await fetch(getAssessmentsListUrl(),
+  const res = await fetch(getAssessmentsRetrieveUrl(),
   {      
     ...options,
     method: 'GET'
@@ -101,8 +119,8 @@ export const assessmentsList = async ( options?: RequestInit): Promise<assessmen
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
   
-  const data: assessmentsListResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as assessmentsListResponse
+  const data: assessmentsRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as assessmentsRetrieveResponse
 }
 
 
@@ -127,7 +145,7 @@ export const getAssessmentsCreateUrl = () => {
   return `/api/assessments`
 }
 
-export const assessmentsCreate = async (startAssessmentRequest: StartAssessmentRequest, options?: RequestInit): Promise<assessmentsCreateResponse> => {
+export const assessmentsCreate = async (startAssessment: StartAssessment, options?: RequestInit): Promise<assessmentsCreateResponse> => {
   
   const res = await fetch(getAssessmentsCreateUrl(),
   {      
@@ -135,7 +153,7 @@ export const assessmentsCreate = async (startAssessmentRequest: StartAssessmentR
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      startAssessmentRequest,)
+      startAssessment,)
   }
 )
 
@@ -147,19 +165,19 @@ export const assessmentsCreate = async (startAssessmentRequest: StartAssessmentR
 
 
 
-export type assessmentsRetrieveResponse200 = {
+export type assessmentsRetrieve2Response200 = {
   data: AssessmentSession
   status: 200
 }
     
-export type assessmentsRetrieveResponseSuccess = (assessmentsRetrieveResponse200) & {
+export type assessmentsRetrieve2ResponseSuccess = (assessmentsRetrieve2Response200) & {
   headers: Headers;
 };
 ;
 
-export type assessmentsRetrieveResponse = (assessmentsRetrieveResponseSuccess)
+export type assessmentsRetrieve2Response = (assessmentsRetrieve2ResponseSuccess)
 
-export const getAssessmentsRetrieveUrl = (id: string,) => {
+export const getAssessmentsRetrieve2Url = (id: string,) => {
 
 
   
@@ -167,9 +185,9 @@ export const getAssessmentsRetrieveUrl = (id: string,) => {
   return `/api/assessments/${id}`
 }
 
-export const assessmentsRetrieve = async (id: string, options?: RequestInit): Promise<assessmentsRetrieveResponse> => {
+export const assessmentsRetrieve2 = async (id: string, options?: RequestInit): Promise<assessmentsRetrieve2Response> => {
   
-  const res = await fetch(getAssessmentsRetrieveUrl(id),
+  const res = await fetch(getAssessmentsRetrieve2Url(id),
   {      
     ...options,
     method: 'GET'
@@ -180,8 +198,8 @@ export const assessmentsRetrieve = async (id: string, options?: RequestInit): Pr
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
   
-  const data: assessmentsRetrieveResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as assessmentsRetrieveResponse
+  const data: assessmentsRetrieve2Response['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as assessmentsRetrieve2Response
 }
 
 
@@ -223,6 +241,97 @@ export const assessmentsAnswersCreate = async (id: string,
   
   const data: assessmentsAnswersCreateResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as assessmentsAnswersCreateResponse
+}
+
+
+
+/**
+ * Fallback to a lower grade or short-test after an unconfirmed assessment (G5).
+ */
+export type assessmentsFallbackCreateResponse200 = {
+  data: AssessmentResult
+  status: 200
+}
+
+export type assessmentsFallbackCreateResponse201 = {
+  data: AssessmentSession
+  status: 201
+}
+    
+export type assessmentsFallbackCreateResponseSuccess = (assessmentsFallbackCreateResponse200 | assessmentsFallbackCreateResponse201) & {
+  headers: Headers;
+};
+;
+
+export type assessmentsFallbackCreateResponse = (assessmentsFallbackCreateResponseSuccess)
+
+export const getAssessmentsFallbackCreateUrl = (id: string,) => {
+
+
+  
+
+  return `/api/assessments/${id}/fallback`
+}
+
+export const assessmentsFallbackCreate = async (id: string,
+    fallbackRequest: FallbackRequest, options?: RequestInit): Promise<assessmentsFallbackCreateResponse> => {
+  
+  const res = await fetch(getAssessmentsFallbackCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      fallbackRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: assessmentsFallbackCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as assessmentsFallbackCreateResponse
+}
+
+
+
+/**
+ * Abandon / finish early an in-progress assessment.
+ */
+export type assessmentsFinishCreateResponse200 = {
+  data: AssessmentResult
+  status: 200
+}
+    
+export type assessmentsFinishCreateResponseSuccess = (assessmentsFinishCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type assessmentsFinishCreateResponse = (assessmentsFinishCreateResponseSuccess)
+
+export const getAssessmentsFinishCreateUrl = (id: string,) => {
+
+
+  
+
+  return `/api/assessments/${id}/finish`
+}
+
+export const assessmentsFinishCreate = async (id: string, options?: RequestInit): Promise<assessmentsFinishCreateResponse> => {
+  
+  const res = await fetch(getAssessmentsFinishCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: assessmentsFinishCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as assessmentsFinishCreateResponse
 }
 
 
@@ -301,6 +410,148 @@ export const assessmentsEligibilityRetrieve = async ( options?: RequestInit): Pr
   
   const data: assessmentsEligibilityRetrieveResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as assessmentsEligibilityRetrieveResponse
+}
+
+
+
+export type authCsrfRetrieveResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type authCsrfRetrieveResponseSuccess = (authCsrfRetrieveResponse204) & {
+  headers: Headers;
+};
+;
+
+export type authCsrfRetrieveResponse = (authCsrfRetrieveResponseSuccess)
+
+export const getAuthCsrfRetrieveUrl = () => {
+
+
+  
+
+  return `/api/auth/csrf`
+}
+
+export const authCsrfRetrieve = async ( options?: RequestInit): Promise<authCsrfRetrieveResponse> => {
+  
+  const res = await fetch(getAuthCsrfRetrieveUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: authCsrfRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as authCsrfRetrieveResponse
+}
+
+
+
+/**
+ * OIDC callback endpoint for FSP ID flow
+ */
+export type authFspIdCallbackRetrieveResponse302 = {
+  data: void
+  status: 302
+}
+
+export type authFspIdCallbackRetrieveResponse409 = {
+  data: void
+  status: 409
+}
+    
+;
+export type authFspIdCallbackRetrieveResponseError = (authFspIdCallbackRetrieveResponse302 | authFspIdCallbackRetrieveResponse409) & {
+  headers: Headers;
+};
+
+export type authFspIdCallbackRetrieveResponse = (authFspIdCallbackRetrieveResponseError)
+
+export const getAuthFspIdCallbackRetrieveUrl = (params: AuthFspIdCallbackRetrieveParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/auth/fsp-id/callback?${stringifiedParams}` : `/api/auth/fsp-id/callback`
+}
+
+export const authFspIdCallbackRetrieve = async (params: AuthFspIdCallbackRetrieveParams, options?: RequestInit): Promise<authFspIdCallbackRetrieveResponse> => {
+  
+  const res = await fetch(getAuthFspIdCallbackRetrieveUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: authFspIdCallbackRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as authFspIdCallbackRetrieveResponse
+}
+
+
+
+/**
+ * Initiate OIDC flow for FSP ID login or linking
+ */
+export type authFspIdLoginRetrieveResponse302 = {
+  data: void
+  status: 302
+}
+    
+;
+export type authFspIdLoginRetrieveResponseError = (authFspIdLoginRetrieveResponse302) & {
+  headers: Headers;
+};
+
+export type authFspIdLoginRetrieveResponse = (authFspIdLoginRetrieveResponseError)
+
+export const getAuthFspIdLoginRetrieveUrl = (params?: AuthFspIdLoginRetrieveParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/auth/fsp-id/login?${stringifiedParams}` : `/api/auth/fsp-id/login`
+}
+
+export const authFspIdLoginRetrieve = async (params?: AuthFspIdLoginRetrieveParams, options?: RequestInit): Promise<authFspIdLoginRetrieveResponse> => {
+  
+  const res = await fetch(getAuthFspIdLoginRetrieveUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: authFspIdLoginRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as authFspIdLoginRetrieveResponse
 }
 
 
@@ -424,6 +675,46 @@ export const authRegisterCreate = async (register: Register, options?: RequestIn
 
 
 
+export type authVerifyEmailCreateResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type authVerifyEmailCreateResponseSuccess = (authVerifyEmailCreateResponse204) & {
+  headers: Headers;
+};
+;
+
+export type authVerifyEmailCreateResponse = (authVerifyEmailCreateResponseSuccess)
+
+export const getAuthVerifyEmailCreateUrl = () => {
+
+
+  
+
+  return `/api/auth/verify-email`
+}
+
+export const authVerifyEmailCreate = async (verifyEmailRequest: VerifyEmailRequest, options?: RequestInit): Promise<authVerifyEmailCreateResponse> => {
+  
+  const res = await fetch(getAuthVerifyEmailCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      verifyEmailRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: authVerifyEmailCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as authVerifyEmailCreateResponse
+}
+
+
+
 export type candidatesMeRetrieveResponse200 = {
   data: CandidateProfile
   status: 200
@@ -503,8 +794,11 @@ export const candidatesMeUpdate = async (candidateProfileUpdate: CandidateProfil
 
 
 
+/**
+ * Generate candidate player card PDF
+ */
 export type candidatesMeCardPdfRetrieveResponse200 = {
-  data: void
+  data: Blob
   status: 200
 }
     
@@ -542,6 +836,45 @@ export const candidatesMeCardPdfRetrieve = async ( options?: RequestInit): Promi
 
 
 
+export type candidatesMeConsentsRetrieveResponse200 = {
+  data: ConsentsResponse
+  status: 200
+}
+    
+export type candidatesMeConsentsRetrieveResponseSuccess = (candidatesMeConsentsRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type candidatesMeConsentsRetrieveResponse = (candidatesMeConsentsRetrieveResponseSuccess)
+
+export const getCandidatesMeConsentsRetrieveUrl = () => {
+
+
+  
+
+  return `/api/candidates/me/consents`
+}
+
+export const candidatesMeConsentsRetrieve = async ( options?: RequestInit): Promise<candidatesMeConsentsRetrieveResponse> => {
+  
+  const res = await fetch(getCandidatesMeConsentsRetrieveUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: candidatesMeConsentsRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as candidatesMeConsentsRetrieveResponse
+}
+
+
+
 export type candidatesMeConsentsUpdateResponse200 = {
   data: ConsentsResponse
   status: 200
@@ -562,7 +895,7 @@ export const getCandidatesMeConsentsUpdateUrl = () => {
   return `/api/candidates/me/consents`
 }
 
-export const candidatesMeConsentsUpdate = async (consentsRequest: ConsentsRequest, options?: RequestInit): Promise<candidatesMeConsentsUpdateResponse> => {
+export const candidatesMeConsentsUpdate = async (consentUpdate: ConsentUpdate, options?: RequestInit): Promise<candidatesMeConsentsUpdateResponse> => {
   
   const res = await fetch(getCandidatesMeConsentsUpdateUrl(),
   {      
@@ -570,7 +903,7 @@ export const candidatesMeConsentsUpdate = async (consentsRequest: ConsentsReques
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      consentsRequest,)
+      consentUpdate,)
   }
 )
 
@@ -602,14 +935,17 @@ export const getCandidatesMeResumeCreateUrl = () => {
   return `/api/candidates/me/resume`
 }
 
-export const candidatesMeResumeCreate = async ( options?: RequestInit): Promise<candidatesMeResumeCreateResponse> => {
-  
+export const candidatesMeResumeCreate = async (candidatesMeResumeCreateBody: CandidatesMeResumeCreateBody, options?: RequestInit): Promise<candidatesMeResumeCreateResponse> => {
+    const formData = new FormData();
+formData.append(`file`, candidatesMeResumeCreateBody.file)
+
   const res = await fetch(getCandidatesMeResumeCreateUrl(),
   {      
     ...options,
     method: 'POST'
-    
-    
+    ,
+    body: 
+      formData,
   }
 )
 
@@ -617,6 +953,92 @@ export const candidatesMeResumeCreate = async ( options?: RequestInit): Promise<
   
   const data: candidatesMeResumeCreateResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as candidatesMeResumeCreateResponse
+}
+
+
+
+export type companiesListResponse200 = {
+  data: CompanyMinimal[]
+  status: 200
+}
+    
+export type companiesListResponseSuccess = (companiesListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type companiesListResponse = (companiesListResponseSuccess)
+
+export const getCompaniesListUrl = (params?: CompaniesListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/companies?${stringifiedParams}` : `/api/companies`
+}
+
+export const companiesList = async (params?: CompaniesListParams, options?: RequestInit): Promise<companiesListResponse> => {
+  
+  const res = await fetch(getCompaniesListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: companiesListResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as companiesListResponse
+}
+
+
+
+export type companiesCreateResponse201 = {
+  data: Company
+  status: 201
+}
+    
+export type companiesCreateResponseSuccess = (companiesCreateResponse201) & {
+  headers: Headers;
+};
+;
+
+export type companiesCreateResponse = (companiesCreateResponseSuccess)
+
+export const getCompaniesCreateUrl = () => {
+
+
+  
+
+  return `/api/companies`
+}
+
+export const companiesCreate = async (company: NonReadonly<Company>, options?: RequestInit): Promise<companiesCreateResponse> => {
+  
+  const res = await fetch(getCompaniesCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      company,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: companiesCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as companiesCreateResponse
 }
 
 
@@ -744,6 +1166,48 @@ export const demoPersonaCreate = async (personaRequest: PersonaRequest, options?
 
 
 /**
+ * Resets the caller's persona data and clock offset in DEMO_MODE.
+ */
+export type demoResetCreateResponse200 = {
+  data: DemoResetResponse
+  status: 200
+}
+    
+export type demoResetCreateResponseSuccess = (demoResetCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type demoResetCreateResponse = (demoResetCreateResponseSuccess)
+
+export const getDemoResetCreateUrl = () => {
+
+
+  
+
+  return `/api/demo/reset`
+}
+
+export const demoResetCreate = async ( options?: RequestInit): Promise<demoResetCreateResponse> => {
+  
+  const res = await fetch(getDemoResetCreateUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: demoResetCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as demoResetCreateResponse
+}
+
+
+
+/**
  * Time-travel endpoint for jury/demo testing cooldowns.
  */
 export type demoTimeTravelCreateResponse200 = {
@@ -787,10 +1251,10 @@ export const demoTimeTravelCreate = async (timeTravelRequest: TimeTravelRequest,
 
 
 /**
- * Server-Sent Events (SSE) endpoint for real-time notifications.
+ * Server-Sent Events (SSE) notification stream
  */
 export type eventsRetrieveResponse200 = {
-  data: void
+  data: string
   status: 200
 }
     
@@ -910,6 +1374,100 @@ export const fspSyncCreate = async ( options?: RequestInit): Promise<fspSyncCrea
 
 
 
+/**
+ * Validation Lab metrics report (G11).
+
+Serves validation/out/report.json if present; otherwise serves
+a synthetic fixture labeled with synthetic_fixture=True.
+ */
+export type labReportRetrieveResponse200 = {
+  data: ValidationReport
+  status: 200
+}
+    
+export type labReportRetrieveResponseSuccess = (labReportRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type labReportRetrieveResponse = (labReportRetrieveResponseSuccess)
+
+export const getLabReportRetrieveUrl = () => {
+
+
+  
+
+  return `/api/lab/report`
+}
+
+export const labReportRetrieve = async ( options?: RequestInit): Promise<labReportRetrieveResponse> => {
+  
+  const res = await fetch(getLabReportRetrieveUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: labReportRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as labReportRetrieveResponse
+}
+
+
+
+/**
+ * League shelves with candidate counts and median salary expectation (G7).
+ */
+export type leaguesListResponse200 = {
+  data: LeagueShelf[]
+  status: 200
+}
+    
+export type leaguesListResponseSuccess = (leaguesListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type leaguesListResponse = (leaguesListResponseSuccess)
+
+export const getLeaguesListUrl = (params?: LeaguesListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/leagues?${stringifiedParams}` : `/api/leagues`
+}
+
+export const leaguesList = async (params?: LeaguesListParams, options?: RequestInit): Promise<leaguesListResponse> => {
+  
+  const res = await fetch(getLeaguesListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: leaguesListResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as leaguesListResponse
+}
+
+
+
 export type meRetrieveResponse200 = {
   data: MeResponse
   status: 200
@@ -949,19 +1507,19 @@ export const meRetrieve = async ( options?: RequestInit): Promise<meRetrieveResp
 
 
 
-export type offersListResponse200 = {
-  data: Offer[]
+export type offersRetrieveResponse200 = {
+  data: OfferPaginatedResponse
   status: 200
 }
     
-export type offersListResponseSuccess = (offersListResponse200) & {
+export type offersRetrieveResponseSuccess = (offersRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type offersListResponse = (offersListResponseSuccess)
+export type offersRetrieveResponse = (offersRetrieveResponseSuccess)
 
-export const getOffersListUrl = () => {
+export const getOffersRetrieveUrl = () => {
 
 
   
@@ -969,9 +1527,9 @@ export const getOffersListUrl = () => {
   return `/api/offers`
 }
 
-export const offersList = async ( options?: RequestInit): Promise<offersListResponse> => {
+export const offersRetrieve = async ( options?: RequestInit): Promise<offersRetrieveResponse> => {
   
-  const res = await fetch(getOffersListUrl(),
+  const res = await fetch(getOffersRetrieveUrl(),
   {      
     ...options,
     method: 'GET'
@@ -982,8 +1540,8 @@ export const offersList = async ( options?: RequestInit): Promise<offersListResp
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
   
-  const data: offersListResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as offersListResponse
+  const data: offersRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as offersRetrieveResponse
 }
 
 
@@ -1008,7 +1566,7 @@ export const getOffersCreateUrl = () => {
   return `/api/offers`
 }
 
-export const offersCreate = async (offer: NonReadonly<Offer>, options?: RequestInit): Promise<offersCreateResponse> => {
+export const offersCreate = async (createOffer: CreateOffer, options?: RequestInit): Promise<offersCreateResponse> => {
   
   const res = await fetch(getOffersCreateUrl(),
   {      
@@ -1016,7 +1574,7 @@ export const offersCreate = async (offer: NonReadonly<Offer>, options?: RequestI
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      offer,)
+      createOffer,)
   }
 )
 
@@ -1028,19 +1586,19 @@ export const offersCreate = async (offer: NonReadonly<Offer>, options?: RequestI
 
 
 
-export type offersRetrieveResponse200 = {
+export type offersRetrieve2Response200 = {
   data: Offer
   status: 200
 }
     
-export type offersRetrieveResponseSuccess = (offersRetrieveResponse200) & {
+export type offersRetrieve2ResponseSuccess = (offersRetrieve2Response200) & {
   headers: Headers;
 };
 ;
 
-export type offersRetrieveResponse = (offersRetrieveResponseSuccess)
+export type offersRetrieve2Response = (offersRetrieve2ResponseSuccess)
 
-export const getOffersRetrieveUrl = (id: string,) => {
+export const getOffersRetrieve2Url = (id: string,) => {
 
 
   
@@ -1048,9 +1606,9 @@ export const getOffersRetrieveUrl = (id: string,) => {
   return `/api/offers/${id}`
 }
 
-export const offersRetrieve = async (id: string, options?: RequestInit): Promise<offersRetrieveResponse> => {
+export const offersRetrieve2 = async (id: string, options?: RequestInit): Promise<offersRetrieve2Response> => {
   
-  const res = await fetch(getOffersRetrieveUrl(id),
+  const res = await fetch(getOffersRetrieve2Url(id),
   {      
     ...options,
     method: 'GET'
@@ -1061,8 +1619,8 @@ export const offersRetrieve = async (id: string, options?: RequestInit): Promise
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
   
-  const data: offersRetrieveResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as offersRetrieveResponse
+  const data: offersRetrieve2Response['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as offersRetrieve2Response
 }
 
 
@@ -1088,7 +1646,7 @@ export const getOffersAcceptCreateUrl = (id: string,) => {
 }
 
 export const offersAcceptCreate = async (id: string,
-    offerAcceptRequest: OfferAcceptRequest, options?: RequestInit): Promise<offersAcceptCreateResponse> => {
+    offerAction: OfferAction, options?: RequestInit): Promise<offersAcceptCreateResponse> => {
   
   const res = await fetch(getOffersAcceptCreateUrl(id),
   {      
@@ -1096,7 +1654,7 @@ export const offersAcceptCreate = async (id: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      offerAcceptRequest,)
+      offerAction,)
   }
 )
 
@@ -1104,6 +1662,47 @@ export const offersAcceptCreate = async (id: string,
   
   const data: offersAcceptCreateResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as offersAcceptCreateResponse
+}
+
+
+
+export type offersCloseCreateResponse200 = {
+  data: Offer
+  status: 200
+}
+    
+export type offersCloseCreateResponseSuccess = (offersCloseCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type offersCloseCreateResponse = (offersCloseCreateResponseSuccess)
+
+export const getOffersCloseCreateUrl = (id: string,) => {
+
+
+  
+
+  return `/api/offers/${id}/close`
+}
+
+export const offersCloseCreate = async (id: string,
+    offerAction: OfferAction, options?: RequestInit): Promise<offersCloseCreateResponse> => {
+  
+  const res = await fetch(getOffersCloseCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      offerAction,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: offersCloseCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as offersCloseCreateResponse
 }
 
 
@@ -1129,7 +1728,7 @@ export const getOffersDeclineCreateUrl = (id: string,) => {
 }
 
 export const offersDeclineCreate = async (id: string,
-    offerDeclineRequest: OfferDeclineRequest, options?: RequestInit): Promise<offersDeclineCreateResponse> => {
+    offerAction: OfferAction, options?: RequestInit): Promise<offersDeclineCreateResponse> => {
   
   const res = await fetch(getOffersDeclineCreateUrl(id),
   {      
@@ -1137,7 +1736,7 @@ export const offersDeclineCreate = async (id: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      offerDeclineRequest,)
+      offerAction,)
   }
 )
 
@@ -1145,6 +1744,88 @@ export const offersDeclineCreate = async (id: string,
   
   const data: offersDeclineCreateResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as offersDeclineCreateResponse
+}
+
+
+
+export type offersHiredCreateResponse200 = {
+  data: Offer
+  status: 200
+}
+    
+export type offersHiredCreateResponseSuccess = (offersHiredCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type offersHiredCreateResponse = (offersHiredCreateResponseSuccess)
+
+export const getOffersHiredCreateUrl = (id: string,) => {
+
+
+  
+
+  return `/api/offers/${id}/hired`
+}
+
+export const offersHiredCreate = async (id: string,
+    offerAction: OfferAction, options?: RequestInit): Promise<offersHiredCreateResponse> => {
+  
+  const res = await fetch(getOffersHiredCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      offerAction,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: offersHiredCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as offersHiredCreateResponse
+}
+
+
+
+export type offersInterviewCreateResponse200 = {
+  data: Offer
+  status: 200
+}
+    
+export type offersInterviewCreateResponseSuccess = (offersInterviewCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type offersInterviewCreateResponse = (offersInterviewCreateResponseSuccess)
+
+export const getOffersInterviewCreateUrl = (id: string,) => {
+
+
+  
+
+  return `/api/offers/${id}/interview`
+}
+
+export const offersInterviewCreate = async (id: string,
+    offerAction: OfferAction, options?: RequestInit): Promise<offersInterviewCreateResponse> => {
+  
+  const res = await fetch(getOffersInterviewCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      offerAction,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: offersInterviewCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as offersInterviewCreateResponse
 }
 
 
@@ -1170,7 +1851,7 @@ export const getOffersViewCreateUrl = (id: string,) => {
 }
 
 export const offersViewCreate = async (id: string,
-    offerViewRequest: OfferViewRequest, options?: RequestInit): Promise<offersViewCreateResponse> => {
+    offerAction: OfferAction, options?: RequestInit): Promise<offersViewCreateResponse> => {
   
   const res = await fetch(getOffersViewCreateUrl(id),
   {      
@@ -1178,7 +1859,7 @@ export const offersViewCreate = async (id: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      offerViewRequest,)
+      offerAction,)
   }
 )
 
@@ -1211,7 +1892,7 @@ export const getOffersWithdrawCreateUrl = (id: string,) => {
 }
 
 export const offersWithdrawCreate = async (id: string,
-    offerWithdrawRequest: OfferWithdrawRequest, options?: RequestInit): Promise<offersWithdrawCreateResponse> => {
+    offerAction: OfferAction, options?: RequestInit): Promise<offersWithdrawCreateResponse> => {
   
   const res = await fetch(getOffersWithdrawCreateUrl(id),
   {      
@@ -1219,7 +1900,7 @@ export const offersWithdrawCreate = async (id: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      offerWithdrawRequest,)
+      offerAction,)
   }
 )
 
@@ -1405,17 +2086,26 @@ export type positionsPoolRetrieveResponseSuccess = (positionsPoolRetrieveRespons
 
 export type positionsPoolRetrieveResponse = (positionsPoolRetrieveResponseSuccess)
 
-export const getPositionsPoolRetrieveUrl = (id: string,) => {
+export const getPositionsPoolRetrieveUrl = (id: string,
+    params?: PositionsPoolRetrieveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/positions/${id}/pool`
+  return stringifiedParams.length > 0 ? `/api/positions/${id}/pool?${stringifiedParams}` : `/api/positions/${id}/pool`
 }
 
-export const positionsPoolRetrieve = async (id: string, options?: RequestInit): Promise<positionsPoolRetrieveResponse> => {
+export const positionsPoolRetrieve = async (id: string,
+    params?: PositionsPoolRetrieveParams, options?: RequestInit): Promise<positionsPoolRetrieveResponse> => {
   
-  const res = await fetch(getPositionsPoolRetrieveUrl(id),
+  const res = await fetch(getPositionsPoolRetrieveUrl(id,params),
   {      
     ...options,
     method: 'GET'
@@ -1428,6 +2118,48 @@ export const positionsPoolRetrieve = async (id: string, options?: RequestInit): 
   
   const data: positionsPoolRetrieveResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as positionsPoolRetrieveResponse
+}
+
+
+
+/**
+ * List shortlisted talent for a position.
+ */
+export type positionsShortlistListResponse200 = {
+  data: TalentShort[]
+  status: 200
+}
+    
+export type positionsShortlistListResponseSuccess = (positionsShortlistListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type positionsShortlistListResponse = (positionsShortlistListResponseSuccess)
+
+export const getPositionsShortlistListUrl = (id: string,) => {
+
+
+  
+
+  return `/api/positions/${id}/shortlist`
+}
+
+export const positionsShortlistList = async (id: string, options?: RequestInit): Promise<positionsShortlistListResponse> => {
+  
+  const res = await fetch(getPositionsShortlistListUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: positionsShortlistListResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as positionsShortlistListResponse
 }
 
 
@@ -1515,9 +2247,53 @@ export const positionsShortlistDestroy = async (id: string,
 
 
 /**
+ * Parse a job description into a position draft.
+ */
+export type positionsParseCreateResponse200 = {
+  data: JdParseResult
+  status: 200
+}
+    
+export type positionsParseCreateResponseSuccess = (positionsParseCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type positionsParseCreateResponse = (positionsParseCreateResponseSuccess)
+
+export const getPositionsParseCreateUrl = () => {
+
+
+  
+
+  return `/api/positions/parse`
+}
+
+export const positionsParseCreate = async (jdParseRequest: JdParseRequest, options?: RequestInit): Promise<positionsParseCreateResponse> => {
+  
+  const res = await fetch(getPositionsParseCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      jdParseRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: positionsParseCreateResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as positionsParseCreateResponse
+}
+
+
+
+/**
  * Talent card view for employers.
 
-SECURITY INVARIANT: Contacts are only unmasked if an active ContactGrant exists!
+SECURITY INVARIANT: Only visible candidates are shown.
+Contacts are only unmasked if an active ContactGrant exists!
  */
 export type talentRetrieveResponse200 = {
   data: TalentDetailResponse
@@ -1573,17 +2349,24 @@ export type talentSearchRetrieveResponseSuccess = (talentSearchRetrieveResponse2
 
 export type talentSearchRetrieveResponse = (talentSearchRetrieveResponseSuccess)
 
-export const getTalentSearchRetrieveUrl = () => {
+export const getTalentSearchRetrieveUrl = (params?: TalentSearchRetrieveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/talent/search`
+  return stringifiedParams.length > 0 ? `/api/talent/search?${stringifiedParams}` : `/api/talent/search`
 }
 
-export const talentSearchRetrieve = async ( options?: RequestInit): Promise<talentSearchRetrieveResponse> => {
+export const talentSearchRetrieve = async (params?: TalentSearchRetrieveParams, options?: RequestInit): Promise<talentSearchRetrieveResponse> => {
   
-  const res = await fetch(getTalentSearchRetrieveUrl(),
+  const res = await fetch(getTalentSearchRetrieveUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1600,6 +2383,48 @@ export const talentSearchRetrieve = async ( options?: RequestInit): Promise<tale
 
 
 
+/**
+ * Platform taxonomy: specializations, grades, skills, and decline reasons (G3).
+ */
+export type taxonomyRetrieveResponse200 = {
+  data: Taxonomy
+  status: 200
+}
+    
+export type taxonomyRetrieveResponseSuccess = (taxonomyRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type taxonomyRetrieveResponse = (taxonomyRetrieveResponseSuccess)
+
+export const getTaxonomyRetrieveUrl = () => {
+
+
+  
+
+  return `/api/taxonomy`
+}
+
+export const taxonomyRetrieve = async ( options?: RequestInit): Promise<taxonomyRetrieveResponse> => {
+  
+  const res = await fetch(getTaxonomyRetrieveUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: taxonomyRetrieveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as taxonomyRetrieveResponse
+}
+
+
+
 export type verifyRetrieveResponse200 = {
   data: VerifyPublicIdResponse
   status: 200
@@ -1612,17 +2437,26 @@ export type verifyRetrieveResponseSuccess = (verifyRetrieveResponse200) & {
 
 export type verifyRetrieveResponse = (verifyRetrieveResponseSuccess)
 
-export const getVerifyRetrieveUrl = (publicId: string,) => {
+export const getVerifyRetrieveUrl = (publicId: string,
+    params?: VerifyRetrieveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/verify/${publicId}`
+  return stringifiedParams.length > 0 ? `/api/verify/${publicId}?${stringifiedParams}` : `/api/verify/${publicId}`
 }
 
-export const verifyRetrieve = async (publicId: string, options?: RequestInit): Promise<verifyRetrieveResponse> => {
+export const verifyRetrieve = async (publicId: string,
+    params?: VerifyRetrieveParams, options?: RequestInit): Promise<verifyRetrieveResponse> => {
   
-  const res = await fetch(getVerifyRetrieveUrl(publicId),
+  const res = await fetch(getVerifyRetrieveUrl(publicId,params),
   {      
     ...options,
     method: 'GET'

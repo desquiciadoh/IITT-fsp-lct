@@ -9,7 +9,6 @@
 /**
  * * `candidate` - Candidate
 * `employer` - Employer
-* `admin` - Admin
  */
 export type RoleEnum = typeof RoleEnum[keyof typeof RoleEnum];
 
@@ -18,5 +17,4 @@ export type RoleEnum = typeof RoleEnum[keyof typeof RoleEnum];
 export const RoleEnum = {
   candidate: 'candidate',
   employer: 'employer',
-  admin: 'admin',
 } as const;
