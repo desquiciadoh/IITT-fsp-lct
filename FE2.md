@@ -1,7 +1,7 @@
 # FE2.md: Frontend Dev 2 — Test Runner, Employer Side, Lab
 
 > **Audience:** frontend developer 2 and their AI coding agent.
-> **Scope:** the qualification **test runner**, every **employer-side** screen (company, position wizard, scouting pool, shortlist, talent drawer, send offer, offers board, talent search), and the Validation Lab and Test Twins (P1).
+> **Scope:** the qualification **test runner**, every **employer-side** screen (company, position wizard, scouting pool, shortlist, talent drawer, send offer, offers board, talent search).
 > **Date:** 2026-10-08. Related files: [FE1.md](FE1.md) (scaffold and shared components; **read it first**), [BE.md](BE.md) (backend and API gaps), [ML.md](ML.md), [AI.md](AI.md).
 
 ---
@@ -9,7 +9,7 @@
 ## 0. Before You Start
 
 1. **Wait for FE1's scaffold PR (FE1-0) to merge**, then pull it. Read `web/README.md` and FE1.md §0–§1: product context, UX rules, stack, folder layout, API client, mocks, router and live events. Everything there applies to you.
-2. If you start before the scaffold lands, work only inside your feature folders (`src/features/qualification-runner/`, `employer/`, `scouting/`, `talent/`, `offers-employer/`, `lab/`) on a branch, and rebase afterwards.
+2. If you start before the scaffold lands, work only inside your feature folders (`src/features/qualification-runner/`, `employer/`, `scouting/`, `talent/`, `offers-employer/`) on a branch, and rebase afterwards.
 3. **Use FE1's shared components** (`components/domain/`): `SalaryTag`, `StatusChip`, `ReasonChips`, `ScoreBar` (with `normalizeComponents()`), `OfferCard`, `TalentRow`, `LeagueBadge`, `RatingBadge`, `FspBadge`, `TrustBadge`, `EmptyState`, `ErrorState`, `useCountdown`. If you need a new shared component, add it to `components/domain/` with a `/dev/ui` entry and tell FE1.
 4. **The backend is Django + DRF.** The generated OpenAPI client is the contract. Missing pieces are BE gaps G1–G17 ([BE.md §2.3](BE.md)). **Mock every gap with MSW in its target shape** (`src/mocks/handlers/<feature>.ts`, response header `X-Stub: true`), so nothing changes when BE ships it.
 5. **UI language: Russian. Code: English.** UX rules: one primary action per screen; **salary and status always visible**; verified and declared evidence look different; WCAG AA; loading, empty and error states everywhere.
@@ -89,32 +89,14 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
 
 ### P1
 
-- [ ] **FE-13 · Validation Lab** (M), route `/lab` (public).
-  - `GET /api/lab/report` → `ValidationReport` (shape in `docs/TASKS.md` §1.4; gap G11). Until it exists, use ML's `validation/out/report.fixture.json`.
-  - **Show a red "FIXTURE" banner whenever `synthetic_fixture` is true.** Fake numbers must never reach the jury unlabeled.
-  - Charts (Recharts):
-    - confusion matrix heatmap;
-    - accuracy, QWK and retest KPIs;
-    - TIF line chart;
-    - leak-attack bars (static vs parametric);
-    - systems table with nDCG@10 and P@10 bars;
-    - non-FSP parity and pool p95.
-- [ ] **FE-14 · Test Twins & Blueprint Builder** (S). JD → blueprint → two unique test instances side by side, with the same difficulty profile. Depends on BE-22 (`/lab/twins?position_id=`) and ML-12; mock it until then.
-- [ ] **FE-17 · Pool power features** (M).
-  - Weight presets (balanced / skills / budget) and sliders that re-rank live.
-  - Counterfactual hints from `relaxations` ("убрать Kubernetes → +23 кандидата").
-  - An acceptance-likelihood badge next to "Send".
-  - A Need Health panel (decline analytics).
-  - A below-salary-floor warning before sending.
-  - Depends on ML-10 and BE-20; mock it until then.
-- [ ] **FE-18 · Polish (your half)** (M, shared with FE1). The test runner and the offers board and modal are responsive on phones. Plus a contrast check and loading, empty and error states across the employer screens.
+All P1 frontend tasks (FE-13 … FE-19, including the Validation Lab, Test Twins, pool power features and polish) moved to **FE1** on 2026-10-09; see [FE1.md §3](FE1.md). FE1 will ask you to review the parts that touch your pages (FE-15, FE-16, FE-17).
 
 ---
 
 ## 2. Coordination
 
 - **With FE1:** FE1 owns the scaffold, `api/client.ts`, `api/events.ts`, the router, the guards and `components/domain/`. You own the feature folders listed in §0. Review each other's PRs. **The handoff routes:** FE1's onboarding → your `/candidate/qualification/start`; your runner → FE1's `/candidate/qualification/:id/result`.
-- **With BE:** regenerate the client when `docs/openapi.json` changes (`pnpm api:schema && pnpm api:gen`). Your blockers: G3 (taxonomy), G5 (runner fields, finish), G6 (JD parse), G7 (leagues), G8 (pool filters, facets, components list), G9 (talent card sections), G10 (employer offer talent), G11 (lab report), G12 (SSE), G13 (error shape), G14 (pagination), G16 (shortlist list), G17 (company create). Add new needs to BE.md §2.3 as gap rows.
-- **With ML:** semantics of `components`, `reasons`, `gaps`, `relaxations`, `ItemView.level` and `max_items`, and the `ValidationReport` (ML.md §3, §5).
+- **With BE:** regenerate the client when `docs/openapi.json` changes (`pnpm api:schema && pnpm api:gen`). Your blockers: G3 (taxonomy), G5 (runner fields, finish), G6 (JD parse), G7 (leagues), G8 (pool filters, facets, components list), G9 (talent card sections), G10 (employer offer talent), G12 (SSE), G13 (error shape), G14 (pagination), G16 (shortlist list), G17 (company create). Add new needs to BE.md §2.3 as gap rows.
+- **With ML:** semantics of `components`, `reasons`, `gaps`, `relaxations`, `ItemView.level` and `max_items` (ML.md §3, §5).
 - **With AI:** `JdParseResult` semantics: editable chips, `unknown_terms` and the `source` badge (AI.md §3).
 - PR titles start with the task ID (`FE-10 Scouting pool`). Keep PRs small.
