@@ -1,21 +1,47 @@
+import { lazy } from 'react'
 import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
-import { HomePage } from '@/pages/home'
-import { DevUiPage } from '@/pages/dev-ui'
-import { DesignVariantsPage } from '@/pages/design-variants'
-import { LoginPage } from '@/features/auth/login-page'
-import { RegisterPage } from '@/features/auth/register-page'
-import { VerifyPage } from '@/features/auth/verify-page'
-import { JuryPage } from '@/features/jury/jury-page'
-import { OnboardingPage } from '@/features/onboarding/onboarding-page'
-import { ResultPage } from '@/features/result/result-page'
-import { DashboardPage } from '@/features/candidate/dashboard-page'
-import { OffersListPage } from '@/features/offers/offers-list-page'
-import { OfferDetailPage } from '@/features/offers/offer-detail-page'
-import { SettingsPage } from '@/features/settings/settings-page'
 import { AppLayout } from '@/app/layouts/app-layout'
 import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
 import { IndexRedirect } from '@/app/index-redirect'
 import { Placeholder } from '@/app/placeholder'
+
+// R30: pages are code-split; each route chunk loads lazily so the main
+// bundle stays under (was 899 KB before the split).
+const HomePage = lazy(() => import('@/pages/home').then((m) => ({ default: m.HomePage })))
+const DevUiPage = lazy(() => import('@/pages/dev-ui').then((m) => ({ default: m.DevUiPage })))
+const DesignVariantsPage = lazy(() =>
+  import('@/pages/design-variants').then((m) => ({ default: m.DesignVariantsPage })),
+)
+const LoginPage = lazy(() =>
+  import('@/features/auth/login-page').then((m) => ({ default: m.LoginPage })),
+)
+const RegisterPage = lazy(() =>
+  import('@/features/auth/register-page').then((m) => ({ default: m.RegisterPage })),
+)
+const VerifyPage = lazy(() =>
+  import('@/features/auth/verify-page').then((m) => ({ default: m.VerifyPage })),
+)
+const JuryPage = lazy(() =>
+  import('@/features/jury/jury-page').then((m) => ({ default: m.JuryPage })),
+)
+const OnboardingPage = lazy(() =>
+  import('@/features/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })),
+)
+const ResultPage = lazy(() =>
+  import('@/features/result/result-page').then((m) => ({ default: m.ResultPage })),
+)
+const DashboardPage = lazy(() =>
+  import('@/features/candidate/dashboard-page').then((m) => ({ default: m.DashboardPage })),
+)
+const OffersListPage = lazy(() =>
+  import('@/features/offers/offers-list-page').then((m) => ({ default: m.OffersListPage })),
+)
+const OfferDetailPage = lazy(() =>
+  import('@/features/offers/offer-detail-page').then((m) => ({ default: m.OfferDetailPage })),
+)
+const SettingsPage = lazy(() =>
+  import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })),
+)
 
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />

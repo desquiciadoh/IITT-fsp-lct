@@ -83,7 +83,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
 
 - [x] **R28 · No dead generated client.** `orval` with `client: 'fetch'` still emits `src/api/generated/fSPDraftAPI.ts` (1638 lines, imported nowhere). Either delete it in the `api:gen` script after generation, or add an ESLint `no-restricted-imports` rule for `@/api/generated/fSPDraftAPI` so nobody bypasses `customFetch` (CSRF, problem+json). Document the choice in `web/README.md`.
 - [x] **R29 · Placeholder task IDs are wrong** in `app/router.tsx`. Use: qualification start and runner → `FE-05`; `/employer`, `/employer/company`, `/employer/positions/new` → `FE-09`; `/employer/positions/:id` → `FE-10`; `/employer/offers` → `FE-11`; `/employer/talent` → `FE-12`; `/lab` → `FE-13` (FE1).
-- [ ] **R30 · Code-split routes.** The main chunk is 899 KB (Vite warns at 500 KB). Lazy-load route pages with React Router `lazy`, plus `/dev/ui` and `/dev/design`. Target: main chunk < 400 KB. Needed before Recharts comes back in FE-13.
+- [x] **R30 · Code-split routes.** The main chunk is 899 KB (Vite warns at 500 KB). Lazy-load route pages with React Router `lazy`, plus `/dev/ui` and `/dev/design`. Target: main chunk < 400 KB. Needed before Recharts comes back in FE-13.
 
 ### Process
 

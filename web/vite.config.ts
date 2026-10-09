@@ -11,6 +11,28 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // R30: keep the never-imported generated client and static bits out of the
+    // entry; split the React ecosystem so the shell chunk stays tiny.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // R30: React-ecosystem vendors get their own cacheable chunk so the
+          // app-shell chunk stays tiny (path matching works under pnpm nesting).
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/') ||
+            id.includes('node_modules/react-router') ||
+            id.includes('node_modules/@tanstack/react-query/') ||
+            id.includes('node_modules/sonner/')
+          ) {
+            return 'react-vendor'
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {
