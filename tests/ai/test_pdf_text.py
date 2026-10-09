@@ -1,5 +1,6 @@
 """extract_text on real PDFs (AI-R10) and the pdfplumber fallback (AI-R4)."""
 import io
+import logging
 from pathlib import Path
 
 import llm_gateway.pdf_text as pdf_text
@@ -40,6 +41,48 @@ def test_password_protected_pdf_is_unreadable():
 
     with pytest.raises(UnreadablePdf):
         extract_text(buf.getvalue())
+
+
+def test_a_broken_page_does_not_discard_the_others(monkeypatch, caplog):
+    class Page:
+        def __init__(self, text):
+            self.text = text
+
+        def extract_text(self):
+            if self.text is None:
+                raise KeyError("/Contents")
+            return self.text
+
+    class Reader:
+        is_encrypted = False
+
+        def __init__(self, stream):
+            self.pages = [Page("Страница один"), Page(None), Page("Страница три")]
+
+    monkeypatch.setattr(pdf_text.pypdf, "PdfReader", Reader)
+    with caplog.at_level(logging.WARNING):
+        text = extract_text(b"%PDF-1.4 fake")
+
+    assert "Страница один" in text and "Страница три" in text
+    assert any("KeyError" in r.getMessage() for r in caplog.records)
+
+
+def test_parser_failures_are_logged_then_unreadable(monkeypatch, caplog):
+    def broken_reader(stream):
+        raise AttributeError("pypdf bug")
+
+    def broken_plumber(stream):
+        raise TypeError("pdfminer bug")
+
+    monkeypatch.setattr(pdf_text.pypdf, "PdfReader", broken_reader)
+    monkeypatch.setattr(pdf_text.pdfplumber, "open", broken_plumber)
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(UnreadablePdf):
+            extract_text(b"%PDF-1.4 fake")
+
+    messages = " ".join(r.getMessage() for r in caplog.records)
+    assert "AttributeError" in messages and "TypeError" in messages
+    assert "bug" not in messages  # types only, never exception text
 
 
 def test_pdfplumber_is_used_when_pypdf_finds_no_text(monkeypatch):

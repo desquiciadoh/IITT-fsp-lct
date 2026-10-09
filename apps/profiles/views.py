@@ -269,6 +269,7 @@ class ResumeParseView(views.APIView):
             # Provider failures never reach this view: parse_resume falls back to rules itself.
             parse_res = parse_resume(file_bytes, gateway=FakeLlm())
         except UnreadablePdf:
+            logger.info("Resume rejected as unreadable (sha=%s)", hashlib.sha256(file_bytes).hexdigest()[:12])
             raise FSPAPIError(
                 'unreadable_pdf',
                 'Не удалось прочитать PDF',
