@@ -1,44 +1,65 @@
 /**
- * Interim hand-written DTOs for the shapes the backend emits today plus the
- * target shapes from TASKS §1.4. Once `pnpm api:gen` output is wired in,
- * features switch to the generated types and this file shrinks to helpers.
+ * API DTOs.
+ *
+ * Types that exist in the generated schema are aliased or derived from
+ * `@/api/generated/models` (orval output) so they cannot drift from the
+ * backend. Hand-written types are limited to shapes drf-spectacular leaves
+ * open (nested serializers flattened to `string`/`unknown`) and to gaps
+ * still to be shipped, each tagged with a comment.
  */
+import type {
+  AssessmentResult as GeneratedAssessmentResult,
+  AssessmentSession as GeneratedAssessmentSession,
+  CandidateProfile as GeneratedCandidateProfile,
+  ConsentsResponse,
+  ContactChannelEnum,
+  DecisionEnum,
+  DeclineReasonEnum,
+  EligibilityResponse,
+  FSPLinkResponse,
+  GradesEnum,
+  KindEnum,
+  MeResponse,
+  ModeEnum,
+  Offer as GeneratedOffer,
+  OfferStatusEnum,
+  ResumeParseResponse,
+  SalaryTypeEnum,
+  SpecializationEnum,
+  Status61dEnum,
+  TalentShort as GeneratedTalentShort,
+  TrustLevelEnum,
+  WorkFormatsEnum,
+} from '@/api/generated/models'
 
-export type Spec = 'backend' | 'frontend' | 'ml_data'
-export type Grade = 'intern' | 'junior' | 'middle' | 'senior'
-export type LeagueStatus = 'pending' | 'confirmed' | 'unconfirmed'
-export type WorkFormat = 'office' | 'hybrid' | 'remote'
-export type SalaryType = 'gross' | 'net'
-export type Source = 'test' | 'fsp' | 'microtask' | 'declared'
-export type OfferStatus =
-  | 'sent'
-  | 'viewed'
-  | 'accepted'
-  | 'declined'
-  | 'expired'
-  | 'withdrawn'
-  | 'interview'
-  | 'hired'
-  | 'closed'
-export type DeclineReason =
-  | 'salary'
-  | 'stack'
-  | 'format'
-  | 'company'
-  | 'timing'
-  | 'not_looking'
-  | 'other'
+// --- enums: single source of truth = the generated schema ---
+export type Spec = SpecializationEnum
+export type Grade = GradesEnum
+export type WorkFormat = WorkFormatsEnum
+export type SalaryType = SalaryTypeEnum
+export type OfferStatus = OfferStatusEnum
+export type AssessmentKind = KindEnum
+export type AssessmentMode = ModeEnum
+export type AssessmentStatus = Status61dEnum
+export type DeclineReason = (typeof DeclineReasonEnum)[keyof typeof DeclineReasonEnum]
+export type GradeDecision = (typeof DecisionEnum)[keyof typeof DecisionEnum] | ''
+export type ContactChannel = (typeof ContactChannelEnum)[keyof typeof ContactChannelEnum]
+export type TrustLevel = (typeof TrustLevelEnum)[keyof typeof TrustLevelEnum]
+export type AssessmentSession = GeneratedAssessmentSession
+export type { ConsentsResponse, FSPLinkResponse }
 
-export type Me = {
-  id: string
-  role: 'candidate' | 'employer' | 'admin'
-  email: string
-  email_verified: boolean
-  demo: boolean
-  company_id?: string | null
-  onboarding_step?: 'consent' | 'profile' | 'survey' | 'qualification' | 'done'
+/** The schema renders `role` as a loose string. */
+export type Role = 'candidate' | 'employer' | 'admin'
+/** The schema renders `onboarding_step` as a loose string (BE `core/enums.py`). */
+export type OnboardingStep = 'consent' | 'profile' | 'qualification' | 'done'
+
+export type Me = Omit<MeResponse, 'role' | 'onboarding_step'> & {
+  role: Role
+  onboarding_step?: OnboardingStep
 }
 
+/** The schema has no League model (nested serializers flattened to `string`). */
+export type LeagueStatus = 'pending' | 'confirmed' | 'unconfirmed'
 export type League = {
   specialization: Spec
   grade: Grade
@@ -48,7 +69,10 @@ export type League = {
   strength?: number | null
 }
 
-export type Reason = { kind: 'plus' | 'minus' | 'info'; text: string; source?: Source }
+/** Reasons carry a source; the schema types `why_you` as `unknown`. */
+export type Source = 'test' | 'fsp' | 'microtask' | 'declared'
+export type ReasonKind = 'plus' | 'minus' | 'info'
+export type Reason = { kind: ReasonKind; text: string; source?: Source }
 
 export type ScoreComponent = {
   key: 'skill' | 'strength' | 'grade' | 'salary' | 'semantic' | 'freshness' | 'fsp'
@@ -56,44 +80,41 @@ export type ScoreComponent = {
   weight?: number
 }
 
-/** Backend pool components today (BE gap G8). */
+/** gap G8 — the backend pool returns a flat components dict today. */
 export type ScoreComponentsDict = Partial<
   Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
 >
 
-export type TalentShort = {
+export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
   public_id: string
+  /** present at runtime; the schema does not declare it */
   display_name?: string
-  city?: string
-  work_formats?: WorkFormat[]
-  salary_min?: number
-  salary_max?: number
-  salary_type?: SalaryType
   league?: League | null
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
-  last_active_at?: string
+  /** the schema flattens this nested list to `string` */
+  skills?: string[]
 }
 
-export type Offer = {
-  id: string
-  title: string
+export type Offer = Omit<
+  GeneratedOffer,
+  | 'company'
+  | 'description'
+  | 'contact_channel'
+  | 'contact_value'
+  | 'why_you'
+  | 'candidate_contacts'
+  | 'decline_reason'
+  | 'decline_comment'
+  | 'expires_at'
+> & {
   description?: string
-  company?: { id: string; name: string; trust_level?: 'none' | 'domain' | 'verified' }
-  position?: string | null
-  salary_min: number
-  salary_max: number
-  salary_type: SalaryType
-  currency?: string
-  contact_channel?: 'email' | 'phone' | 'telegram' | 'platform'
+  company?: { id: string; name: string; trust_level?: TrustLevel }
+  contact_channel?: ContactChannel
   contact_value?: string
-  status: OfferStatus
+  why_you?: Reason[]
   decline_reason?: DeclineReason | null
   decline_comment?: string | null
-  why_you?: Reason[]
-  version: number
   expires_at?: string | null
-  created_at?: string
-  updated_at?: string
   candidate_contacts?: {
     full_name?: string
     email?: string
@@ -109,32 +130,26 @@ export type ProfileSkill = {
   level?: string | null
 }
 
-export type Consents = {
-  processing: boolean
-  publication: boolean
-  fsp_sync: boolean
-}
+export type Consents = ConsentsResponse
 
-export type CandidateProfile = {
-  public_id: string
-  full_name?: string | null
-  city?: string | null
-  timezone?: string | null
+export type CandidateProfile = Omit<
+  GeneratedCandidateProfile,
+  | 'specialization'
+  | 'claimed_grade'
+  | 'salary_type'
+  | 'about'
+  | 'experience_text'
+  | 'contacts'
+  | 'skills'
+  | 'league'
+  | 'fsp'
+  | 'consents'
+> & {
   specialization?: Spec | '' | null
   claimed_grade?: Grade | '' | null
-  years_experience?: string | null
-  roles?: string[]
-  work_formats?: WorkFormat[]
-  salary_min?: number | null
-  salary_max?: number | null
   salary_type?: SalaryType | '' | null
-  salary_floor?: number | null
-  open_to_offers?: boolean
-  blind_mode?: boolean
-  blocked_company_ids?: string[]
   about?: string | null
   experience_text?: string | null
-  completeness?: number
   contacts?: { email?: string; phone?: string; telegram?: string } | null
   skills?: ProfileSkill[]
   league?: League | null
@@ -155,17 +170,16 @@ export type CandidateProfile = {
   consents?: Consents | null
 }
 
-export type ResumeParseResult = {
+export type ResumeParseResult = Omit<ResumeParseResponse, 'prefill'> & {
   prefill: {
     specialization?: Spec
     claimed_grade?: Grade
     skills?: string[]
     about?: string
   }
-  unknown_terms: string[]
-  source: 'llm' | 'rules' | string
 }
 
+/** gap G3 — the taxonomy endpoint is mocked until the backend ships it. */
 export type Taxonomy = {
   specs: Spec[]
   grades: Grade[]
@@ -174,19 +188,14 @@ export type Taxonomy = {
   skills: string[]
 }
 
-export type AssessmentKind = 'initial' | 'fallback' | 'promotion' | 'screening'
-export type AssessmentStatus = 'in_progress' | 'finished' | 'abandoned' | 'expired'
-export type AssessmentMode = 'full' | 'express'
-export type GradeDecision = 'confirmed' | 'unconfirmed' | ''
-
 export type ResultTopic = { key: string; label: string; correct: number; total: number }
 export type EvidencePoint = { seq: number; correct: boolean | null }
 
 /** GET /api/assessments/{id}/result. G5 fields are optional (mocked until BE adds them). */
-export type AssessmentResult = {
-  id: string
-  specialization: Spec
-  claimed_grade: Grade
+export type AssessmentResult = Omit<
+  GeneratedAssessmentResult,
+  'kind' | 'mode' | 'status' | 'theta' | 'se' | 'rating' | 'result_grade' | 'decision' | 'started_at'
+> & {
   kind: AssessmentKind
   mode: AssessmentMode
   status: AssessmentStatus
@@ -195,11 +204,8 @@ export type AssessmentResult = {
   rating: number | null
   result_grade: Grade | ''
   decision: GradeDecision
-  promotion_unlocked: boolean
-  counts_as_attempt: boolean
   started_at: string | null
-  finished_at: string | null
-  // gap G5 � hidden when absent
+  // gap G5 — hidden while the backend omits them
   rating_ci?: number | null
   percentile?: number | null
   topics?: ResultTopic[]
@@ -209,10 +215,6 @@ export type AssessmentResult = {
 }
 
 /** GET /api/assessments/eligibility?specialization= */
-export type Eligibility = {
-  can_start: boolean
+export type Eligibility = Omit<EligibilityResponse, 'next_attempt_at'> & {
   next_attempt_at?: string | null
-  promotion_available?: boolean
-  reason?: string | null
-  active_session_id?: string | null
 }

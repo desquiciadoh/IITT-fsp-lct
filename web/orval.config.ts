@@ -6,12 +6,10 @@ export default defineConfig({
     output: {
       target: './src/api/generated',
       schemas: './src/api/generated/models',
-      client: 'react-query',
-      httpClient: 'fetch',
+      // Models only. The app calls the API through the hand-written hooks in
+      // `src/api/*.ts`; react-query hooks here would be dead code (R5).
+      client: 'fetch',
       clean: true,
-      override: {
-        mutator: { path: './src/api/client.ts', name: 'customFetch' },
-      },
     },
   },
 })

@@ -2,9 +2,9 @@ import { Star, Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LeagueBadge, type Grade, type LeagueStatus, type Spec } from '@/components/domain/league-badge'
 import { SalaryTag } from '@/components/domain/salary-tag'
-import { ReasonChips, type Reason } from '@/components/domain/reason-chips'
+import { ReasonChips } from '@/components/domain/reason-chips'
 import { WORK_FORMAT_LABEL } from '@/lib/labels'
-import type { TalentShort } from '@/api/types'
+import type { Reason, TalentShort } from '@/api/types'
 
 export type TalentRowProps = {
   talent: TalentShort
@@ -66,7 +66,7 @@ export function TalentRow({
         <SalaryTag
           min={talent.salary_min ?? 0}
           max={talent.salary_max ?? 0}
-          type={talent.salary_type ?? 'gross'}
+          type={talent.salary_type || 'gross'}
         />
         <div className="flex items-center gap-2">
           {score !== undefined && (

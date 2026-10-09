@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils'
 import { SalaryTag } from '@/components/domain/salary-tag'
 import { StatusChip, type OfferStatus } from '@/components/domain/status-chip'
-import { ReasonChips, type Reason } from '@/components/domain/reason-chips'
+import { ReasonChips } from '@/components/domain/reason-chips'
 import { TrustBadge, type TrustLevel } from '@/components/domain/trust-badge'
+import type { Reason } from '@/api/types'
 
 export type OfferCardOffer = {
   title: string

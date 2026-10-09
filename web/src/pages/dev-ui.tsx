@@ -4,7 +4,8 @@ import { LeagueBadge } from '@/components/domain/league-badge'
 import { RatingBadge } from '@/components/domain/rating-badge'
 import { SalaryTag } from '@/components/domain/salary-tag'
 import { StatusChip, type OfferStatus } from '@/components/domain/status-chip'
-import { ReasonChips, type Reason } from '@/components/domain/reason-chips'
+import { ReasonChips } from '@/components/domain/reason-chips'
+import type { Reason } from '@/api/types'
 import { ScoreBar } from '@/components/domain/score-bar'
 import { OfferCard } from '@/components/domain/offer-card'
 import { TalentRow } from '@/components/domain/talent-row'
@@ -37,6 +38,8 @@ const SCORE_LIST = [
 
 const SCORE_DICT = { skill: 34, grade: 22, strength: 14, fsp: 15, salary: 8 }
 
+const NOW = '2026-01-01T00:00:00.000Z'
+
 const OFFERS: Offer[] = [
   {
     id: 'o-1',
@@ -48,6 +51,8 @@ const OFFERS: Offer[] = [
     status: 'sent',
     why_you: REASONS.slice(0, 3),
     version: 1,
+    created_at: NOW,
+    updated_at: NOW,
   },
   {
     id: 'o-2',
@@ -58,6 +63,8 @@ const OFFERS: Offer[] = [
     salary_type: 'gross',
     status: 'accepted',
     version: 2,
+    created_at: NOW,
+    updated_at: NOW,
   },
   {
     id: 'o-3',
@@ -68,6 +75,8 @@ const OFFERS: Offer[] = [
     salary_type: 'net',
     status: 'declined',
     version: 1,
+    created_at: NOW,
+    updated_at: NOW,
   },
 ]
 

@@ -1,15 +1,7 @@
 import type { ReactNode } from 'react'
 import { Info, ListChecks, Minus, PenLine, Plus, Trophy, Beaker } from 'lucide-react'
+import type { Reason, ReasonKind, Source } from '@/api/types'
 import { cn } from '@/lib/utils'
-
-export type Source = 'test' | 'fsp' | 'microtask' | 'declared'
-export type ReasonKind = 'plus' | 'minus' | 'info'
-
-export type Reason = {
-  kind: ReasonKind
-  text: string
-  source?: Source
-}
 
 const KIND_ICON: Record<ReasonKind, ReactNode> = {
   plus: <Plus className="h-3 w-3" />,

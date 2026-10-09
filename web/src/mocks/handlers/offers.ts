@@ -22,7 +22,9 @@ const problem = (status: number, code: string, detail: string) =>
 const now = new Date().toISOString()
 const in7d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-const store: Offer[] = [
+type MutableOffer = { -readonly [K in keyof Offer]: Offer[K] }
+
+const store: MutableOffer[] = [
   {
     id: 'off-1',
     title: 'Senior Backend Engineer',
