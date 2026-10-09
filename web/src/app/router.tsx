@@ -30,12 +30,19 @@ export const router = createBrowserRouter([
   { path: '/dev/ui', element: <DevUiPage /> },
   { path: '/dev/design', element: <DesignVariantsPage /> },
   {
+    // Public pages inside the shell (no RequireAuth; no SSE for anonymous users)
+    element: <AppLayout />,
+    children: [
+      { path: '/jury', element: <JuryPage /> },
+      { path: '/lab', element: ph('Лаборатория', 'FE2', 'FE-18') },
+    ],
+  },
+  {
     element: <RequireAuth />,
     children: [
       {
         element: <AppLayout />,
         children: [
-          { path: '/jury', element: <JuryPage /> },
           {
             element: <RequireRole role="candidate" />,
             children: [
@@ -84,7 +91,6 @@ export const router = createBrowserRouter([
               },
               { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
               { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-17') },
-              { path: '/lab', element: ph('Лаборатория', 'FE2', 'FE-18') },
             ],
           },
         ],

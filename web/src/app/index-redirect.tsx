@@ -12,7 +12,7 @@ export function IndexRedirect() {
       </div>
     )
   }
-  if (!data) return <Navigate to="/login" replace />
+  if (!data) return <Navigate to="/jury" replace />
   if (data.role === 'candidate') return <Navigate to="/candidate" replace />
   if (data.role === 'employer') return <Navigate to="/employer" replace />
   return <Navigate to="/jury" replace />

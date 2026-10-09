@@ -56,11 +56,12 @@ function handleEvent(client: QueryClient, event: string, raw: string) {
   }
 }
 
-/** Mount once inside authenticated layouts. */
-export function useLiveEvents(): void {
+/** Mount once inside authenticated layouts. No-op while `enabled` is false (anonymous users). */
+export function useLiveEvents(enabled = true): void {
   const client = useQueryClient()
 
   useEffect(() => {
+    if (!enabled) return
     let source: EventSource | null = null
     let retry: ReturnType<typeof setTimeout> | null = null
 
@@ -87,5 +88,5 @@ export function useLiveEvents(): void {
       source?.close()
       if (retry) clearTimeout(retry)
     }
-  }, [client])
+  }, [client, enabled])
 }

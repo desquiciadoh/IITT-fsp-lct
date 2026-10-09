@@ -17,7 +17,7 @@ export function AppLayout() {
   const { data: me } = useMe()
   const navigate = useNavigate()
   const client = useQueryClient()
-  useLiveEvents()
+  useLiveEvents(Boolean(me))
 
   const logout = useMutation({
     mutationFn: () => customFetch<void>('/api/auth/logout', { method: 'POST' }),
@@ -68,6 +68,11 @@ export function AppLayout() {
               {RU.nav.jury}
             </NavLink>
           </nav>
+          {!me && (
+            <NavLink to="/login" className={linkClass}>
+              Войти
+            </NavLink>
+          )}
           {me && (
             <div className="flex items-center gap-2">
               <Badge variant="outline">{me.role}</Badge>
