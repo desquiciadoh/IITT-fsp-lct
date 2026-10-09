@@ -12,6 +12,7 @@ export const keys = {
   offers: (status?: string) => ['offers', status ?? 'all'] as const,
   offer: (id: string) => ['offer', id] as const,
   company: ['company'] as const,
+  companySearch: (q: string) => ['companies', 'search', q] as const,
   positions: ['positions'] as const,
   position: (id: string) => ['position', id] as const,
   pool: (positionId: string) => ['pool', positionId] as const,

@@ -8,6 +8,7 @@ import { keys } from '@/api/keys'
 import { errorMessage } from '@/i18n/errors'
 import { useMe } from '@/api/me'
 import { useProfile, useSaveConsents, useSaveProfile } from '@/api/profile'
+import { useCompanySearch } from '@/api/companies'
 import { formatDate } from '@/lib/format'
 import { PLACEMENT_TIER_LABEL, SPORTS_RANK_LABEL } from '@/lib/labels'
 import { cn } from '@/lib/utils'
@@ -20,13 +21,7 @@ import { Button } from '@/components/ui/button'
  * forwards to this page (see `router.tsx`).
  */
 const FSP_OIDC_LINK = '/api/auth/fsp-id/login?intent=link'
-
-/** Mock company picker — real lookup endpoint is gap G17; ids must be UUIDs (backend constraint). */
-const MOCK_COMPANIES = [
-  { id: '00000000-0000-4000-8000-000000000001', name: 'Yandex Tech' },
-  { id: '00000000-0000-4000-8000-000000000002', name: 'Ozon' },
-  { id: '00000000-0000-4000-8000-000000000003', name: 'Avito' },
-]
+const COMPANY_MIN_QUERY = 2
 
 function ToggleRow({
   label,
@@ -71,10 +66,19 @@ export function SettingsPage() {
   const [openToOffers, setOpenToOffers] = useState(true)
   const [salaryFloor, setSalaryFloor] = useState('')
   const [blocked, setBlocked] = useState<string[]>([])
-  const [blockPick, setBlockPick] = useState('')
+  const [blockedNames, setBlockedNames] = useState<Record<string, string>>({})
+  const [blockQuery, setBlockQuery] = useState('')
+  const [blockQ, setBlockQ] = useState('')
   const [consents, setConsents] = useState({ processing: true, publication: true, fsp_sync: true })
   const [fspId, setFspId] = useState('')
   const [fspPending, setFspPending] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBlockQ(blockQuery), 200)
+    return () => clearTimeout(timer)
+  }, [blockQuery])
+
+  const { data: companyHits } = useCompanySearch(blockQ)
 
   useEffect(() => {
     if (!profile) return
@@ -227,17 +231,24 @@ export function SettingsPage() {
               <span className="text-xs text-muted-foreground">Список пуст.</span>
             )}
             {blocked.map((id) => {
-              const company = MOCK_COMPANIES.find((c) => c.id === id)
+              const name = blockedNames[id]
               return (
                 <span
                   key={id}
                   className="flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs"
                 >
-                  {company?.name ?? id}
+                  {name ?? id}
                   <button
                     type="button"
-                    aria-label={`Убрать ${company?.name ?? id} из блок-листа`}
-                    onClick={() => setBlocked(blocked.filter((b) => b !== id))}
+                    aria-label={`Убрать ${name ?? id} из блок-листа`}
+                    onClick={() => {
+                      setBlocked(blocked.filter((b) => b !== id))
+                      setBlockedNames((prev) => {
+                        const next = { ...prev }
+                        delete next[id]
+                        return next
+                      })
+                    }}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -245,36 +256,46 @@ export function SettingsPage() {
               )
             })}
           </div>
-          <div className="mt-3 flex gap-2">
-            <select
-              value={blockPick}
-              onChange={(e) => setBlockPick(e.target.value)}
-              aria-label="Выберите компанию для блокировки"
-              className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              <option value="">— выбрать компанию (демо-список) —</option>
-              {MOCK_COMPANIES.filter((c) => !blocked.includes(c.id)).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!blockPick}
-              onClick={() => {
-                setBlocked([...blocked, blockPick])
-                setBlockPick('')
-              }}
-            >
-              Заблокировать
-            </Button>
+          <div className="mt-3">
+            <label className="text-xs text-muted-foreground">
+              Найти компанию по названию (реестр, `GET /api/companies`)
+              <input
+                type="text"
+                value={blockQuery}
+                onChange={(e) => setBlockQuery(e.target.value)}
+                placeholder="от 2 символов, например «Яндекс»"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+            </label>
+            {blockQuery.trim().length >= COMPANY_MIN_QUERY && (
+              <ul className="mt-2 max-h-56 overflow-auto divide-y divide-border rounded-lg border border-border">
+                {companyHits && companyHits.length > 0 ? (
+                  companyHits.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        disabled={blocked.includes(c.id)}
+                        onClick={() => {
+                          setBlocked([...blocked, c.id])
+                          setBlockedNames((prev) => ({ ...prev, [c.id]: c.name }))
+                          setBlockQuery('')
+                          setBlockQ('')
+                        }}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-secondary/50 disabled:text-muted-foreground"
+                      >
+                        {c.name}
+                        {blocked.includes(c.id) && <span className="text-xs">в списке</span>}
+                      </button>
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-3 py-2 text-sm text-muted-foreground">
+                    {companyHits ? 'Ничего не найдено' : 'Ищем…'}
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
-          <span className="mt-2 block text-xs text-muted-foreground">
-            Поиск по реальному реестру компаний пока недоступен (G17) — список организаций
-            демонстрационный.
-          </span>
         </div>
         <Button onClick={savePrivacy} disabled={saveProfile.isPending}>
           {saveProfile.isPending ? 'Сохраняем…' : 'Сохранить приватность'}

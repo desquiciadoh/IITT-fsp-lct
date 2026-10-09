@@ -10,6 +10,16 @@ const problem = (status: number, code: string, detail: string, errors?: unknown)
     headers: { 'Content-Type': 'application/problem+json', 'X-Stub': 'true' },
   })
 
+/** Registry stand-in for `all` mode (G17 is live on the backend). */
+const ALL_COMPANIES = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Yandex Tech' },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Ozon' },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Avito' },
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Tinkoff' },
+  { id: '00000000-0000-4000-8000-000000000005', name: 'Acme Systems' },
+  { id: '00000000-0000-4000-8000-000000000006', name: 'DataForge' },
+]
+
 /**
  * `all`-mode stand-ins for endpoints that are **live on the backend** now
  * (G1 csrf, G2 verify-email, G3 taxonomy, G6 positions/parse, G7 leagues,
@@ -43,6 +53,10 @@ export const gapHandlers = [
       ],
     }),
   ),
+  http.get('*/api/companies', ({ request }) => {
+    const search = new URL(request.url).searchParams.get('search')?.trim().toLowerCase() ?? ''
+    return json(ALL_COMPANIES.filter((c) => c.name.toLowerCase().includes(search)))
+  }),
   http.get('*/api/leagues', ({ request }) => {
     const spec = new URL(request.url).searchParams.get('specialization')
     return json({
