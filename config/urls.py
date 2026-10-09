@@ -17,4 +17,8 @@ urlpatterns = [
     path('api/', include('matching.urls')),
     path('api/', include('outreach.urls')),
     path('api/', include('fsp_sync.urls')),
+
+    # Mock FSP IdP & Registry (AI-08 / dev / test)
+    path('idp/', include('fsp_mock.urls')),
+    path('registry/', include('fsp_mock.registry_urls')),
 ]

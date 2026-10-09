@@ -8,7 +8,8 @@ Generates:
 """
 import uuid
 from datetime import date
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from django.utils import timezone
 
 from identity.models import User, Consent
@@ -45,8 +46,12 @@ class Command(BaseCommand):
             help='Seed mode: mini (stand showcase) or full',
         )
 
+    @transaction.atomic
     def handle(self, *args, **options):
         mode = options['mode']
+        if mode == 'full':
+            raise CommandError("Full seed mode requires synthetic world data (BE-13). Use --mode=mini.")
+
         self.stdout.write(self.style.NOTICE(f"Seeding database in mode '{mode}'..."))
 
         # --- 1. Skills Taxonomy ---
@@ -88,7 +93,7 @@ class Command(BaseCommand):
             email="techlead@yandex-mock.ru",
             defaults={'role': UserRole.EMPLOYER, 'is_demo': True, 'email_verified_at': timezone.now()}
         )
-        emp1.set_password("demopassword")
+        emp1.set_unusable_password()
         emp1.save()
         CompanyMember.objects.get_or_create(company=comp1, user=emp1)
 
@@ -109,7 +114,7 @@ class Command(BaseCommand):
             email="recruiter@sbertech-mock.ru",
             defaults={'role': UserRole.EMPLOYER, 'is_demo': True, 'email_verified_at': timezone.now()}
         )
-        emp2.set_password("demopassword")
+        emp2.set_unusable_password()
         emp2.save()
         CompanyMember.objects.get_or_create(company=comp2, user=emp2)
 
@@ -190,14 +195,16 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.CONFIRMED,
                 'rating': 1250,
                 'strength': 95.0,
+                'base_strength': 85.0,
+                'fsp_boost': 10.0,
                 'salary_min': 290000,
                 'salary_max': 380000,
                 'fsp_id': 'FSP-000123',
                 'fsp_rank': SportsRank.KMS,
                 'skills': [('python', EvidenceSource.TEST), ('postgresql', EvidenceSource.TEST), ('algorithms', EvidenceSource.FSP)],
                 'results': [
-                    ("Чемпионат России по СП 2025", Discipline.ALGORITHMIC, 1, PlacementTier.WINNER, 200),
-                    ("Кубок Федерации СП (Продукт)", Discipline.PRODUCT, 2, PlacementTier.PRIZE_WINNER, 80),
+                    ("CHAMP-2025", "Чемпионат России по спортивному программированию 2025", Discipline.ALGORITHMIC, date(2025, 11, 20), 2, PlacementTier.PRIZE_WINNER, 180),
+                    ("CUP-2025", "Кубок Федерации 2025 (Продуктовое программирование)", Discipline.PRODUCT, date(2025, 6, 15), 1, PlacementTier.WINNER, 64),
                 ]
             },
             # 2. Mikhail - FSP Prize-Winner, Middle, Confirmed
@@ -211,13 +218,15 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.CONFIRMED,
                 'rating': 1120,
                 'strength': 84.0,
+                'base_strength': 79.0,
+                'fsp_boost': 5.0,
                 'salary_min': 190000,
                 'salary_max': 240000,
                 'fsp_id': 'FSP-000456',
                 'fsp_rank': SportsRank.CAT1,
                 'skills': [('python', EvidenceSource.TEST), ('docker', EvidenceSource.TEST), ('algorithms', EvidenceSource.FSP)],
                 'results': [
-                    ("Первенство Москвы по СП 2025", Discipline.INFOSEC, 3, PlacementTier.PRIZE_WINNER, 120),
+                    ("MOSCOW-2025", "Первенство Москвы 2025", Discipline.INFOSEC, date(2025, 9, 10), 3, PlacementTier.PRIZE_WINNER, 120),
                 ]
             },
             # 3. Dmitry - FSP Participant, Junior, Confirmed
@@ -231,13 +240,15 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.CONFIRMED,
                 'rating': 1040,
                 'strength': 72.0,
+                'base_strength': 67.0,
+                'fsp_boost': 5.0,
                 'salary_min': 100000,
                 'salary_max': 140000,
                 'fsp_id': 'FSP-000789',
                 'fsp_rank': SportsRank.CAT2,
                 'skills': [('python', EvidenceSource.TEST), ('sql', EvidenceSource.DECLARED)],
                 'results': [
-                    ("Региональный кубок Сибири по СП", Discipline.ALGORITHMIC, 5, PlacementTier.FINALIST, 60),
+                    ("SIBERIA-2025", "Региональный кубок Сибири по СП", Discipline.ALGORITHMIC, date(2025, 5, 12), 5, PlacementTier.FINALIST, 60),
                 ]
             },
             # 4. Elena - FSP Participant, Frontend, Confirmed
@@ -251,13 +262,15 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.CONFIRMED,
                 'rating': 1100,
                 'strength': 80.0,
+                'base_strength': 75.0,
+                'fsp_boost': 5.0,
                 'salary_min': 200000,
                 'salary_max': 260000,
                 'fsp_id': 'FSP-000321',
                 'fsp_rank': SportsRank.CAT3,
                 'skills': [('react', EvidenceSource.TEST), ('typescript', EvidenceSource.TEST)],
                 'results': [
-                    ("Студенческий хакатон ФСП", Discipline.PRODUCT, 3, PlacementTier.PRIZE_WINNER, 45),
+                    ("HACKATHON-2025", "Студенческий хакатон ФСП", Discipline.PRODUCT, date(2025, 4, 18), 3, PlacementTier.PRIZE_WINNER, 45),
                 ]
             },
             # 5. Alex - Non-FSP, Middle, Confirmed (Shows fair chance for standard engineers!)
@@ -271,6 +284,8 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.CONFIRMED,
                 'rating': 1080,
                 'strength': 75.0,
+                'base_strength': 75.0,
+                'fsp_boost': 0.0,
                 'salary_min': 180000,
                 'salary_max': 220000,
                 'fsp_id': None,
@@ -289,6 +304,8 @@ class Command(BaseCommand):
                 'league_status': LeagueStatus.UNCONFIRMED,
                 'rating': 920,
                 'strength': 45.0,
+                'base_strength': 45.0,
+                'fsp_boost': 0.0,
                 'salary_min': 250000,
                 'salary_max': 350000,
                 'fsp_id': None,
@@ -307,7 +324,7 @@ class Command(BaseCommand):
                     'email_verified_at': timezone.now(),
                 }
             )
-            user.set_password("demopassword")
+            user.set_unusable_password()
             user.save()
 
             # Consents
@@ -377,6 +394,8 @@ class Command(BaseCommand):
                     'status': cand['league_status'],
                     'rating': cand['rating'],
                     'strength': cand['strength'],
+                    'base_strength': cand.get('base_strength', cand['strength']),
+                    'fsp_boost': cand.get('fsp_boost', 0.0),
                     'confirmed_at': timezone.now() if cand['league_status'] == LeagueStatus.CONFIRMED else None,
                 }
             )
@@ -392,14 +411,14 @@ class Command(BaseCommand):
                         'last_sync_at': timezone.now(),
                     }
                 )
-                for event_name, discipline, place, tier, total_part in cand['results']:
+                for event_id, event_name, discipline, event_date, place, tier, total_part in cand['results']:
                     FSPResult.objects.get_or_create(
                         candidate=user,
-                        event_id=f"EVT-{abs(hash(event_name)) % 10000}",
+                        event_id=event_id,
                         defaults={
                             'event_name': event_name,
                             'discipline': discipline,
-                            'date': date(2025, 6, 1),
+                            'date': event_date,
                             'placement': place,
                             'tier': tier,
                             'participants_total': total_part,

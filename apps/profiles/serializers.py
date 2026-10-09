@@ -1,7 +1,11 @@
 """Profiles app serializers."""
+import uuid
+from django.db import transaction
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from profiles.models import CandidateProfile, CandidateContact, Skill, CandidateSkill
 from identity.models import Consent
+from matching.models import Company
 from core.enums import Specialization, Grade, WorkFormat, SalaryType, ConsentType
 
 
@@ -18,6 +22,38 @@ class CandidateSkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = CandidateSkill
         fields = ['id', 'name', 'source', 'level']
+
+
+class CandidateLeagueSerializer(serializers.Serializer):
+    specialization = serializers.CharField()
+    grade = serializers.CharField()
+    status = serializers.CharField()
+    rating = serializers.IntegerField()
+    percentile = serializers.FloatField(allow_null=True)
+    strength = serializers.IntegerField(allow_null=True)
+
+
+class FSPResultSerializer(serializers.Serializer):
+    event_id = serializers.CharField()
+    event_name = serializers.CharField()
+    discipline = serializers.CharField()
+    date = serializers.CharField()
+    placement = serializers.IntegerField()
+    tier = serializers.CharField()
+    participants_total = serializers.IntegerField()
+
+
+class CandidateFSPSerializer(serializers.Serializer):
+    participant_id = serializers.CharField()
+    sports_rank = serializers.CharField(allow_null=True)
+    sync_status = serializers.CharField()
+    results = FSPResultSerializer(many=True)
+
+
+class ConsentsResponseSerializer(serializers.Serializer):
+    processing = serializers.BooleanField()
+    publication = serializers.BooleanField()
+    fsp_sync = serializers.BooleanField()
 
 
 class CandidateProfileSerializer(serializers.ModelSerializer):
@@ -57,6 +93,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['public_id', 'completeness']
 
+    @extend_schema_field(CandidateContactSerializer)
     def get_contacts(self, obj):
         # Candidate viewing own profile sees contacts; employers NEVER get this field here
         request = self.context.get('request')
@@ -68,6 +105,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
                 return {'email': obj.user.email, 'phone': '', 'telegram': ''}
         return None
 
+    @extend_schema_field(CandidateSkillSerializer(many=True))
     def get_skills(self, obj):
         qs = obj.skills.select_related('skill').all()
         return [
@@ -80,6 +118,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             for cs in qs
         ]
 
+    @extend_schema_field(CandidateLeagueSerializer)
     def get_league(self, obj):
         # Latest confirmed or unconfirmed league membership
         lm = obj.user.league_memberships.filter(status__in=['confirmed', 'unconfirmed']).first()
@@ -96,6 +135,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             }
         return None
 
+    @extend_schema_field(CandidateFSPSerializer)
     def get_fsp(self, obj):
         if hasattr(obj.user, 'fsp_link'):
             link = obj.user.fsp_link
@@ -119,6 +159,7 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             }
         return None
 
+    @extend_schema_field(ConsentsResponseSerializer)
     def get_consents(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated and request.user.id == obj.user_id:
@@ -158,6 +199,40 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             'skills',
         ]
 
+    def validate_blocked_company_ids(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('blocked_company_ids must be a list of company IDs.')
+        valid_uuids = []
+        for item in value:
+            try:
+                valid_uuids.append(uuid.UUID(str(item)))
+            except (ValueError, AttributeError):
+                raise serializers.ValidationError(f'Invalid company UUID: {item}')
+
+        existing = set(Company.objects.filter(id__in=valid_uuids).values_list('id', flat=True))
+        missing = [str(vid) for vid in valid_uuids if vid not in existing]
+        if missing:
+            raise serializers.ValidationError(f"Companies not found: {', '.join(missing)}")
+        return [str(vid) for vid in valid_uuids]
+
+    def validate(self, attrs):
+        s_min = attrs['salary_min'] if 'salary_min' in attrs else getattr(self.instance, 'salary_min', None)
+        s_max = attrs['salary_max'] if 'salary_max' in attrs else getattr(self.instance, 'salary_max', None)
+
+        if s_min is not None and s_max is not None and s_min > s_max:
+            raise serializers.ValidationError({
+                'salary_min': 'salary_min cannot be greater than salary_max',
+            })
+
+        s_floor = attrs['salary_floor'] if 'salary_floor' in attrs else getattr(self.instance, 'salary_floor', None)
+        if s_floor is not None and s_min is not None and s_floor > s_min:
+            raise serializers.ValidationError({
+                'salary_floor': 'salary_floor cannot be greater than salary_min',
+            })
+
+        return attrs
+
+    @transaction.atomic
     def update(self, instance, validated_data):
         contacts_data = validated_data.pop('contacts', None)
         skills_data = validated_data.pop('skills', None)
@@ -187,3 +262,44 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
                 )
 
         return instance
+
+
+class ConsentUpdateSerializer(serializers.Serializer):
+    processing = serializers.BooleanField(required=False)
+    publication = serializers.BooleanField(required=False)
+    fsp_sync = serializers.BooleanField(required=False)
+    version = serializers.CharField(required=False, default='1.0')
+
+
+class TaxonomySpecializationSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    topics = serializers.ListField(child=serializers.CharField())
+
+
+class TaxonomyGradeSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    descriptor = serializers.CharField()
+    rating_cut = serializers.IntegerField()
+
+
+class TaxonomySkillSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    aliases = serializers.ListField(child=serializers.CharField())
+    topic = serializers.CharField()
+
+
+class TaxonomyDeclineReasonSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+
+
+class TaxonomySerializer(serializers.Serializer):
+    specializations = TaxonomySpecializationSerializer(many=True)
+    grades = TaxonomyGradeSerializer(many=True)
+    skills = TaxonomySkillSerializer(many=True)
+    decline_reasons = TaxonomyDeclineReasonSerializer(many=True)
+
+

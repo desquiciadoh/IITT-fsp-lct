@@ -1,6 +1,6 @@
 # FSP Draft — Backend Code & Architecture Documentation
 
-Этот документ описывает внутреннее устройство серверной части платформы «FSP Draft», структуру модулей, сервисный слой, инварианты безопасности и математические модели оценивания и матчинга.
+Этот документ описывает внутреннее устройство серверной части платформы «FSP Draft», структуру модулей, сервисный слой, инварианты безопасности, шину доменных событий, интеграцию с Celery, OIDC IdP мок и границу сопряжения со слоем ML/AI.
 
 ---
 
@@ -10,21 +10,22 @@
 
 ```text
 apps/
-├── core/                   # Общие интерфейсы, сервис гейтинга контактов, ошибки RFC 7807, сиды
+├── core/                   # Общие интерфейсы (чистый листовой модуль без моделей домена)
 │   ├── enums.py            # Все перечисления предметной области (UserRole, Grade, Specialization и др.)
-│   ├── errors.py           # Иерархия FSPAPIError и кастомный exception handler DRF
-│   ├── services.py         # ContactAccessService — единственный шлюз к чтению контактов
+│   ├── errors.py           # Иерархия FSPAPIError и кастомный exception handler DRF (RFC 7807)
 │   ├── pagination.py       # Пагинация ответов в формате {items, total, page, pages}
 │   └── management/
-│       └── commands/seed.py # Идемпотентный сид стенда (мини-датасет)
+│       └── commands/seed.py # Идемпотентный сид стенда (мини-датасет, валидированный транзакцией)
 │
-├── identity/               # Управление пользователями, авторизация и аудит
+├── identity/               # Управление пользователями, авторизация, OIDC и аудит
 │   ├── models.py           # User, Identity, Consent (152-ФЗ), AuditLog
-│   ├── views.py            # Регистрация, сессионный логин, /me, demo persona, time-travel
+│   ├── oidc.py             # Authlib OIDC клиент: PKCE S256, login/link callback, jwt декодирование
+│   ├── views.py            # Регистрация, сессионный логин, /me, demo persona, time-travel, CSRF
 │   └── urls.py
 │
 ├── profiles/               # Профили кандидатов, навыки, PDF-карточка игрока
 │   ├── models.py           # CandidateProfile (public_id), CandidateContact, Skill, CandidateSkill
+│   ├── selectors.py        # visible_candidates_for(company) — единый шлюз фильтрации видимости
 │   ├── serializers.py      # Безопасные сериализаторы без утечки контактов
 │   ├── pdf_service.py      # Генерация PDF «Карточка игрока» (WeasyPrint) с защитным QR-кодом
 │   ├── views.py            # CRUD профиля, consents, resume parse, QR verify
@@ -32,29 +33,40 @@ apps/
 │
 ├── assessment/             # Адаптивное тестирование (CAT) и расчет рейтинга IRT
 │   ├── models.py           # ItemFamily, AssessmentSession, AssessmentItem, LeagueMembership
-│   ├── engine.py           # Базовый класс ItemFamily, параметрические генераторы, IRT EAP
+│   ├── services.py         # AssessmentService: жизненный цикл, дедлайны, CatState, финализация
+│   ├── engine.py           # ML-адаптер: ItemFamily, генераторы по seed, IRT EAP (ML-заглушка)
 │   ├── serializers.py      # ItemViewSerializer (СТРОГО исключает key)
-│   ├── views.py            # Проверка eligibility, сессия тестирования, прием ответов, финализация
+│   ├── views.py            # Проверка eligibility, сессия тестирования, прием ответов, fallback
 │   └── urls.py
 │
-├── matching/               # Вакансии, скоринг кандидатов и шортлисты
+├── matching/               # Вакансии, скоринг кандидатов, шортлисты и полки лиг
 │   ├── models.py           # Company, CompanyMember, Position, Shortlist
-│   ├── scoring.py          # Взвешенный расчет соответствия и ReasonChips
+│   ├── selectors.py        # Оптимизированные выборки позиций и пулов
+│   ├── scoring.py          # ML-адаптер: взвешенный расчет соответствия и ReasonChips (ML-заглушка)
 │   ├── serializers.py      # Валидация зарплат (salary_min > 0, max >= min), TalentShortSerializer
-│   ├── views.py            # Компании, CRUD вакансий, скоринг пула (/pool), шортлисты
+│   ├── views.py            # Компании, CRUD вакансий, скоринг пула (/pool), полки лиг, шортлисты
 │   └── urls.py
 │
-├── outreach/               # Драфт-офферы, машина состояний и раскрытие контактов
+├── outreach/               # Драфт-офферы, машина состояний, события и раскрытие контактов
 │   ├── models.py           # Offer, OfferEvent, ContactGrant, OFFER_TRANSITIONS
-│   ├── services.py         # OfferService (транзакции, optimistic locking, авто-грант)
+│   ├── services.py         # OfferService (optimistic locking), ContactAccessService (гейтинг контактов)
+│   ├── events.py           # Шина доменных событий (Redis Pub/Sub + in-memory fallback, replay buffer)
+│   ├── tasks.py            # Фоновые периодические задачи Celery (expire_offers)
 │   ├── serializers.py      # Валидация офферов, защищенное раскрытие контактов при accepted
-│   ├── views.py            # Создание офферов, view/accept/decline/withdraw, SSE-стриминг
+│   ├── views.py            # Создание офферов, view/accept/decline/withdraw, SSE-стриминг событий
 │   └── urls.py
 │
-└── fsp_sync/               # Интеграция с Федерацией спортивного программирования
-    ├── models.py           # FSPLink, FSPResult
-    ├── tasks.py            # Фоновая задача Celery (sync_all_fsp_profiles)
-    ├── views.py            # Привязка FSP ID, мок-реестр, пересчет strength без изменения grade
+├── fsp_sync/               # Интеграция с Федерацией спортивного программирования
+│   ├── models.py           # FSPLink, FSPResult
+│   ├── services.py         # FSPService: привязка participant_id, пересчет strength без изменения grade
+│   ├── registry.py         # Адаптер взаимодействия с реестром ФСП
+│   ├── tasks.py            # Фоновая задача Celery (sync_all_fsp_profiles)
+│   ├── views.py            # Привязка FSP ID, мок-реестр
+│   └── urls.py
+│
+└── fsp_mock/               # Встроенный Keycloak-совместимый OIDC Identity Provider (DEMO_MODE)
+    ├── keys.py             # Генерация и хранение RSA ключей (RS256 JWKS)
+    ├── views.py            # OIDC Discovery, JWKS, Auth (PKCE), Token, UserInfo, Registry API
     └── urls.py
 ```
 
@@ -114,11 +126,11 @@ erDiagram
 
 ### 3.1. Zero Contact Leaks: `ContactAccessService`
 
-Контакты кандидата отделены от профиля. Модель `CandidateProfile` содержит только профессиональные характеристики и публичный идентификатор `public_id` (например, `C-7F3A2B`).
+Контакты кандидата отделены от профиля. Модель `CandidateProfile` содержит только профессиональные характеристики и публичный идентификатор `public_id` (например, `C-7F3A2B`). Модуль `apps/core/` полностью декуплирован и является чистым листовым пакетом (leaf module).
 
-Чтение контактов (`email`, `phone`, `telegram`) реализовано исключительно через:
+Чтение контактов (`email`, `phone`, `telegram`) вынесено в защищенный доменный сервис:
 ```python
-# apps/core/services.py
+# apps/outreach/services.py
 ContactInfo = ContactAccessService.get_contacts(
     company_id=company_id,
     candidate_id=candidate_id,
@@ -136,38 +148,90 @@ ContactInfo = ContactAccessService.get_contacts(
 
 ### 3.2. Машина состояний оффера и оптимистичная блокировка
 
-Драфт-офферы управляются классом `OfferService`:
+Драфт-офферы управляются классом `OfferService` (`apps/outreach/services.py`):
 
 ```mermaid
 stateDiagram-v2
     [*] --> sent : Employer creates offer
     sent --> viewed : Candidate opens offer
     sent --> withdrawn : Employer cancels
-    sent --> expired : 14 days timeout
+    sent --> expired : 14 days timeout / Celery beat
     
     viewed --> accepted : Candidate accepts (Unlocks Contacts!)
     viewed --> declined : Candidate declines (with reason)
     viewed --> withdrawn : Employer cancels
-    viewed --> expired : 14 days timeout
+    viewed --> expired : 14 days timeout / Celery beat
 
-    accepted --> interview : Next stage
-    accepted --> closed : Finish
-    interview --> hired : Final Hire
-    interview --> closed : Finish
+    accepted --> interview : Employer moves to next stage
+    accepted --> closed : Employer/Candidate finishes
+    interview --> hired : Employer final hire
+    interview --> closed : Employer/Candidate finishes
 ```
 
 * **Оптимистичная блокировка (Optimistic Concurrency Control):**
-  Каждый вызов `transition()` принимает `expected_version`. При обновлении в БД поле `version` увеличивается на 1 через `F('version') + 1`. Если версия изменилась конкурентным запросом, выбрасывается `VersionConflict` (HTTP 409).
+  Каждый вызов `transition()` принимает `expected_version`. При обновлении в БД поле `version` инкрементируется на уровне СУБД через `F('version') + 1`. Если версия изменилась конкурентным запросом, выбрасывается `VersionConflict` (HTTP 409).
+* **Сброс выражений ORM перед событиями:**
+  Перед сериализацией объекта в событие или JSON вызывается `offer_locked.refresh_from_db()`, исключая ошибки несериализуемых `CombinedExpression`.
 * **Автоматическое создание `ContactGrant`:**
-  При переходе в `accepted` метод `transition()` вызывает `ContactAccessService.create_grant()`, открывая работодателю легальный доступ к контактам.
+  При переходе в `accepted` метод `transition()` атомарно создает `ContactGrant`, открывая работодателю легальный доступ к контактам, сохраняющийся на всех последующих этапах (`interview`, `hired`, `closed`).
+* **Публикация доменных событий:**
+  Каждый успешный переход публикует событие в шину: `offer.created`, `offer.updated`.
+
+### 3.3. Шлюз видимости кандидатов: `CandidateVisibilitySelector`
+
+Вся выборка кандидатов для работодателей (пулы, поиск, карточки талантов, создание офферов) централизована в `apps/profiles/selectors.py`:
+`visible_candidates_for(company, qs=None) -> QuerySet[CandidateProfile]`
+
+**Критерии фильтрации (Privacy & 152-ФЗ):**
+1. **Согласие на публикацию:** последний по времени объект `Consent` типа `publication` имеет статус `granted=True`. При отзыве согласия кандидат немедленно исключается из всех выдач, а активные входящие офферы переводятся в статус `withdrawn`.
+2. **Флаг активности:** `open_to_offers == True`.
+3. **Подтверждение аккаунта:** адрес электронной почты верифицирован (`email_verified == True`).
+4. **Статус в Лиге:** статус кандидата в `LeagueMembership` не является `pending`.
+5. **Блок-листы компаний:** компания исключается, если ее `id` присутствует в `blocked_company_ids` кандидата.
+
+### 3.4. Шина доменных событий и SSE-стриминг
+
+Для обеспечения реактивного взаимодействия frontend и backend реализована шина доменных событий в `apps/outreach/events.py`:
+
+```mermaid
+graph LR
+    Services[Domain Services: Offer, Assessment, FSP] -->|publish_domain_event| EventBus[EventBus Engine]
+    EventBus -->|Transport: Redis PubSub / In-Memory Queue| Transport[(Channel: fsp_domain_events)]
+    EventBus -->|Bounded Ring Buffer| ReplayBuffer[FIFO Ring Buffer: max 100 events]
+    Transport --> SSEView[SSEEventsView: GET /api/events]
+    ReplayBuffer -->|Initial Catch-Up on Connect| SSEView
+    SSEView -->|text/event-stream| FrontendClient[Frontend Web Browser / SPA]
+```
+
+* **События платформы:**
+  * `offer.created` — создание нового драфт-оффера.
+  * `offer.updated` — изменение статуса оффера (`viewed`, `accepted`, `declined`, `expired`, `interview`, `hired`, `closed`).
+  * `league.updated` — обновление позиций и силы участников Лиги.
+  * `fsp.synced` — завершение синхронизации достижений с реестром ФСП.
+* **Транспорт событий:**
+  * В рабочей среде используется **Redis Pub/Sub** (`settings.REDIS_URL`).
+  * При локальной разработке или в тестах автоматически активируется **in-memory thread-safe queue**, гарантируя 100% работоспособность без внешних сервисов.
+* **Кольцевой буфер и replay при подключении:**
+  Шина хранит последние 100 событий (`_RECENT_EVENTS`). При открытии нового SSE-соединения клиенту передаются актуальные события, устраняя потерю сообщений при реконнекте или гонках сетевых запросов.
 
 ---
 
 ## 4. Оценивание (Assessment Engine) и Item Response Theory (IRT)
 
-Оценивание кандидатов полностью детерминировано. В коде отсутствует вызов LLM для выставления грейдов или проверки ответов.
+Оценивание кандидатов полностью детерминировано. В коде платформы полностью исключен вызов LLM для выставления грейдов или проверки ответов.
 
-### 4.1. Параметрические семейства (`ItemFamily`)
+### 4.1. Архитектурная граница со слоем ML (ML Boundary & Stubs)
+
+В соответствии с принципами разделения ответственности бэкенд и ML строго изолированы:
+* **ML-сторона:** поставляет чистые алгоритмы и структуры данных в виде pure-Python модулей без зависимостей от Django ORM (`apps/assessment/engine.py`, генераторы семейств `ItemFamily`, модуль IRT EAP).
+* **Бэкенд-сторона (`apps/assessment/services.py`):**
+  * Управляет сессиями тестирования (`AssessmentSession`) и сериализацией состояния в поле `state` (`CatState`).
+  * Контролирует дедлайны по времени: если ответ отправлен позже `deadline_at`, он принудительно засчитывается как неверный (`correct=False`).
+  * Обеспечивает транзакционность через `transaction.atomic()` и `select_for_update()`.
+  * Реализует эндпоинты завершения теста (`/finish`) и перехода на аварийный режим (`/fallback`).
+  * Предоставляет стабильный адаптер-заглушку (stub) `CatEngine`, обеспечивающий идентичный интерфейс при замене на финальную ML-модель.
+
+### 4.2. Параметрические семейства (`ItemFamily`)
 Каждое задание порождается генератором, принимающим псевдослучайный `seed`:
 ```python
 seed = sha256(f"{ITEM_SEED_SECRET}:{session_id}:{family_id}:{seq}")
@@ -177,7 +241,7 @@ instance = family.generate(seed)
   * `instance.view`: содержит markdown формулировки, код и варианты ответа. Сохраняется в `AssessmentItem.view` и отдается клиенту.
   * `instance.key`: верный ответ, вычисленный детерминированным оракулом. Сохраняется в `AssessmentItem.key` и **никогда не сериализуется в API**.
 
-### 4.2. IRT EAP Модель (3-Parameter Logistic Model)
+### 4.3. IRT EAP Модель (3-Parameter Logistic Model)
 Для каждого вопроса заданы параметры калибровки:
 * $a$ — дискриминативность (способность различать сильных и слабых).
 * $b$ — сложность вопроса.
@@ -188,18 +252,24 @@ instance = family.generate(seed)
 * $SE$ — стандартная ошибка измерения.
 * Спортивный рейтинг силы: $Rating = 1000 + 200 \times \theta$.
 
-### 4.3. Принцип неизменяемости грейда (Grade Immutability)
+### 4.4. Принцип неизменяемости грейда (Grade Immutability)
 * Грейд кандидата (`Junior`, `Middle`, `Senior`) устанавливается **только пороговыми значениями $\theta$ тестирования**.
 * Достижения ФСП влияют **только на Profile Strength (ранжирование внутри Лиги)**:
   $$\text{Strength} = \min(100.0, \; \text{BaseStrength} + \text{FSP\_Boost})$$
+* Сервис `recompute_strength(user)` атомарно пересчитывает силу, сохраняя исходный `base_strength` и рассчитывая `fsp_boost` заново, предотвращая накопление бонусов при повторных вызовах.
 * Тест `test_fsp_achievements_boost_strength_not_grade` подтверждает, что даже звание Мастера спорта и победа в Чемпионате России не могут изменить подтвержденный грейд в обход тестирования.
 
 ---
 
 ## 5. Алгоритм скоринга вакансий и ReasonChips
 
-Эндпоинт `GET /api/positions/{id}/pool` ранжирует кандидатов по 100-балльной шкале, формируя для каждого прозрачное объяснение:
+Эндпоинт `GET /api/positions/{id}/pool` ранжирует кандидатов по 100-балльной шкале, формируя для каждого прозрачное объяснение.
 
+### 5.1. Граница матчинга и скоринга (Matching Boundary & Stubs)
+* **Бэкенд:** выполняет предварительную фильтрацию видимости через `visible_candidates_for(company)` и SQL-хард-фильтры (грейды, навыки, зарплаты), собирает данные кандидатов за 1 оптимизированный батч-запрос (`select_related`, `prefetch_related`) и преобразует их в легковесные DTO (`CandidateCtx`, `NeedCtx`).
+* **ML-адаптер (`apps/matching/scoring.py`):** чистая функция `score_pool(need, pool, weights) -> list[Scored]`, изолированная от базы данных. До поставки продакшн-модели ML работает детерминированный адаптер-заглушка.
+
+### 5.2. Формирование факторов скоринга:
 1. **Совпадение стека (до 35 баллов):**
    * Обязательные навыки (`must_skills`) имеют вес 2.
    * Дополнительные (`nice_skills`) имеют вес 1.
@@ -224,7 +294,8 @@ instance = family.generate(seed)
 
 ## 6. Защищенный PDF «Карточка игрока» и онлайн-верификация
 
-* Формируется сервисом [`apps/profiles/pdf_service.py`](file:///c:/Users/bikhe/projects/IITT-fsp-lct/apps/profiles/pdf_service.py) на базе `WeasyPrint`.
+* Формируется сервисом `apps/profiles/pdf_service.py` на базе `WeasyPrint`.
+* **Безопасность генерации:** используется кастомный безопасный URL fetcher (`data:` only), исключающий SSRF-атаки и чтение локальных файлов сервера; все строковые параметры экранируются.
 * Включает стилизованную верстку с токенами бренда ФСП, текущую Лигу, подтвержденный грейд, рейтинг силы IRT и спортивный разряд.
 * Содержит сгенерированный векторный QR-код, ведущий на публичный эндпоинт онлайн-проверки:
   `GET /api/verify/<public_id>`
@@ -234,14 +305,41 @@ instance = family.generate(seed)
 
 ## 7. Развертывание и выполнение фоновых задач (Celery)
 
-### Очередь задач Celery
-Конфигурация Celery определена в [`config/celery.py`](file:///c:/Users/bikhe/projects/IITT-fsp-lct/config/celery.py).
-Для запуска воркера Celery в рабочей среде:
+### Конфигурация Celery
+Конфигурация Celery определена в `config/celery.py` и инициализируется в `config/__init__.py`.
+
+1. **Периодические задачи (Celery Beat):**
+   * В `config/settings.py` настроен планировщик `CELERY_BEAT_SCHEDULE`:
+     * `expire-stale-offers` (`apps.outreach.tasks.expire_offers`): выполняется каждые 5 минут, автоматически переводя просроченные офферы (`expires_at < now()`) в статус `expired` с публикацией доменного события `offer.updated`.
+   * Для управления расписанием используется `django_celery_beat`, включенный в `INSTALLED_APPS`.
+2. **Маршрутизация очередей (Task Routing):**
+   * `CELERY_TASK_ROUTES` направляет задачи парсинга резюме/вакансий через AI/LLM (`llm_gateway.*`, `ai.*`) в выделенную очередь `llm`.
+   * Воркер для очереди `llm` запускается с флагом `--concurrency=1`, предотвращая исчерпание лимитов внешних LLM API (GigaChat).
+   * При сбоях или превышении 15-секундного таймаута AI-задачи откатываются к детерминированным правилам (rule-based fallback).
+
+Команды запуска:
 ```bash
-celery -A config worker --loglevel=info
+# Воркер основных очередей
+celery -A config worker -l info -Q celery
+
+# Воркер очередей LLM
+celery -A config worker -l info -Q llm --concurrency=1
+
+# Планировщик периодических задач
+celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 ```
-Для запуска планировщика синхронизации:
-```bash
-celery -A config beat --loglevel=info
-```
-Периодическая задача `sync_all_fsp_profiles` опрашивает реестр ФСП, обновляет таблицу `fsp_results` с вычислением хэшей целостности `source_hash` и пересчитывает перцентили в Лигах.
+
+---
+
+## 8. Мок-сервер авторизации ФСП (FSP Mock Identity Provider)
+
+Для автономного тестирования и проведения демонстраций (Jury Mode) в каталог `apps/fsp_mock/` встроен полнофункциональный Keycloak-совместимый OIDC-сервер (активен в `DEMO_MODE`):
+
+* **Эндпоинты OIDC (`/idp/`):**
+  * `GET /idp/.well-known/openid-configuration` — OIDC Discovery документ.
+  * `GET /idp/protocol/openid-connect/certs` — JWKS с публичным RSA-ключом (RS256).
+  * `GET /idp/protocol/openid-connect/auth` — страница выбора тестового участника ФСП с генерацией authorization code и проверкой PKCE (S256).
+  * `POST /idp/protocol/openid-connect/token` — выдача подписанного `id_token` и `access_token` с верификацией PKCE `code_verifier`.
+  * `GET /idp/protocol/openid-connect/userinfo` — получение информации о профиле участника.
+* **Реестр достижений:**
+  * `GET /idp/registry/v1/participants/{id}/achievements` — защищенный сервисным токеном API реестра для импорта верифицированных соревнований и спортивных разрядов.

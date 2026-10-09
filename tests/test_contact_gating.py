@@ -14,7 +14,7 @@ from outreach.models import Offer, ContactGrant
 from outreach.services import OfferService
 from core.enums import OfferStatus, SalaryType, UserRole
 from core.errors import ContactNotGranted
-from core.services import ContactAccessService
+from outreach.services import ContactAccessService
 
 
 @pytest.fixture

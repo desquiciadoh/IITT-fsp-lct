@@ -3,20 +3,37 @@ import json
 import time
 from django.http import StreamingHttpResponse
 from rest_framework import permissions, status, views
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 
-from core.enums import OfferStatus, UserRole
-from core.errors import FSPAPIError, SalaryInvalid
-from core.permissions import IsEmployer
+from core.enums import DeclineReason, OfferStatus, UserRole
+from core.errors import FSPAPIError, SalaryInvalid, CandidateNotReachable
+from core.permissions import IsEmployer, IsCandidate
+from core.pagination import FSPPagination
 from matching.views import get_employer_company
 from outreach.models import Offer
-from outreach.serializers import OfferSerializer
+from outreach.serializers import (
+    OfferSerializer,
+    CreateOfferSerializer,
+    OfferActionSerializer,
+)
 from outreach.services import OfferService
 from profiles.models import CandidateProfile
+from profiles.selectors import is_candidate_visible_to_company
 
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
+
+
+class EventStreamRenderer(BaseRenderer):
+    """Renderer for text/event-stream (SSE)."""
+    media_type = 'text/event-stream'
+    format = 'event-stream'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
 
 class OfferListCreateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -27,7 +44,12 @@ class OfferListCreateView(views.APIView):
             return [IsEmployer()]
         return super().get_permissions()
 
-    @extend_schema(responses={200: OfferSerializer(many=True)})
+    @extend_schema(responses={200: inline_serializer('OfferPaginatedResponse', fields={
+        'items': OfferSerializer(many=True),
+        'total': serializers.IntegerField(),
+        'page': serializers.IntegerField(),
+        'pages': serializers.IntegerField(),
+    })})
     def get(self, request):
         user = request.user
         if user.role == UserRole.CANDIDATE:
@@ -40,47 +62,70 @@ class OfferListCreateView(views.APIView):
         if status_param:
             offers = offers.filter(status=status_param)
 
-        serializer = OfferSerializer(offers, many=True, context={'request': request})
-        return Response(serializer.data)
+        paginator = FSPPagination()
+        page = paginator.paginate_queryset(offers, request, view=self)
+        if page is not None:
+            serializer = OfferSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
 
-    @extend_schema(request=OfferSerializer, responses={201: OfferSerializer})
+        serializer = OfferSerializer(offers, many=True, context={'request': request})
+        return Response({
+            'items': serializer.data,
+            'total': len(serializer.data),
+            'page': 1,
+            'pages': 1,
+        })
+
+    @extend_schema(request=CreateOfferSerializer, responses={201: OfferSerializer})
     def post(self, request):
         company = get_employer_company(request.user)
-        public_id = request.data.get('candidate_public_id')
-        if not public_id:
-            raise FSPAPIError('validation_failed', 'Missing candidate', 'candidate_public_id is required', 422)
 
+        serializer = CreateOfferSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        data = serializer.validated_data
+
+        public_id = data['candidate_public_id']
         profile = CandidateProfile.objects.filter(public_id=public_id).first()
         if not profile:
             raise FSPAPIError('not_found', 'Not found', 'Candidate not found', 404)
 
-        salary_min = request.data.get('salary_min')
-        salary_max = request.data.get('salary_max')
-        salary_type = request.data.get('salary_type', 'gross')
+        if not is_candidate_visible_to_company(profile, company):
+            raise CandidateNotReachable()
 
-        if not salary_min or int(salary_min) <= 0:
-            raise SalaryInvalid('salary_min must be positive integer')
-        if not salary_max or int(salary_max) < int(salary_min):
-            raise SalaryInvalid('salary_max must be >= salary_min')
+        position_id = data.get('position')
+        if position_id:
+            from matching.models import Position
+            if not Position.objects.filter(id=position_id, company=company).exists():
+                raise FSPAPIError(
+                    'validation_failed',
+                    'Invalid position',
+                    'Position must belong to your company',
+                    422,
+                )
 
         offer = OfferService.create_offer(
             company_id=company.id,
             candidate_id=profile.user_id,
             created_by_id=request.user.id,
-            title=request.data.get('title', 'Draft Offer'),
-            description=request.data.get('description', ''),
-            salary_min=int(salary_min),
-            salary_max=int(salary_max),
-            salary_type=salary_type,
-            contact_channel=request.data.get('contact_channel', 'email'),
-            contact_value=request.data.get('contact_value', request.user.email),
-            position_id=request.data.get('position_id'),
-            why_you=request.data.get('why_you', []),
+            title=data.get('title', 'Draft Offer'),
+            description=data.get('description', ''),
+            salary_min=data['salary_min'],
+            salary_max=data['salary_max'],
+            salary_type=data['salary_type'],
+            contact_channel=data['contact_channel'],
+            contact_value=data['contact_value'],
+            position_id=position_id,
         )
 
         return Response(
             OfferSerializer(offer, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -105,71 +150,85 @@ class OfferDetailView(views.APIView):
 
 
 class OfferViewActionView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = OfferSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCandidate]
+    serializer_class = OfferActionSerializer
 
-    @extend_schema(
-        request=inline_serializer('OfferViewRequest', fields={'version': serializers.IntegerField()}),
-        responses={200: OfferSerializer}
-    )
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
     def post(self, request, pk):
         offer = Offer.objects.filter(id=pk, candidate=request.user).first()
         if not offer:
             raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
 
-        version = int(request.data.get('version', offer.version))
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
         updated_offer = OfferService.transition(
             offer_id=offer.id,
             new_status=OfferStatus.VIEWED,
             expected_version=version,
-            actor_id=request.user.id
+            actor_id=request.user.id,
         )
         return Response(OfferSerializer(updated_offer, context={'request': request}).data)
 
 
 class OfferAcceptActionView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = OfferSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCandidate]
+    serializer_class = OfferActionSerializer
 
-    @extend_schema(
-        request=inline_serializer('OfferAcceptRequest', fields={'version': serializers.IntegerField()}),
-        responses={200: OfferSerializer}
-    )
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
     def post(self, request, pk):
         offer = Offer.objects.filter(id=pk, candidate=request.user).first()
         if not offer:
             raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
 
-        version = int(request.data.get('version', offer.version))
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
         updated_offer = OfferService.transition(
             offer_id=offer.id,
             new_status=OfferStatus.ACCEPTED,
             expected_version=version,
-            actor_id=request.user.id
+            actor_id=request.user.id,
         )
         return Response(OfferSerializer(updated_offer, context={'request': request}).data)
 
 
 class OfferDeclineActionView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = OfferSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCandidate]
+    serializer_class = OfferActionSerializer
 
-    @extend_schema(
-        request=inline_serializer('OfferDeclineRequest', fields={
-            'version': serializers.IntegerField(),
-            'reason': serializers.CharField(default='salary'),
-            'comment': serializers.CharField(required=False, allow_blank=True),
-        }),
-        responses={200: OfferSerializer}
-    )
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
     def post(self, request, pk):
         offer = Offer.objects.filter(id=pk, candidate=request.user).first()
         if not offer:
             raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
 
-        version = int(request.data.get('version', offer.version))
-        reason = request.data.get('reason', 'other')
-        comment = request.data.get('comment', '')
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+
+        version = serializer.validated_data['version']
+        reason = serializer.validated_data.get('reason') or DeclineReason.OTHER
+        comment = serializer.validated_data.get('comment', '')
 
         updated_offer = OfferService.transition(
             offer_id=offer.id,
@@ -177,31 +236,127 @@ class OfferDeclineActionView(views.APIView):
             expected_version=version,
             actor_id=request.user.id,
             decline_reason=reason,
-            decline_comment=comment
+            decline_comment=comment,
         )
         return Response(OfferSerializer(updated_offer, context={'request': request}).data)
 
 
 class OfferWithdrawActionView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = OfferSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEmployer]
+    serializer_class = OfferActionSerializer
 
-    @extend_schema(
-        request=inline_serializer('OfferWithdrawRequest', fields={'version': serializers.IntegerField()}),
-        responses={200: OfferSerializer}
-    )
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
     def post(self, request, pk):
         company = get_employer_company(request.user)
         offer = Offer.objects.filter(id=pk, company=company).first()
         if not offer:
             raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
 
-        version = int(request.data.get('version', offer.version))
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
         updated_offer = OfferService.transition(
             offer_id=offer.id,
             new_status=OfferStatus.WITHDRAWN,
             expected_version=version,
-            actor_id=request.user.id
+            actor_id=request.user.id,
+        )
+        return Response(OfferSerializer(updated_offer, context={'request': request}).data)
+
+
+class OfferInterviewActionView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsEmployer]
+    serializer_class = OfferActionSerializer
+
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
+    def post(self, request, pk):
+        company = get_employer_company(request.user)
+        offer = Offer.objects.filter(id=pk, company=company).first()
+        if not offer:
+            raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
+
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
+        updated_offer = OfferService.transition(
+            offer_id=offer.id,
+            new_status=OfferStatus.INTERVIEW,
+            expected_version=version,
+            actor_id=request.user.id,
+        )
+        return Response(OfferSerializer(updated_offer, context={'request': request}).data)
+
+
+class OfferHiredActionView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsEmployer]
+    serializer_class = OfferActionSerializer
+
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
+    def post(self, request, pk):
+        company = get_employer_company(request.user)
+        offer = Offer.objects.filter(id=pk, company=company).first()
+        if not offer:
+            raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
+
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
+        updated_offer = OfferService.transition(
+            offer_id=offer.id,
+            new_status=OfferStatus.HIRED,
+            expected_version=version,
+            actor_id=request.user.id,
+        )
+        return Response(OfferSerializer(updated_offer, context={'request': request}).data)
+
+
+class OfferCloseActionView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsEmployer]
+    serializer_class = OfferActionSerializer
+
+    @extend_schema(request=OfferActionSerializer, responses={200: OfferSerializer})
+    def post(self, request, pk):
+        company = get_employer_company(request.user)
+        offer = Offer.objects.filter(id=pk, company=company).first()
+        if not offer:
+            raise FSPAPIError('not_found', 'Not found', 'Offer not found', 404)
+
+        serializer = OfferActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise FSPAPIError(
+                'validation_failed',
+                'Validation failed',
+                errors=serializer.errors,
+                status_code=422,
+            )
+        version = serializer.validated_data['version']
+
+        updated_offer = OfferService.transition(
+            offer_id=offer.id,
+            new_status=OfferStatus.CLOSED,
+            expected_version=version,
+            actor_id=request.user.id,
         )
         return Response(OfferSerializer(updated_offer, context={'request': request}).data)
 
@@ -209,16 +364,42 @@ class OfferWithdrawActionView(views.APIView):
 class SSEEventsView(views.APIView):
     """Server-Sent Events (SSE) endpoint for real-time notifications."""
     permission_classes = [permissions.IsAuthenticated]
+    renderer_classes = [EventStreamRenderer]
 
+    @extend_schema(
+        responses={(200, 'text/event-stream'): str},
+        description='Server-Sent Events (SSE) notification stream',
+    )
     def get(self, request):
         def event_stream():
-            yield "event: connected\ndata: {\"status\": \"connected\"}\n\n"
-            # Keepalive ping
-            for _ in range(3):
-                time.sleep(1)
-                yield f": ping {time.time()}\n\n"
+            import queue
+            from outreach.events import register_subscriber, unregister_subscriber
+
+            sub = register_subscriber(replay_recent=True)
+            try:
+                yield "event: connected\ndata: {\"status\": \"connected\"}\n\n"
+
+                limit = int(request.query_params.get('limit', 0))
+                count = 0
+                # In standard streaming, run until disconnected; when limit is provided (e.g. tests), stop after limit events
+                while True:
+                    try:
+                        msg = sub.get(timeout=1.0 if limit else 15.0)
+                        event_name = msg.get('event', 'message')
+                        data_json = json.dumps(msg.get('data', {}))
+                        yield f"event: {event_name}\ndata: {data_json}\n\n"
+                        count += 1
+                        if limit and count >= limit:
+                            break
+                    except queue.Empty:
+                        yield f": keepalive {time.time()}\n\n"
+                        if limit:
+                            break
+            finally:
+                unregister_subscriber(sub)
 
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
         response['Cache-Control'] = 'no-cache'
         response['X-Accel-Buffering'] = 'no'
         return response
+

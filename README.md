@@ -157,23 +157,109 @@ pytest -v
 
 ## 6. Каталог ошибок (RFC 7807)
 
-Все ошибки API возвращаются с `Content-Type: application/problem+json`:
+Все ошибки API возвращаются в стандартизированном формате `Content-Type: application/problem+json`:
 ```json
 {
   "type": "https://fsp-draft.local/problems/contact_not_granted",
   "title": "Contact access not granted",
   "status": 403,
   "code": "contact_not_granted",
-  "detail": "Candidate contacts are not available without an accepted offer."
+  "detail": "Candidate contacts are not available without an accepted offer.",
+  "errors": [
+    {
+      "field": "offer_id",
+      "msg": "Offer must be in accepted status."
+    }
+  ]
 }
 ```
 
-Коды ошибок:
-* `validation_failed` (422) — ошибки валидации полей
-* `salary_invalid` (422) — некорректная вилка зарплаты
-* `contact_not_granted` (403) — попытка чтения скрытых контактов
-* `version_conflict` (409) — конфликт оптимистичной блокировки
-* `invalid_transition` (409) — недопустимый переход статуса оффера
-* `cooldown_active` (429) — активен кулдаун пересдачи
-* `item_not_current` (409) — ответ на неактуальный вопрос теста
-* `fsp_id_already_linked` (409) — FSP ID уже привязан к другому аккаунту
+Ключевые коды ошибок:
+* `validation_failed` (422) — ошибки валидации входящих полей структуры данных.
+* `salary_invalid` (422) — некорректная вилка зарплаты (`salary_min <= 0` или `salary_max < salary_min`).
+* `contact_not_granted` (403) — попытка чтения скрытых контактов без гранта.
+* `company_required` (403) — действие доступно только представителю зарегистрированной компании.
+* `version_conflict` (409) — конфликт оптимистичной блокировки при параллельном обновлении оффера.
+* `invalid_transition` (409) — недопустимый переход статуса в машине состояний оффера.
+* `cooldown_active` (429) — активен кулдаун на повторное прохождение тестирования.
+* `item_not_current` (409) — ответ на устаревший или уже отправленный вопрос тестирования.
+* `fsp_id_already_linked` (409) — FSP ID уже привязан к другой учетной записи платформы.
+
+---
+
+## 7. Чипы обоснования рекомендаций (ReasonChips)
+
+Каждый кандидат в пуле вакансии снабжается массивом объясняющих факторов `ReasonChips` с указанием источника достоверности (`source`):
+
+| Источник (`source`) | Назначение | Достоверность |
+|---|---|---|
+| `test` | Навык или грейд подтверждены результатами адаптивного вступительного тестирования платформы. | 100% (верифицировано тестом) |
+| `fsp` | Спортивный разряд, статус призера или победа в соревнованиях подтверждены официальным реестром ФСП. | 100% (верифицировано Федерацией) |
+| `declared` | Навык или опыт заявлены кандидатом самостоятельно в анкете/резюме. | Заявлено кандидатом |
+
+Примеры чипов:
+- `✓ Verified Python` (source: `test`)
+- `🏆 Чемпион России по спортивному программированию` (source: `fsp`)
+- `🎖️ Спортивный разряд: КМС` (source: `fsp`)
+- `Match: 350 000 ₽ gross (в рамках вилки)` (source: `declared`)
+
+---
+
+## 8. Демонстрационный сид (Seed Claims)
+
+Команда `python manage.py seed` формирует детерминированный набор данных для демонстрации жюри:
+
+* **Кандидаты:**
+  1. `anna.fsp@example.com` (Чемпионка РФ по спортивному программированию, Senior Backend, подтвержденный тест, 100 Strength).
+  2. `alex.dev@example.com` (Опытный Middle Python разработчик без соревновательного бэкграунда).
+  3. `elena.junior@example.com` (Junior Backend разработчица, подтвердила грейд на тестировании).
+  4. `dmitry.unconfirmed@example.com` (Заявил Senior, но не сдал квалификационный тест — переведен в статус `unconfirmed`).
+  5. `maksim.fsp@example.com` (КМС по спортивному программированию, Middle).
+  6. `olga.fullstack@example.com` (Fullstack разработчик, закрыт для предложений `open_to_offers=False`).
+* **Компании и вакансии:**
+  * `Yandex Tech`: открытая вакансия «Senior Backend Developer» (350k–450k ₽ gross).
+  * `СберТехнологии`: открытая вакансия «Middle Python Developer» (220k–300k ₽ net).
+  * `VK`: открытая вакансия «Junior Go Developer» (120k–180k ₽ gross).
+
+---
+
+## 9. Таблица переменных окружения (`.env`)
+
+| Переменная | Назначение | Значение по умолчанию |
+|---|---|---|
+| `DEBUG` | Режим отладки Django | `False` |
+| `DEMO_MODE` | Включение эндпоинтов жюри (`/api/demo/*`, `/idp/*`) | `False` |
+| `SECRET_KEY` | Криптографический ключ подписи сессий и токенов | Обязателен в production |
+| `ALLOWED_HOSTS` | Разрешенные HTTP-хосты | `localhost,127.0.0.1` |
+| `CSRF_TRUSTED_ORIGINS` | Разрешенные источники для CSRF защиты | `http://localhost:5173,http://localhost:8000` |
+| `POSTGRES_DB` | Имя базы данных PostgreSQL | `fsp_draft` |
+| `POSTGRES_USER` | Пользователь PostgreSQL | `postgres` |
+| `POSTGRES_PASSWORD` | Пароль пользователя PostgreSQL | `postgres` |
+| `POSTGRES_HOST` | Хост СУБД PostgreSQL | `localhost` (или `db` в Docker) |
+| `POSTGRES_PORT` | Порт СУБД PostgreSQL | `5432` |
+| `CELERY_BROKER_URL` | Брокер сообщений Celery | `redis://localhost:6379/0` |
+| `CELERY_RESULT_BACKEND` | Хранилище результатов Celery | `redis://localhost:6379/0` |
+| `REDIS_URL` | URL Redis для шины доменных событий | `redis://localhost:6379/0` |
+| `ITEM_SEED_SECRET` | HMAC-секрет генерации параметров тестовых заданий | Обязателен |
+| `LLM_PROVIDER` | Провайдер LLM (`fake`, `gigachat`) | `fake` |
+| `GRADE_RETRY_COOLDOWN_DAYS` | Длительность кулдауна пересдачи теста | `30` |
+
+---
+
+## 10. Запуск через Docker Compose
+
+Для развертывания полного стека сервисов одной командой:
+```bash
+# Сборка и запуск контейнеров (db, redis, api, worker, worker-llm, beat)
+make up
+# или
+docker compose up -d --build
+```
+
+Сервисы автоматически:
+1. Дождутся готовности PostgreSQL с расширением `pgvector` и Redis.
+2. Применят миграции Django.
+3. Заполнят демонстрационные данные (`seed`).
+4. Поднимут сервер API на `http://localhost:8000`.
+5. Запустят фоновые воркеры Celery и планировщик Celery Beat.
+

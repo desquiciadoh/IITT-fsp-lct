@@ -21,6 +21,7 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
     must_skills = [s.lower() for s in (position.must_skills or [])]
     nice_skills = [s.lower() for s in (position.nice_skills or [])]
 
+    gaps = []
     must_matches = 0
     for s in must_skills:
         if s in candidate_skills:
@@ -36,6 +37,7 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
                 'kind': 'minus',
                 'text': f"Отсутствует {s} (обязательный)",
             })
+            gaps.append(f"Отсутствует обязательный навык {s}")
 
     skill_score = (must_matches / len(must_skills) * 35) if must_skills else 25
     components['skill'] = round(skill_score, 1)
@@ -65,8 +67,10 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
                 'kind': 'minus',
                 'text': f"Грейд ({league.grade}) не совпадает с требованиями вакансии",
             })
+            gaps.append(f"Грейд ({league.grade}) не совпадает с требованиями вакансии")
     else:
         grade_score = 5
+        gaps.append("Грейд не подтвержден тестом")
 
     components['grade'] = grade_score
 
@@ -108,6 +112,7 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
                 'kind': 'minus',
                 'text': f"Ожидания кандидата выше бюджета вакансии",
             })
+            gaps.append("Ожидания кандидата выше бюджета вакансии")
             salary_score = 2
         else:
             salary_score = 8
@@ -115,8 +120,18 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
 
     total_score = min(100, sum(components.values()))
 
+    components_list = [
+        {'key': 'skill', 'value': round(skill_score, 1), 'weight': 0.35, 'contribution': round(skill_score, 1)},
+        {'key': 'grade', 'value': float(grade_score), 'weight': 0.25, 'contribution': float(grade_score)},
+        {'key': 'strength', 'value': round(strength_score, 1), 'weight': 0.15, 'contribution': round(strength_score, 1)},
+        {'key': 'fsp', 'value': float(fsp_score), 'weight': 0.15, 'contribution': float(fsp_score)},
+        {'key': 'salary', 'value': float(salary_score), 'weight': 0.10, 'contribution': float(salary_score)},
+    ]
+
     return {
         'total_score': round(total_score, 1),
-        'components': components,
+        'components': components_list,
+        'components_dict': components,
         'reasons': reasons,
+        'gaps': gaps,
     }

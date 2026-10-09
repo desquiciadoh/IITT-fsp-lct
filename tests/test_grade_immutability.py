@@ -115,3 +115,36 @@ class TestGradeImmutability:
         # Status must stay UNCONFIRMED
         assert lm.status == LeagueStatus.UNCONFIRMED
         assert lm.grade == Grade.SENIOR  # Not promoted, not confirmed
+
+    def test_sync_is_idempotent_strength_does_not_inflate(self, junior_candidate):
+        """Calling FSP sync multiple times does NOT inflate strength (B10)."""
+        user, league_membership = junior_candidate
+
+        FSPLink.objects.create(
+            candidate=user,
+            participant_id='FSP-999999',
+            sports_rank=SportsRank.MS,
+        )
+        FSPResult.objects.create(
+            candidate=user,
+            event_id='NATIONAL-GOLD-2025',
+            event_name='Чемпионат России по СП (Золото)',
+            discipline=Discipline.ALGORITHMIC,
+            date=date(2025, 11, 20),
+            placement=1,
+            tier=PlacementTier.WINNER,
+            participants_total=300,
+        )
+
+        # First sync
+        sync_candidate_fsp_data(user, 'FSP-999999')
+        league_membership.refresh_from_db()
+        first_sync_strength = league_membership.strength
+        assert first_sync_strength == 55.0  # 50.0 base + 5.0 boost
+
+        # Second sync
+        sync_candidate_fsp_data(user, 'FSP-999999')
+        league_membership.refresh_from_db()
+        assert league_membership.strength == first_sync_strength, (
+            "FSP sync must be idempotent: multiple syncs must not inflate profile strength!"
+        )

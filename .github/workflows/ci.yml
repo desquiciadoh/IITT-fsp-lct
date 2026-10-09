@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, "feature/**" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-checks:
+    name: Backend Lint, Test & OpenAPI Drift Check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: fsp_draft_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install system dependencies (WeasyPrint / Cairo / Pango)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libgdk-pixbuf2.0-0 shared-mime-info
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest-cov ruff
+
+      - name: Run Ruff Lint
+        run: |
+          ruff check .
+
+      - name: Check Django Migrations Drift
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-secret-key-temporary-for-migrations-check"
+          ALLOWED_HOSTS: "localhost,127.0.0.1"
+          POSTGRES_DB: "fsp_draft_test"
+          POSTGRES_USER: "postgres"
+          POSTGRES_PASSWORD: "postgrespassword"
+          POSTGRES_HOST: "localhost"
+          POSTGRES_PORT: "5432"
+          ITEM_SEED_SECRET: "ci-item-seed-secret"
+        run: |
+          python manage.py makemigrations --check --dry-run
+
+      - name: Run Pytest Suite with Coverage
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-secret-key-temporary-for-tests"
+          ALLOWED_HOSTS: "localhost,127.0.0.1"
+          POSTGRES_DB: "fsp_draft_test"
+          POSTGRES_USER: "postgres"
+          POSTGRES_PASSWORD: "postgrespassword"
+          POSTGRES_HOST: "localhost"
+          POSTGRES_PORT: "5432"
+          ITEM_SEED_SECRET: "ci-item-seed-secret"
+        run: |
+          pytest --tb=short
+
+      - name: Verify OpenAPI Schema Drift
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-secret-key-temporary-for-openapi"
+          ALLOWED_HOSTS: "localhost,127.0.0.1"
+          ITEM_SEED_SECRET: "ci-item-seed-secret"
+        run: |
+          python manage.py spectacular --format openapi-json --file docs/openapi.ci.json
+          python -c "import json; openapi_current = json.load(open('docs/openapi.json', encoding='utf-8')); openapi_new = json.load(open('docs/openapi.ci.json', encoding='utf-8')); assert openapi_current['paths'].keys() == openapi_new['paths'].keys(), 'OpenAPI paths drift detected! Regenerate docs/openapi.json'"
