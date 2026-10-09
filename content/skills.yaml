@@ -1,0 +1,813 @@
+# Skill taxonomy catalog (v0: ~100 essential IT skills)
+# Schema:
+# - id: unique canonical string id (preserves 10 seed ids from AI-F3)
+#   name: human-readable canonical display name
+#   topic: topic reference matching specialization areas
+#   aliases: alternative spellings, acronyms, common typos and RU transcriptions
+#   related: related skill ids in the taxonomy
+
+- id: python
+  name: Python
+  topic: backend.python
+  aliases:
+    - py
+    - python3
+    - python 3
+    - cpython
+    - питон
+    - пайтон
+  related:
+    - django
+    - fastapi
+    - pytest
+    - sql
+
+- id: django
+  name: Django
+  topic: backend.python
+  aliases:
+    - djangorestframework
+    - drf
+    - django drf
+    - django-rest-framework
+    - джанго
+  related:
+    - python
+    - postgresql
+
+- id: fastapi
+  name: FastAPI
+  topic: backend.python
+  aliases:
+    - fast-api
+    - fast api
+    - фастапи
+    - фаст апи
+    - pydantic
+  related:
+    - python
+    - asyncio
+
+- id: postgresql
+  name: PostgreSQL
+  topic: backend.databases
+  aliases:
+    - postgres
+    - postgress
+    - pgsql
+    - постгрес
+    - постгре
+    - пг
+    - postgresql database
+  related:
+    - sql
+    - database_design
+
+- id: docker
+  name: Docker
+  topic: infrastructure.containers
+  aliases:
+    - docker-compose
+    - docker compose
+    - containerd
+    - докер
+  related:
+    - kubernetes
+    - linux
+
+- id: react
+  name: React
+  topic: frontend.react
+  aliases:
+    - react.js
+    - reactjs
+    - react js
+    - реакт
+    - реакт js
+  related:
+    - typescript
+    - javascript
+    - redux
+
+- id: typescript
+  name: TypeScript
+  topic: frontend.javascript
+  aliases:
+    - ts
+    - тайпскрипт
+    - тайп скрипт
+  related:
+    - javascript
+    - react
+    - nodejs
+
+- id: sql
+  name: SQL
+  topic: backend.databases
+  aliases:
+    - rdbms
+    - relational database
+    - ansi sql
+    - скл
+    - скуль
+  related:
+    - postgresql
+    - mysql
+
+- id: algorithms
+  name: Algorithms
+  topic: general.computer_science
+  aliases:
+    - data structures
+    - dsa
+    - algorithms and data structures
+    - алгоритмы
+    - алгоритмы и структуры данных
+  related:
+    - problem_solving
+
+- id: pytorch
+  name: PyTorch
+  topic: ml.deep_learning
+  aliases:
+    - torch
+    - пайторч
+    - торч
+  related:
+    - python
+    - deep_learning
+    - machine_learning
+
+# Additional Backend & Languages
+- id: golang
+  name: Go
+  topic: backend.go
+  aliases:
+    - go
+    - golang
+    - го
+    - голанг
+  related:
+    - docker
+    - microservices
+
+- id: java
+  name: Java
+  topic: backend.java
+  aliases:
+    - java core
+    - jdk
+    - jvm
+    - джава
+    - ява
+  related:
+    - spring_boot
+
+- id: spring_boot
+  name: Spring Boot
+  topic: backend.java
+  aliases:
+    - spring
+    - spring framework
+    - springboot
+    - спринг
+    - спринг бут
+  related:
+    - java
+
+- id: csharp
+  name: C#
+  topic: backend.dotnet
+  aliases:
+    - c#
+    - c-sharp
+    - c sharp
+    - csharp
+    - си шарп
+    - сишарп
+  related:
+    - dotnet
+
+- id: dotnet
+  name: .NET
+  topic: backend.dotnet
+  aliases:
+    - .net
+    - dot net
+    - dotnet
+    - .net core
+    - asp.net
+    - asp.net core
+    - дотнет
+  related:
+    - csharp
+
+- id: cpp
+  name: C++
+  topic: general.systems
+  aliases:
+    - c++
+    - cpp
+    - c/c++
+    - си плюс плюс
+    - плюсы
+  related:
+    - c
+    - algorithms
+
+- id: c
+  name: C
+  topic: general.systems
+  aliases:
+    - c language
+    - си
+  related:
+    - cpp
+
+- id: rust
+  name: Rust
+  topic: general.systems
+  aliases:
+    - rust-lang
+    - раст
+  related:
+    - algorithms
+
+- id: nodejs
+  name: Node.js
+  topic: backend.javascript
+  aliases:
+    - node
+    - node.js
+    - nodejs
+    - нода
+    - ноде
+  related:
+    - javascript
+    - typescript
+    - express
+
+- id: express
+  name: Express.js
+  topic: backend.javascript
+  aliases:
+    - express
+    - expressjs
+    - экспресс
+  related:
+    - nodejs
+
+- id: nestjs
+  name: NestJS
+  topic: backend.javascript
+  aliases:
+    - nest
+    - nest.js
+    - нест
+    - нест джс
+  related:
+    - nodejs
+    - typescript
+
+- id: php
+  name: PHP
+  topic: backend.php
+  aliases:
+    - php8
+    - php7
+    - пхп
+    - пыха
+  related:
+    - laravel
+
+- id: laravel
+  name: Laravel
+  topic: backend.php
+  aliases:
+    - ларвел
+    - ларавель
+  related:
+    - php
+
+- id: ruby
+  name: Ruby
+  topic: backend.ruby
+  aliases:
+    - ruby on rails
+    - rails
+    - руби
+    - рельсы
+  related:
+    - sql
+
+- id: kotlin
+  name: Kotlin
+  topic: general.jvm
+  aliases:
+    - котлин
+  related:
+    - java
+    - android
+
+# Frontend
+- id: javascript
+  name: JavaScript
+  topic: frontend.javascript
+  aliases:
+    - js
+    - es6
+    - es2020
+    - ecmascript
+    - джаваскрипт
+    - джс
+  related:
+    - typescript
+    - html
+    - css
+
+- id: html
+  name: HTML
+  topic: frontend.markup
+  aliases:
+    - html5
+    - markup
+    - хтмл
+  related:
+    - css
+    - javascript
+
+- id: css
+  name: CSS
+  topic: frontend.markup
+  aliases:
+    - css3
+    - cascading style sheets
+    - ксс
+  related:
+    - html
+    - scss
+    - tailwindcss
+
+- id: scss
+  name: SCSS / SASS
+  topic: frontend.markup
+  aliases:
+    - sass
+    - scss
+    - sass/scss
+  related:
+    - css
+
+- id: tailwindcss
+  name: Tailwind CSS
+  topic: frontend.markup
+  aliases:
+    - tailwind
+    - tailwindcss
+    - тейлвинд
+  related:
+    - css
+
+- id: redux
+  name: Redux
+  topic: frontend.react
+  aliases:
+    - redux toolkit
+    - rtk
+    - редукс
+  related:
+    - react
+
+- id: nextjs
+  name: Next.js
+  topic: frontend.react
+  aliases:
+    - next.js
+    - nextjs
+    - next
+    - некст
+  related:
+    - react
+    - typescript
+
+- id: vue
+  name: Vue.js
+  topic: frontend.vue
+  aliases:
+    - vue
+    - vue.js
+    - vuejs
+    - vue3
+    - вью
+    - вью джс
+  related:
+    - javascript
+    - typescript
+
+- id: nuxt
+  name: Nuxt.js
+  topic: frontend.vue
+  aliases:
+    - nuxt
+    - nuxt.js
+    - nuxtjs
+    - накст
+  related:
+    - vue
+
+- id: angular
+  name: Angular
+  topic: frontend.angular
+  aliases:
+    - angular2+
+    - ангуляр
+  related:
+    - typescript
+
+# Databases & Cache & Message Queues
+- id: mysql
+  name: MySQL
+  topic: backend.databases
+  aliases:
+    - my sql
+    - mariadb
+    - мускул
+    - мариадб
+  related:
+    - sql
+
+- id: redis
+  name: Redis
+  topic: backend.databases
+  aliases:
+    - редис
+  related:
+    - celery
+    - caching
+
+- id: mongodb
+  name: MongoDB
+  topic: backend.databases
+  aliases:
+    - mongo
+    - монго
+    - монгодб
+  related:
+    - nosql
+
+- id: clickhouse
+  name: ClickHouse
+  topic: backend.databases
+  aliases:
+    - click house
+    - кликхаус
+    - кликхауз
+  related:
+    - sql
+    - analytics
+
+- id: elasticsearch
+  name: Elasticsearch
+  topic: backend.databases
+  aliases:
+    - elastic
+    - es
+    - эластик
+    - эластиксерч
+  related:
+    - search
+
+- id: rabbitmq
+  name: RabbitMQ
+  topic: infrastructure.messaging
+  aliases:
+    - rabbit
+    - rmq
+    - кролик
+    - рэббит
+  related:
+    - celery
+    - microservices
+
+- id: kafka
+  name: Apache Kafka
+  topic: infrastructure.messaging
+  aliases:
+    - kafka
+    - кафка
+  related:
+    - microservices
+    - streaming
+
+- id: celery
+  name: Celery
+  topic: backend.python
+  aliases:
+    - селери
+  related:
+    - python
+    - redis
+    - rabbitmq
+
+# Infrastructure, CI/CD, Cloud
+- id: kubernetes
+  name: Kubernetes
+  topic: infrastructure.containers
+  aliases:
+    - k8s
+    - k8-s
+    - kube
+    - кубер
+    - кубернетес
+    - кубик
+  related:
+    - docker
+    - helm
+
+- id: linux
+  name: Linux
+  topic: infrastructure.os
+  aliases:
+    - ubuntu
+    - debian
+    - centos
+    - bash
+    - shell
+    - линукс
+    - баbash
+  related:
+    - git
+
+- id: git
+  name: Git
+  topic: general.tools
+  aliases:
+    - github
+    - gitlab
+    - gitea
+    - гит
+  related:
+    - ci_cd
+
+- id: ci_cd
+  name: CI/CD
+  topic: infrastructure.devops
+  aliases:
+    - cicd
+    - continuous integration
+    - continuous deployment
+    - github actions
+    - gitlab ci
+    - jenkins
+    - сисиди
+  related:
+    - git
+    - docker
+
+- id: nginx
+  name: Nginx
+  topic: infrastructure.servers
+  aliases:
+    - нджинкс
+    - энжинкс
+  related:
+    - linux
+
+- id: ansible
+  name: Ansible
+  topic: infrastructure.devops
+  aliases:
+    - ансибл
+  related:
+    - linux
+
+- id: terraform
+  name: Terraform
+  topic: infrastructure.devops
+  aliases:
+    - терраформ
+    - iac
+  related:
+    - cloud
+
+# Machine Learning & Data Science
+- id: tensorflow
+  name: TensorFlow
+  topic: ml.deep_learning
+  aliases:
+    - tf
+    - keras
+    - тензорфлоу
+  related:
+    - python
+    - machine_learning
+
+- id: machine_learning
+  name: Machine Learning
+  topic: ml.general
+  aliases:
+    - ml
+    - машинное обучение
+    - машобучение
+  related:
+    - python
+    - deep_learning
+
+- id: deep_learning
+  name: Deep Learning
+  topic: ml.deep_learning
+  aliases:
+    - dl
+    - глубокое обучение
+    - нейросети
+    - нейронные сети
+  related:
+    - pytorch
+    - tensorflow
+
+- id: scikit_learn
+  name: Scikit-learn
+  topic: ml.general
+  aliases:
+    - sklearn
+    - scikit learn
+    - скикит
+  related:
+    - python
+    - machine_learning
+
+- id: pandas
+  name: Pandas
+  topic: ml.data_engineering
+  aliases:
+    - пандас
+  related:
+    - python
+    - numpy
+
+- id: numpy
+  name: NumPy
+  topic: ml.data_engineering
+  aliases:
+    - нампи
+    - нумпи
+  related:
+    - python
+
+- id: nlp
+  name: Natural Language Processing
+  topic: ml.nlp
+  aliases:
+    - nlp
+    - нлп
+    - обработка естественного языка
+    - text processing
+  related:
+    - deep_learning
+    - llm
+
+- id: computer_vision
+  name: Computer Vision
+  topic: ml.cv
+  aliases:
+    - cv
+    - opencv
+    - компьютерное зрение
+    - комп зрение
+  related:
+    - deep_learning
+
+- id: llm
+  name: Large Language Models
+  topic: ml.llm
+  aliases:
+    - llm
+    - ллм
+    - large language model
+    - генеративный ии
+    - genai
+    - prompt engineering
+  related:
+    - nlp
+    - langchain
+
+- id: langchain
+  name: LangChain
+  topic: ml.llm
+  aliases:
+    - lang chain
+    - лангчейн
+  related:
+    - python
+    - llm
+
+- id: huggingface
+  name: Hugging Face
+  topic: ml.nlp
+  aliases:
+    - huggingface
+    - transformers
+    - хаггингфейс
+  related:
+    - pytorch
+    - nlp
+
+# Architecture, Protocols, Testing
+- id: rest_api
+  name: REST API
+  topic: backend.architecture
+  aliases:
+    - rest
+    - restful
+    - rest api
+    - рест
+    - рест апи
+  related:
+    - http
+
+- id: graphql
+  name: GraphQL
+  topic: backend.architecture
+  aliases:
+    - graph ql
+    - графкуэль
+    - граф кл
+  related:
+    - api
+
+- id: grpc
+  name: gRPC
+  topic: backend.architecture
+  aliases:
+    - grpc
+    - protobuf
+    - protocol buffers
+    - грпц
+  related:
+    - microservices
+
+- id: microservices
+  name: Microservices
+  topic: backend.architecture
+  aliases:
+    - microservice architecture
+    - микросервисы
+    - микросервисная архитектура
+  related:
+    - docker
+    - kubernetes
+
+- id: pytest
+  name: Pytest
+  topic: backend.python
+  aliases:
+    - пайтест
+  related:
+    - python
+    - unit_testing
+
+- id: unit_testing
+  name: Unit Testing
+  topic: general.qa
+  aliases:
+    - unit tests
+    - юнит тесты
+    - модульное тестирование
+    - tdd
+  related:
+    - pytest
+
+- id: asyncio
+  name: Asyncio
+  topic: backend.python
+  aliases:
+    - async/await
+    - asynchronous python
+    - асинк
+    - асинкио
+  related:
+    - python
+    - fastapi
+
+- id: security
+  name: Application Security
+  topic: general.security
+  aliases:
+    - appsec
+    - infosec
+    - безопасность
+    - кибербезопасность
+    - oauth2
+    - jwt
+  related:
+    - web
+
+- id: websockets
+  name: WebSockets
+  topic: backend.networking
+  aliases:
+    - websocket
+    - ws
+    - вебсокеты
+  related:
+    - rest_api

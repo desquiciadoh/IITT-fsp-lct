@@ -259,29 +259,20 @@ class ResumeParseView(views.APIView):
         if not file_obj.name.lower().endswith('.pdf'):
             raise FSPAPIError('unreadable_pdf', 'Invalid file type', 'Only PDF files are supported', 422)
 
-        extracted_text = ""
         try:
-            from pypdf import PdfReader
-            reader = PdfReader(file_obj)
-            if len(reader.pages) == 0:
-                raise ValueError("PDF has no pages")
-            for page in reader.pages:
-                extracted_text += page.extract_text() or ""
-        except Exception:
+            from llm_gateway import UnreadablePdf, get_gateway, parse_resume
+            file_bytes = file_obj.read()
+            gateway = get_gateway()
+            parse_res = parse_resume(file_bytes, gateway=gateway)
+        except UnreadablePdf:
             raise FSPAPIError('unreadable_pdf', 'Unreadable PDF', 'Unable to parse provided PDF file', 422)
-
-        # Basic rule-based extraction fallback (AI adapter boundary)
-        prefill = {
-            'specialization': 'backend' if 'python' in extracted_text.lower() or 'backend' in extracted_text.lower() else 'frontend',
-            'claimed_grade': 'middle' if 'middle' in extracted_text.lower() else 'junior',
-            'skills': ['Python', 'Django', 'PostgreSQL', 'Docker'],
-            'about': extracted_text[:300] if extracted_text else 'Parsed from resume'
-        }
+        except Exception as e:
+            raise FSPAPIError('unreadable_pdf', 'Unreadable PDF', f'Unable to parse provided PDF file: {e}', 422)
 
         return Response({
-            'prefill': prefill,
-            'unknown_terms': [],
-            'source': 'rules',
+            'prefill': parse_res.prefill,
+            'unknown_terms': parse_res.unknown_terms,
+            'source': parse_res.source,
         })
 
 
