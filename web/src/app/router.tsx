@@ -43,7 +43,7 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: '/jury', element: <JuryPage /> },
-      { path: '/lab', element: ph('Лаборатория', 'FE2', 'FE-18') },
+      { path: '/lab', element: ph('Лаборатория', 'FE1', 'FE-13') },
     ],
   },
   {
@@ -65,11 +65,11 @@ export const router = createBrowserRouter([
                   { path: '/candidate', element: <DashboardPage /> },
                   {
                     path: '/candidate/qualification/start',
-                    element: ph('Вход в тест', 'FE2', 'FE-12'),
+                    element: ph('Вход в тест', 'FE2', 'FE-05'),
                   },
                   {
                     path: '/candidate/qualification/:id',
-                    element: ph('Тест-раннер', 'FE2', 'FE-12'),
+                    element: ph('Тест-раннер', 'FE2', 'FE-05'),
                   },
                   {
                     path: '/candidate/qualification/:id/result',
@@ -89,18 +89,18 @@ export const router = createBrowserRouter([
           {
             element: <RequireRole role="employer" />,
             children: [
-              { path: '/employer', element: ph('Кабинет работодателя', 'FE2', 'FE-13') },
-              { path: '/employer/company', element: ph('Профиль компании', 'FE2', 'FE-13') },
+              { path: '/employer', element: ph('Кабинет работодателя', 'FE2', 'FE-09') },
+              { path: '/employer/company', element: ph('Профиль компании', 'FE2', 'FE-09') },
               {
                 path: '/employer/positions/new',
-                element: ph('Новая вакансия', 'FE2', 'FE-14'),
+                element: ph('Новая вакансия', 'FE2', 'FE-09'),
               },
               {
                 path: '/employer/positions/:id',
-                element: ph('Вакансия (детально)', 'FE2', 'FE-14'),
+                element: ph('Вакансия (детально)', 'FE2', 'FE-10'),
               },
-              { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
-              { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-17') },
+              { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-12') },
+              { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-11') },
             ],
           },
         ],
