@@ -42,6 +42,7 @@ const OfferDetailPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })),
 )
+const LabPage = lazy(() => import('@/features/lab/lab-page').then((m) => ({ default: m.LabPage })))
 
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
@@ -69,7 +70,7 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: '/jury', element: <JuryPage /> },
-      { path: '/lab', element: ph('Лаборатория', 'FE1', 'FE-13') },
+      { path: '/lab', element: <LabPage /> },
     ],
   },
   {

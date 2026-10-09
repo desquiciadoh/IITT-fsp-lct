@@ -31,6 +31,7 @@ import type {
   Status61dEnum,
   TalentShort as GeneratedTalentShort,
   TrustLevelEnum,
+  ValidationReport,
   WorkFormatsEnum,
 } from '@/api/generated/models'
 
@@ -48,7 +49,7 @@ export type GradeDecision = (typeof DecisionEnum)[keyof typeof DecisionEnum] | '
 export type ContactChannel = (typeof ContactChannelEnum)[keyof typeof ContactChannelEnum]
 export type TrustLevel = (typeof TrustLevelEnum)[keyof typeof TrustLevelEnum]
 export type AssessmentSession = GeneratedAssessmentSession
-export type { ConsentsResponse, FSPLinkResponse }
+export type { ConsentsResponse, FSPLinkResponse, ValidationReport }
 
 /** The schema renders `role` as a loose string. */
 export type Role = 'candidate' | 'employer' | 'admin'
