@@ -60,7 +60,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
   - **Fix:** after login, navigate to `next` if it starts with `/` and not `//` (no open redirect) and matches the user's role area; otherwise `/`.
   - **Acceptance:** delete the `sessionid` cookie on `/candidate/offers/<id>` → land on `/login` → log in → back on the same offer.
 
-- [ ] **R21 · 401 handling sends duplicate requests and toasts.** `app/providers.tsx` uses the default `retry: 1`, so every 401 is retried once before the redirect, and parallel 401s each fire a toast and a navigation.
+- [x] **R21 · 401 handling sends duplicate requests and toasts.** `app/providers.tsx` uses the default `retry: 1`, so every 401 is retried once before the redirect, and parallel 401s each fire a toast and a navigation.
   - **Fix:** `retry: (n, e) => !(e instanceof ApiError && (e.status === 401 || e.status === 403)) && n < 1`; `toast.error(…, { id: 'session-expired' })`; skip `navigate` if a redirect to `/login` is already pending.
   - **Acceptance:** on `/candidate` with a dead session, the network tab shows each query once, and there is exactly one toast.
 
