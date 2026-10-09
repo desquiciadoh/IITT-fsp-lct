@@ -26,14 +26,14 @@ export function useHistory() {
 }
 
 export function useEligibility(specialization?: string) {
-  const spec = specialization || 'backend'
   return useQuery({
-    queryKey: keys.eligibility(spec),
+    queryKey: keys.eligibility(specialization ?? ''),
     queryFn: () =>
       customFetch<Eligibility>(
-        `/api/assessments/eligibility?specialization=${encodeURIComponent(spec)}`,
+        `/api/assessments/eligibility?specialization=${encodeURIComponent(specialization ?? '')}`,
       ),
     retry: false,
+    enabled: Boolean(specialization),
   })
 }
 
