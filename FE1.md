@@ -50,7 +50,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
   - **Fix:** pin the version the team actually runs (`pnpm -v`, today `11.11.0`) or delete the field.
   - **Acceptance:** in a fresh directory `git clone … && cd web && pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` is green with no manual edits. Paste the output into the PR.
 
-- [ ] **R19 · Offer auto-view can still hang (rest of R10).** `features/offers/offer-detail-page.tsx` retries `POST /view` only when the `offer` object changes. If the refetch returns identical data (lazy expiry after time travel: GET says `sent`, POST says `invalid_transition` / `offer_expired`), TanStack keeps the same reference, the effect never re-runs, and the page shows "Открываем оффер…" forever.
+- [x] **R19 · Offer auto-view can still hang (rest of R10).** `features/offers/offer-detail-page.tsx` retries `POST /view` only when the `offer` object changes. If the refetch returns identical data (lazy expiry after time travel: GET says `sent`, POST says `invalid_transition` / `offer_expired`), TanStack keeps the same reference, the effect never re-runs, and the page shows "Открываем оффер…" forever.
   - **Fix:** in the conflict branch, `const { data } = await refetch()`; if `data?.status === 'sent'` and no retry was made yet, call `view.mutate` directly with `data.version`; otherwise do nothing (the status moved on). Any second failure, and `offer_expired`, sets `viewError` (shows `ErrorState`).
   - **Acceptance:** a Vitest test with MSW: `/view` returns 409 twice and GET returns the same body → `ErrorState` with a retry button renders, no endless "Открываем оффер…".
 

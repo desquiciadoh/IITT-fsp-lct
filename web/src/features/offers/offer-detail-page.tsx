@@ -38,7 +38,6 @@ export function OfferDetailPage() {
   const [declineOpen, setDeclineOpen] = useState(false)
   const [viewError, setViewError] = useState<ApiError | null>(null)
   const autoViewed = useRef<string | null>(null)
-  const viewRetries = useRef(0)
 
   const onError = useCallback((err: unknown) => {
     if (isOfferConflict(err)) {
@@ -55,26 +54,34 @@ export function OfferDetailPage() {
     if (!offer || offer.status !== 'sent' || viewError) return
     if (autoViewed.current === offer.id) return
     autoViewed.current = offer.id
-    view.mutate(
-      { id: offer.id, body: { version: offer.version } },
-      {
-        onError: (err) => {
-          // A version conflict means the offer moved on: refetch and retry once.
-          if (isOfferConflict(err) && viewRetries.current < 1) {
-            viewRetries.current += 1
-            autoViewed.current = null
-            toast.error('Оффер изменился — обновляем данные')
-            void refetch()
-            return
-          }
-          setViewError(
-            err instanceof ApiError
-              ? err
-              : new ApiError({ status: 0, code: 'api_error', detail: 'Не удалось открыть оффер' }),
-          )
+
+    // The retry is driven from the error callback, not from the effect, so a
+    // refetch that returns identical data (same status/version, TanStack keeps
+    // the same reference) cannot leave the page stuck on "Открываем оффер…" (R19).
+    const open = (current: Offer, retries: number) => {
+      view.mutate(
+        { id: current.id, body: { version: current.version } },
+        {
+          onError: async (err) => {
+            if (isOfferConflict(err) && retries < 1) {
+              toast.error('Оффер изменился — обновляем данные')
+              const { data } = await refetch()
+              if (data?.status === 'sent') {
+                open(data, retries + 1)
+              }
+              return
+            }
+            setViewError(
+              err instanceof ApiError
+                ? err
+                : new ApiError({ status: 0, code: 'api_error', detail: 'Не удалось открыть оффер' }),
+            )
+          },
         },
-      },
-    )
+      )
+    }
+
+    open(offer, 0)
   }, [offer, view, refetch, viewError])
 
   if (isLoading) {
@@ -183,7 +190,6 @@ export function OfferDetailPage() {
               code={viewError.code}
               description={errorMessage(viewError.code, viewError.detail)}
               onRetry={() => {
-                viewRetries.current = 0
                 autoViewed.current = null
                 setViewError(null)
               }}
