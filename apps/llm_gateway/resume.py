@@ -58,17 +58,18 @@ def parse_resume(
 
     matches, unknown_terms = normalize_many(draft.skills_raw)
 
-    # Keys of CandidateProfileUpdateSerializer (AI-R11)
+    # Keys of CandidateProfileUpdateSerializer (AI-R11). Unknown: "" for strings (the model's
+    # CharFields are blank=True, not null=True), [] for lists, None for numbers.
     prefill: dict[str, Any] = {
         "city": draft.city or "",
-        "specialization": draft.specialization,
-        "claimed_grade": draft.claimed_grade,
+        "specialization": draft.specialization or "",
+        "claimed_grade": draft.claimed_grade or "",
         "years_experience": draft.years_experience,
         "roles": draft.roles,
         "work_formats": draft.work_formats,
         "salary_min": draft.salary_min,
         "salary_max": draft.salary_max,
-        "salary_type": draft.salary_type,
+        "salary_type": draft.salary_type or "",
         "about": draft.about or "",
         "experience_text": draft.experience_text or "",
         "skills": [m.skill_id for m in matches],

@@ -58,10 +58,12 @@ def parse_jd(
     must_skill_ids = [m.skill_id for m in must_matches]
     nice_skill_ids = [m.skill_id for m in nice_matches if m.skill_id not in must_skill_ids]
 
-    # Writable keys of PositionSerializer (AI-R11)
+    # Writable keys of PositionSerializer (AI-R11). Same rule as the resume prefill: "" / [] / None.
+    # title, specialization, grades and the salary fields are required by the model, so an
+    # unknown value stays empty and the form asks for it.
     draft_payload: dict[str, Any] = {
         "title": draft.title or "",
-        "specialization": draft.specialization,
+        "specialization": draft.specialization or "",
         "grades": draft.grades,
         "must_skills": must_skill_ids,
         "nice_skills": nice_skill_ids,
@@ -69,7 +71,7 @@ def parse_jd(
         "location": draft.location or "",
         "salary_min": draft.salary_min,
         "salary_max": draft.salary_max,
-        "salary_type": draft.salary_type,
+        "salary_type": draft.salary_type or "",
         "team_context": draft.team_context or "",
         "description": draft.description or "",
     }
