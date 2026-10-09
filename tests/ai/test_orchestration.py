@@ -9,11 +9,15 @@ from llm_gateway import (
     FakeLlm,
     GatewayConfig,
     UnreadablePdf,
+    extract_text,
     get_gateway,
     parse_jd,
     parse_resume,
+    pipeline,
+    redact,
 )
-from llm_gateway.base import LlmUnavailable
+from llm_gateway.base import RESUME_PROMPT, LlmSchemaError, LlmUnavailable, load_prompt
+from llm_gateway.gigachat import GigaChatLlm
 from llm_gateway.types import ResumeDraft
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -65,17 +69,8 @@ def test_parse_resume_caching_and_fallback():
 
     # 2. Provider succeeds -> source='llm', 1 cache entry
     mock_gw.resume.side_effect = None
-    mock_gw.resume.return_value = ResumeDraft(
-        specialization="backend",
-        claimed_grade="middle",
-        years_experience=3.5,
-        roles=["Backend Developer"],
+    mock_gw.resume.return_value = _llm_draft(
         skills_raw=["Python", "FastAPI"],
-        work_formats=["remote"],
-        salary_min=220000,
-        salary_max=280000,
-        salary_type="net",
-        city="Москва",
         about="Middle backend developer",
         experience_text="3.5 years of experience",
     )
@@ -97,6 +92,129 @@ def test_parse_resume_caching_and_fallback():
         cache.store[k] = json.dumps({"source": "llm", "draft": "corrupted non-dict"})
     _ = parse_resume(pdf_bytes, gateway=mock_gw, cache=cache)
     assert mock_gw.resume.call_count == 3
+
+
+def _llm_draft(**overrides) -> ResumeDraft:
+    fields = {
+        "specialization": "backend", "claimed_grade": "middle", "years_experience": 3.5,
+        "roles": ["Backend Developer"], "skills_raw": ["Python"], "work_formats": ["remote"],
+        "salary_min": 220000, "salary_max": 280000, "salary_type": "net", "city": "Москва",
+        "about": "", "experience_text": "",
+    }
+    fields.update(overrides)
+    return ResumeDraft(**fields)
+
+
+def _gigachat_mock() -> MagicMock:
+    gw = MagicMock()
+    gw.name = "gigachat"
+    gw.config = GatewayConfig(provider="gigachat", auth_key="dummy-key", model="GigaChat-2")
+    return gw
+
+
+@pytest.mark.parametrize(
+    ("side_effect", "reason"),
+    [
+        (LlmUnavailable("down", reason="timeout"), "timeout"),
+        (LlmUnavailable("503", reason="http_error"), "http_error"),
+        (LlmSchemaError("bad json twice", reason="schema"), "schema"),
+        (TimeoutError("timed out"), "timeout"),
+        (RuntimeError("bug in an adapter"), "error"),
+    ],
+)
+def test_gateway_failure_falls_back_with_reason(side_effect, reason):
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    cache = InMemoryCache()
+    gw = _gigachat_mock()
+    gw.resume.side_effect = side_effect
+
+    res = parse_resume(pdf_bytes, gateway=gw, cache=cache)
+
+    assert res.source == "rules"
+    assert res.fallback_reason == reason
+    assert res.prefill["specialization"] == "backend"  # the rules answer, not an empty form
+    assert cache.store == {}
+
+
+def test_llm_answer_without_usable_fields_is_a_schema_fallback():
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    gw = _gigachat_mock()
+    gw.resume.return_value = ResumeDraft()
+
+    res = parse_resume(pdf_bytes, gateway=gw)
+
+    assert (res.source, res.fallback_reason) == ("rules", "schema")
+
+
+def test_rules_reasons_provider_fake_and_no_key():
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_frontend_junior.pdf").read_bytes()
+
+    res_fake = parse_resume(pdf_bytes, gateway=FakeLlm())
+    assert (res_fake.source, res_fake.fallback_reason) == ("rules", "provider_fake")
+
+    no_key = get_gateway(GatewayConfig(provider="gigachat", auth_key=None))
+    res_no_key = parse_resume(pdf_bytes, gateway=no_key)
+    assert (res_no_key.source, res_no_key.fallback_reason) == ("rules", "no_key")
+
+
+def test_cache_entry_with_invalid_enums_is_ignored():
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    cache = InMemoryCache()
+    gw = _gigachat_mock()
+    gw.resume.return_value = _llm_draft()
+
+    parse_resume(pdf_bytes, gateway=gw, cache=cache)
+    (key, raw), = cache.store.items()
+    entry = json.loads(raw)
+    entry["draft"]["specialization"] = "fullstack"  # not an enum value
+    cache.store[key] = json.dumps(entry)
+
+    res = parse_resume(pdf_bytes, gateway=gw, cache=cache)
+
+    assert gw.resume.call_count == 2, "a tampered entry must not be served"
+    assert res.source == "llm"
+    assert res.prefill["specialization"] == "backend"
+
+
+def test_cache_works_with_django_cache_signature():
+    """BE passes django.core.cache.cache, whose set() calls the ttl `timeout`."""
+
+    class DjangoLikeCache:
+        def __init__(self):
+            self.store = {}
+
+        def get(self, key, default=None, version=None):
+            return self.store.get(key, default)
+
+        def set(self, key, value, timeout=None, version=None):
+            self.store[key] = (value, timeout)
+
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    cache = DjangoLikeCache()
+    gw = _gigachat_mock()
+    gw.resume.return_value = _llm_draft()
+
+    parse_resume(pdf_bytes, gateway=gw, cache=cache)
+
+    ((value, timeout),) = cache.store.values()
+    assert timeout == 7 * 86400
+    assert json.loads(value)["source"] == "llm"
+
+
+def test_prompt_constant_drives_loader_and_cache_key():
+    """Renaming the prompt file (a new version) must invalidate the cache (AI-R2)."""
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    cache = InMemoryCache()
+    gw = _gigachat_mock()
+    gw.resume.return_value = _llm_draft()
+
+    parse_resume(pdf_bytes, gateway=gw, cache=cache)
+
+    redacted_text = redact(extract_text(pdf_bytes)).text
+    expected_key = pipeline.cache_key("resume", RESUME_PROMPT, "GigaChat-2", redacted_text)
+    assert list(cache.store) == [expected_key]
+    assert json.loads(cache.store[expected_key])["prompt"] == RESUME_PROMPT
+    assert GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k")).resume_prompt == load_prompt(RESUME_PROMPT)
 
 
 def test_serializer_fit_prefill_shape():

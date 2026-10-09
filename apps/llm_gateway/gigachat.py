@@ -23,13 +23,19 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .base import GatewayConfig, LlmSchemaError, LlmUnavailable
+from .base import (
+    JD_PROMPT,
+    PHRASE_PROMPT,
+    RESUME_PROMPT,
+    GatewayConfig,
+    LlmSchemaError,
+    LlmUnavailable,
+    load_prompt,
+)
 from .schema import validate_jd_payload, validate_resume_payload
 from .types import JdDraft, ResumeDraft
 
 logger = logging.getLogger(__name__)
-
-PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
 
 class GigaChatLlm:
@@ -46,12 +52,10 @@ class GigaChatLlm:
         self._token_expires_at: float = 0.0
         self._token_lock = threading.Lock()
 
-        # Load prompts (using resume.v2.md per AI-R6)
-        self.resume_prompt = self._load_prompt("resume.v2.md")
-        if not self.resume_prompt:
-            self.resume_prompt = self._load_prompt("resume.v1.md")
-        self.jd_prompt = self._load_prompt("jd.v1.md")
-        self.phrase_prompt = self._load_prompt("phrase.v1.md")
+        # Same constants as the cache keys; a missing prompt file fails here, at construction
+        self.resume_prompt = load_prompt(RESUME_PROMPT)
+        self.jd_prompt = load_prompt(JD_PROMPT)
+        self.phrase_prompt = load_prompt(PHRASE_PROMPT)
 
         # Setup SSL context (fail-fast if configured bundle path does not exist)
         self._ssl_context = self._build_ssl_context()
@@ -70,12 +74,6 @@ class GigaChatLlm:
             return ssl.create_default_context(cafile=str(default_bundle))
 
         return ssl.create_default_context()
-
-    def _load_prompt(self, filename: str) -> str:
-        prompt_file = PROMPTS_DIR / filename
-        if prompt_file.exists():
-            return prompt_file.read_text(encoding="utf-8")
-        return ""
 
     def _get_access_token(self, deadline: float) -> str:
         """Get cached OAuth token or fetch a new one under lock."""

@@ -54,7 +54,9 @@ class ResumeParseResult:
     contacts: dict[str, Any]  # {"full_name", "email", "phone", "telegram"} from local redaction only
     unknown_terms: list[str]  # raw skills that normalize_skill() could not map
     source: Source
-    fallback_reason: str | None = None  # "provider_fake" | "timeout" | "http_error" | "invalid_json" | "schema" | "pii_residual" | "no_key" | None
+    # Why the rules answered: "provider_fake" | "no_key" | "pii_residual" | "timeout" | "http_error"
+    # | "schema" | "error" (unexpected exception in the adapter); None when source == "llm"
+    fallback_reason: str | None = None
 
 
 @dataclass(frozen=True)

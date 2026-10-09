@@ -19,6 +19,10 @@ class FakeLlm:
 
     name: str = "fake"
 
+    def __init__(self, fallback_reason: str = "provider_fake") -> None:
+        # Why the rules answer: the configured provider, or "no_key" from get_gateway() (AI-R2)
+        self.fallback_reason = fallback_reason
+
     def resume(self, redacted_text: str) -> ResumeDraft:
         """Extract resume draft using regex and taxonomy heuristics."""
         lowered = redacted_text.lower()

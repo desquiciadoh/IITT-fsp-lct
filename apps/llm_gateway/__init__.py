@@ -62,13 +62,18 @@ def get_gateway(config: GatewayConfig | None = None) -> LlmGateway:
 
         try:
             from django.conf import settings
-            provider = getattr(settings, "LLM_PROVIDER", provider)
-            auth_key = getattr(settings, "GIGACHAT_AUTH_KEY", auth_key)
-            scope = getattr(settings, "GIGACHAT_SCOPE", scope)
-            model = getattr(settings, "GIGACHAT_MODEL", model)
-            ca_bundle = getattr(settings, "GIGACHAT_CA_BUNDLE", ca_bundle)
-            timeout_s = getattr(settings, "LLM_TIMEOUT_S", timeout_s)
-        except Exception:
+            from django.core.exceptions import ImproperlyConfigured
+
+            try:
+                provider = getattr(settings, "LLM_PROVIDER", provider)
+                auth_key = getattr(settings, "GIGACHAT_AUTH_KEY", auth_key)
+                scope = getattr(settings, "GIGACHAT_SCOPE", scope)
+                model = getattr(settings, "GIGACHAT_MODEL", model)
+                ca_bundle = getattr(settings, "GIGACHAT_CA_BUNDLE", ca_bundle)
+                timeout_s = float(getattr(settings, "LLM_TIMEOUT_S", timeout_s))
+            except ImproperlyConfigured:
+                pass  # used outside Django (scripts, pure tests): env vars only
+        except ImportError:
             pass
 
         config = GatewayConfig(
@@ -85,7 +90,7 @@ def get_gateway(config: GatewayConfig | None = None) -> LlmGateway:
             if not _NO_KEY_LOGGED:
                 logger.error("GigaChat provider requested but GIGACHAT_AUTH_KEY is missing. Using FakeLlm.")
                 _NO_KEY_LOGGED = True
-            return FakeLlm()
+            return FakeLlm(fallback_reason="no_key")
 
         with _GATEWAY_LOCK:
             if config not in _GATEWAY_INSTANCES:
@@ -98,6 +103,7 @@ def get_gateway(config: GatewayConfig | None = None) -> LlmGateway:
 
 __all__ = [
     "Cache",
+    "FakeLlm",
     "GatewayConfig",
     "JdDraft",
     "JdParseResult",

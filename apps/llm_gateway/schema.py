@@ -148,8 +148,11 @@ def _clean_salary_num(val: Any) -> int | None:
     return None
 
 
-def validate_resume_payload(d: dict[str, Any]) -> ResumeDraft:
-    """Validate and normalize a raw dict into a validated ResumeDraft."""
+def validate_resume_payload(d: dict[str, Any], *, require_data: bool = True) -> ResumeDraft:
+    """Validate and normalize a raw dict into a validated ResumeDraft.
+
+    require_data=False is for the rules output: an empty draft is a valid answer there.
+    """
     if not isinstance(d, dict):
         raise LlmSchemaError("Payload is not a dictionary", reason="schema")
 
@@ -190,7 +193,7 @@ def validate_resume_payload(d: dict[str, Any]) -> ResumeDraft:
         specialization, claimed_grade, years_exp is not None, roles,
         skills_raw, work_formats, sal_min, sal_max, city, about, experience_text
     ])
-    if not has_data:
+    if require_data and not has_data:
         raise LlmSchemaError("Payload has no usable fields", reason="schema")
 
     return ResumeDraft(
@@ -209,7 +212,7 @@ def validate_resume_payload(d: dict[str, Any]) -> ResumeDraft:
     )
 
 
-def validate_jd_payload(d: dict[str, Any]) -> JdDraft:
+def validate_jd_payload(d: dict[str, Any], *, require_data: bool = True) -> JdDraft:
     """Validate and normalize a raw dict into a validated JdDraft."""
     if not isinstance(d, dict):
         raise LlmSchemaError("Payload is not a dictionary", reason="schema")
@@ -244,7 +247,7 @@ def validate_jd_payload(d: dict[str, Any]) -> JdDraft:
         title, specialization, grades, must_skills, nice_skills,
         work_formats, location, sal_min, sal_max, description
     ])
-    if not has_data:
+    if require_data and not has_data:
         raise LlmSchemaError("Payload has no usable fields", reason="schema")
 
     return JdDraft(

@@ -5,9 +5,22 @@ Pure Python protocols and config without ORM or view dependencies.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from .types import JdDraft, ResumeDraft
+
+# One constant per prompt: GigaChatLlm loads prompts/<version>.md and the orchestrators put the
+# same string into the cache key, so a new prompt file invalidates the cache (AI-R2).
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+RESUME_PROMPT = "resume.v2"
+JD_PROMPT = "jd.v1"
+PHRASE_PROMPT = "phrase.v1"
+
+
+def load_prompt(version: str) -> str:
+    """Read prompts/<version>.md. A missing prompt is a deployment error, never a silent fallback."""
+    return (PROMPTS_DIR / f"{version}.md").read_text(encoding="utf-8")
 
 
 class LlmError(Exception):
