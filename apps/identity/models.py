@@ -1,12 +1,10 @@
 """Identity app models: User, Identity, Consent, AuditLog."""
 import uuid
 
+from core.enums import ConsentType, IdentityProvider, UserRole
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
-
-from core.enums import UserRole, ConsentType, IdentityProvider
 
 
 class UserManager(BaseUserManager):

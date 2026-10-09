@@ -6,10 +6,6 @@ Draft Offers, contacts unlock only on candidate acceptance.
 import uuid
 from datetime import timedelta
 
-from django.conf import settings
-from django.db import models
-from django.utils import timezone
-
 from core.enums import (
     ContactChannel,
     ContactGrantSource,
@@ -17,7 +13,9 @@ from core.enums import (
     OfferStatus,
     SalaryType,
 )
-
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
 
 # Valid state transitions for the offer state machine
 OFFER_TRANSITIONS: dict[str, list[str]] = {

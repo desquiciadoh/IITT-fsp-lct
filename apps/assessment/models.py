@@ -1,10 +1,6 @@
 """Assessment app models: ItemFamily, AssessmentSession, AssessmentItem, LeagueMembership."""
 import uuid
 
-from django.conf import settings
-from django.contrib.postgres.fields import ArrayField
-from django.db import models
-
 from core.enums import (
     AssessmentKind,
     AssessmentMode,
@@ -16,6 +12,9 @@ from core.enums import (
     LeagueStatus,
     Specialization,
 )
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
 
 
 class ItemFamily(models.Model):
@@ -143,6 +142,13 @@ class AssessmentSession(models.Model):
 
     class Meta:
         db_table = 'assessments'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['candidate', 'specialization'],
+                condition=models.Q(status=AssessmentStatus.IN_PROGRESS),
+                name='uq_one_in_progress_assessment_per_spec',
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=['candidate', '-started_at'],
@@ -159,7 +165,7 @@ class AssessmentItem(models.Model):
 
     INVARIANT: The `key` field contains the correct answer and MUST NEVER
     be included in any API response. It is used only by the server-side
-    grading logic. Tests verify this invariant (see tests/test_invariants.py).
+    grading logic. Tests verify this invariant (see tests/test_assessment_security.py).
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -204,7 +210,11 @@ class AssessmentItem(models.Model):
     )
 
     served_at = models.DateTimeField(auto_now_add=True)
-    deadline_at = models.DateTimeField(help_text='Item-level time limit deadline')
+    deadline_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Item-level deadline; set when the item becomes current, NULL until served',
+    )
     answered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -250,6 +260,14 @@ class LeagueMembership(models.Model):
     strength = models.FloatField(
         default=0.0,
         help_text='Profile Strength 0-100 for ranking within the League',
+    )
+    base_strength = models.FloatField(
+        default=0.0,
+        help_text='Base strength computed from IRT theta (0-100)',
+    )
+    fsp_boost = models.FloatField(
+        default=0.0,
+        help_text='Current FSP boost applied to strength (0-15)',
     )
 
     confirmed_at = models.DateTimeField(null=True, blank=True)

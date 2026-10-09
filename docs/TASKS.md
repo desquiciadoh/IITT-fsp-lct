@@ -207,7 +207,7 @@ Indexes: `league_memberships(specialization, grade, status)`, `offers(candidate_
 
 **Conventions**
 - Base path `/api`, JSON, snake_case. IDs are UUIDs, except candidates on the employer side, who are addressed by `public_id`.
-- Auth uses an HttpOnly session cookie `sid` (SameSite=Lax). Unsafe methods must send `X-Requested-With: fsp-draft` (CSRF guard).
+- Auth uses an HttpOnly session cookie `sessionid` (SameSite=Lax). Unsafe methods must send `X-CSRFToken` (retrieved via `GET /api/auth/csrf`).
 - Errors are `application/problem+json` with a machine-readable `code` (catalog below). A 422 also carries `errors[{field, msg}]`.
 - Lists take `?page=1&size=20` (max 100) and return `{items, total, page}`. Array filters repeat the key: `?grades=middle&grades=senior`.
 - Money is an integer number of RUB per month, always with `type: gross` or `net`. Times are ISO 8601 UTC.

@@ -1,5 +1,6 @@
 """FSP Sync URLs."""
 from django.urls import path
+
 from fsp_sync import views
 
 urlpatterns = [

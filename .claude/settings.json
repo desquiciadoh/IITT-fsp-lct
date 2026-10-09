@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -m pytest:*)",
+      "Bash(.venv/Scripts/python -m ruff check:*)",
+      "Bash(.venv/Scripts/python manage.py check:*)",
+      "Bash(.venv/Scripts/python manage.py makemigrations --check:*)",
+      "Bash(.venv/Scripts/python manage.py showmigrations:*)",
+      "Bash(.venv/Scripts/python .claude/skills/verify/scripts/verify.py:*)",
+      "Bash(.venv/Scripts/python .claude/skills/irt-cat/scripts/irt_reference.py:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}
