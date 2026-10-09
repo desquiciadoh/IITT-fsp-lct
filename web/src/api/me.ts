@@ -9,5 +9,7 @@ export function useMe() {
     queryFn: () => customFetch<Me>('/api/me'),
     retry: (count, error) => !(error instanceof ApiError && error.status === 401) && count < 2,
     staleTime: 30_000,
+    // Public pages (e.g. /jury) call this while anonymous; the 401 is expected.
+    meta: { skipAuthRedirect: true },
   })
 }

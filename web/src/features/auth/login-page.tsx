@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { customFetch, ApiError } from '@/api/client'
+import { keys } from '@/api/keys'
+import type { Me } from '@/api/types'
 import { errorMessage } from '@/i18n/errors'
 import { applyApiErrorToForm } from '@/features/auth/form-errors'
 import { loginSchema, type LoginValues } from '@/features/auth/schemas'
@@ -25,38 +27,50 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   })
 
-  const finish = () => {
-    void client.invalidateQueries({ queryKey: ['me'] })
+  const finish = (data?: Me) => {
+    // Clear first: never let the previous session leak into the next screen.
+    client.clear()
+    if (data) client.setQueryData(keys.me, data)
+    client.invalidateQueries({ queryKey: keys.me })
     navigate('/', { replace: true })
   }
 
   const handleError = (error: unknown) => {
     if (applyApiErrorToForm(error, setError)) return
+    // Only the login form treats a bare 401 as bad credentials.
+    const code =
+      error instanceof ApiError
+        ? error.code === 'unauthorized'
+          ? 'bad_credentials'
+          : error.code
+        : undefined
     toast.error(
       error instanceof ApiError
-        ? errorMessage(error.code, error.detail)
+        ? errorMessage(code, error.detail)
         : 'Не удалось войти. Проверьте соединение.',
     )
   }
 
   const login = useMutation({
     mutationFn: (values: LoginValues) =>
-      customFetch<void>('/api/auth/login', {
+      customFetch<Me>('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       }),
+    meta: { skipAuthRedirect: true },
     onSuccess: finish,
     onError: handleError,
   })
 
   const persona = useMutation({
     mutationFn: (id: string) =>
-      customFetch<void>('/api/demo/persona', {
+      customFetch<Me>('/api/demo/persona', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ persona: id }),
       }),
+    meta: { skipAuthRedirect: true },
     onSuccess: finish,
     onError: handleError,
   })

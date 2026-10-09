@@ -96,7 +96,7 @@ function toApiError(status: number, body: unknown): ApiError {
   const code =
     problem.code ??
     (status === 401
-      ? 'bad_credentials'
+      ? 'unauthorized'
       : status === 403
         ? 'forbidden'
         : status === 404

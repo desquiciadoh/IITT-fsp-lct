@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { FlaskConical, RotateCcw, Timer } from 'lucide-react'
 import { customFetch, ApiError } from '@/api/client'
+import { keys } from '@/api/keys'
+import type { Me } from '@/api/types'
 import { errorMessage } from '@/i18n/errors'
 import { PERSONAS, type PersonaId } from '@/lib/personas'
 import { Button } from '@/components/ui/button'
@@ -44,13 +46,18 @@ export function JuryPage() {
 
   const loginPersona = useMutation({
     mutationFn: (persona: PersonaId) =>
-      customFetch<{ role: string }>('/api/demo/persona', {
+      customFetch<Me>('/api/demo/persona', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ persona }),
       }),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['me'] })
+    meta: { skipAuthRedirect: true },
+    onSuccess: (data) => {
+      // Drop the anonymous cache and seed the caretaker user before redirecting,
+      // so we never flash the previous role's data.
+      client.clear()
+      if (data) client.setQueryData(keys.me, data)
+      client.invalidateQueries({ queryKey: keys.me })
       navigate('/', { replace: true })
     },
     onError: handleError,

@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { customFetch, ApiError } from '@/api/client'
+import { keys } from '@/api/keys'
+import type { Me } from '@/api/types'
 import { errorMessage } from '@/i18n/errors'
 import { applyApiErrorToForm } from '@/features/auth/form-errors'
 import { registerSchema, type RegisterValues } from '@/features/auth/schemas'
@@ -57,12 +59,14 @@ export function RegisterPage() {
       }),
     onSuccess: async (result, values) => {
       try {
-        await customFetch<void>('/api/auth/login', {
+        const user = await customFetch<Me>('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: values.email, password: values.password }),
         })
-        void client.invalidateQueries({ queryKey: ['me'] })
+        client.clear()
+        if (user) client.setQueryData(keys.me, user)
+        client.invalidateQueries({ queryKey: keys.me })
         if (result.email_verified) {
           toast.success('Аккаунт создан')
           navigate('/', { replace: true })

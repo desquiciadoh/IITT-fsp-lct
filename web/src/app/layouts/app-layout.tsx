@@ -22,7 +22,8 @@ export function AppLayout() {
   const logout = useMutation({
     mutationFn: () => customFetch<void>('/api/auth/logout', { method: 'POST' }),
     onSettled: () => {
-      void client.invalidateQueries({ queryKey: ['me'] })
+      // Drop every cached response so the next session never sees this user's data.
+      client.clear()
       navigate('/login', { replace: true })
     },
   })

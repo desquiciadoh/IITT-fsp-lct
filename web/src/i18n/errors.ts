@@ -4,6 +4,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   validation_failed: 'Проверьте правильность заполнения полей.',
   email_taken: 'Пользователь с таким email уже зарегистрирован.',
   bad_credentials: 'Неверный email или пароль.',
+  unauthorized: 'Сессия истекла, войдите снова.',
   email_unverified: 'Email не подтверждён. Проверьте почту.',
   token_invalid: 'Ссылка недействительна или устарела.',
   rate_limited: 'Слишком много попыток. Попробуйте позже.',
