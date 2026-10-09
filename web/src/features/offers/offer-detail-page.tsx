@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client'
 import { errorMessage } from '@/i18n/errors'
 import { useCountdown } from '@/lib/hooks/useCountdown'
 import { formatDate, formatDateTime, formatDuration } from '@/lib/format'
+import { CONTACT_CHANNEL_LABEL, DECLINE_REASON_LABEL, OFFER_STATUS_LABEL } from '@/lib/labels'
 import { SalaryTag } from '@/components/domain/salary-tag'
 import { StatusChip } from '@/components/domain/status-chip'
 import { TrustBadge } from '@/components/domain/trust-badge'
@@ -75,7 +76,8 @@ export function OfferDetailPage() {
     Boolean(offer.candidate_contacts) && ['accepted', 'interview', 'hired'].includes(offer.status)
   const channels: string[] = []
   if (offer.contact_channel && offer.contact_value) {
-    channels.push(`${offer.contact_channel}: ${offer.contact_value}`)
+    const channel = CONTACT_CHANNEL_LABEL[offer.contact_channel] ?? offer.contact_channel
+    channels.push(`${channel}: ${offer.contact_value}`)
   }
 
   return (
@@ -123,7 +125,9 @@ export function OfferDetailPage() {
         )}
         {offer.decline_reason && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
-            <span className="font-medium">Отклонён: {offer.decline_reason}</span>
+            <span className="font-medium">
+              Отклонён: {DECLINE_REASON_LABEL[offer.decline_reason] ?? offer.decline_reason}
+            </span>
             {offer.decline_comment && (
               <p className="mt-1 text-xs text-muted-foreground">{offer.decline_comment}</p>
             )}
@@ -177,7 +181,7 @@ export function OfferDetailPage() {
         )}
         {['declined', 'withdrawn', 'expired', 'closed'].includes(offer.status) && (
           <span className="text-sm text-muted-foreground">
-            Действий недоступно: статус «{offer.status}».
+            Действий недоступно: статус «{OFFER_STATUS_LABEL[offer.status] ?? offer.status}».
           </span>
         )}
       </section>

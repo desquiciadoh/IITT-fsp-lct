@@ -64,6 +64,13 @@ export const DECLINE_REASON_LABEL: Record<string, string> = {
   other: 'другое',
 }
 
+export const CONTACT_CHANNEL_LABEL: Record<string, string> = {
+  email: 'email',
+  phone: 'телефон',
+  telegram: 'telegram',
+  platform: 'платформа',
+}
+
 export const SOURCE_LABEL: Record<string, string> = {
   test: 'подтверждено тестом',
   fsp: 'подтверждено ФСП',
