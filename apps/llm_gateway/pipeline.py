@@ -115,7 +115,7 @@ def _cache_get(cache: Cache | None, key: str, validate: Callable[..., DraftT]) -
             return None
         stored = obj["draft"]
         draft = validate(stored)
-    except (ValueError, TypeError, KeyError, LlmSchemaError):
+    except (ValueError, TypeError, KeyError, ArithmeticError, LlmSchemaError):
         return None
     # Only validated answers are stored, so a valid entry is a fixed point of validation.
     if dataclasses.asdict(draft) != stored:

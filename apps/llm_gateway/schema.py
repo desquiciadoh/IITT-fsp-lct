@@ -6,6 +6,7 @@ bounds checking, salary sanitization, and string length caps.
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -152,13 +153,18 @@ def _clean_salary_num(val: Any) -> int | None:
     """250000, "250 000", "250k", "150 тыс", "1,5 млн" -> RUB; out of (0, 10 000 000] -> None."""
     if val is None or isinstance(val, bool):
         return None
+    if isinstance(val, float) and not math.isfinite(val):
+        return None  # json.loads gives inf for 1e999 and nan for NaN
     if isinstance(val, (int, float)):
         num = int(val)
     else:
-        m = _SALARY_STR_RE.match(str(val).strip())
+        m = _SALARY_STR_RE.match(str(val).strip()[:64])
         if not m:
             return None
-        number = float(re.sub(r"[\s\xa0]", "", m.group(1)).replace(",", "."))
+        digits = re.sub(r"[\s\xa0]", "", m.group(1))
+        if len(digits) > 12:
+            return None
+        number = float(digits.replace(",", "."))
         suffix = (m.group(2) or "").lower()
         scale = 1_000_000 if suffix in ("млн", "mln") else 1000 if suffix else 1
         num = int(number * scale)

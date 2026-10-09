@@ -1,4 +1,5 @@
 """Unit tests for LLM Gateway orchestration (AI-R2, AI-R10, AI-R11, AI-R12, AI-R13)."""
+import dataclasses
 import json
 import logging
 import sys
@@ -136,6 +137,17 @@ def test_gateway_failure_falls_back_with_reason(side_effect, reason):
     assert res.fallback_reason == reason
     assert res.prefill["specialization"] == "backend"  # the rules answer, not an empty form
     assert cache.store == {}
+
+
+def test_non_finite_salary_from_the_llm_is_dropped_not_a_crash():
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    gw = _gigachat_mock()
+    gw.resume.return_value = {**dataclasses.asdict(_llm_draft()), "salary_min": float("inf")}
+
+    res = parse_resume(pdf_bytes, gateway=gw)
+
+    assert (res.source, res.fallback_reason) == ("llm", None)
+    assert res.prefill["salary_min"] is None
 
 
 def test_llm_answer_without_usable_fields_is_a_schema_fallback():

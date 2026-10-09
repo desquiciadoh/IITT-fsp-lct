@@ -84,6 +84,9 @@ def test_schema_caps_and_sanitization():
         ("abc", None),
         (0, None),
         ("20 000 000", None),
+        (float("inf"), None),  # json.loads("1e999")
+        (float("nan"), None),
+        ("1" * 400, None),  # float() would be inf -> OverflowError
     ],
 )
 def test_schema_salary_strings(raw, expected):

@@ -257,10 +257,13 @@ def _key_pattern(key: str) -> re.Pattern[str]:
     return re.compile(rf"(?<![{_WORD_CHARS}]){escaped}(?![{_WORD_CHARS}])", re.IGNORECASE)
 
 
-_PATTERNS_CACHE: tuple[dict[str, SkillEntry], list[tuple[str, SkillEntry, list[tuple[str, re.Pattern[str]]]]]] | None = None
+# (key, needles, pattern): the regex runs only if a needle occurs in the text (a fast substring
+# check); long keys are looked up in the lower-cased text, short keys in their exact spellings.
+_KeyPatterns = list[tuple[str, tuple[str, ...], re.Pattern[str]]]
+_PATTERNS_CACHE: tuple[dict[str, SkillEntry], list[tuple[str, SkillEntry, _KeyPatterns]]] | None = None
 
 
-def _catalog_patterns(catalog: dict[str, SkillEntry]) -> list[tuple[str, SkillEntry, list[tuple[str, re.Pattern[str]]]]]:
+def _catalog_patterns(catalog: dict[str, SkillEntry]) -> list[tuple[str, SkillEntry, _KeyPatterns]]:
     """Compile the free-text patterns once per catalog object."""
     global _PATTERNS_CACHE
     if _PATTERNS_CACHE is not None and _PATTERNS_CACHE[0] is catalog:
@@ -268,7 +271,11 @@ def _catalog_patterns(catalog: dict[str, SkillEntry]) -> list[tuple[str, SkillEn
     compiled = []
     for sid, entry in catalog.items():
         keys = list(dict.fromkeys(k for k in [sid, clean_key(entry.name), *entry.aliases] if k))
-        compiled.append((sid, entry, [(k, _key_pattern(k)) for k in keys]))
+        patterns = []
+        for key in keys:
+            needles = tuple({key.upper(), key[:1].upper() + key[1:]}) if len(key) <= 2 else (key,)
+            patterns.append((key, needles, _key_pattern(key)))
+        compiled.append((sid, entry, patterns))
     _PATTERNS_CACHE = (catalog, compiled)
     return compiled
 
@@ -285,10 +292,12 @@ def extract_skills(text: str, catalog: dict[str, SkillEntry] | None = None) -> t
     if catalog is None:
         catalog = load_skills()
 
+    lowered = text.lower()
     matches: list[SkillMatch] = []
     for sid, entry, patterns in _catalog_patterns(catalog):
-        for key, pattern in patterns:
-            if pattern.search(text):
+        for key, needles, pattern in patterns:
+            haystack = text if len(key) <= 2 else lowered
+            if any(needle in haystack for needle in needles) and pattern.search(text):
                 matches.append(SkillMatch(
                     skill_id=sid,
                     name=entry.name,

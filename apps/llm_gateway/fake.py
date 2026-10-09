@@ -33,7 +33,10 @@ _SALARY_CUE_RE = re.compile(
     r"|(?<![а-яё])руб|(?<![a-z])rub|\d\s*[kк](?![a-zа-яё])",
     re.IGNORECASE,
 )
-_AMOUNT = r"\d[\d \xa0]*(?:[.,]\d+)?\s*(?:тыс\.?|[kк](?![a-zа-яё]))?"
+# Unambiguous on purpose: "250 000" (groups of exactly 3 digits) or up to 9 plain digits, so a long
+# run of digits and spaces cannot make the range pattern backtrack quadratically.
+_AMOUNT = r"(?:\d{1,3}(?:[ \xa0]\d{3})+|\d{1,9})(?:[.,]\d{1,2})?(?:\s?(?:тыс\.?|[kк](?![a-zа-яё])))?"
+_SALARY_LINE_MAX = 300
 _NOT_YEARS = r"(?!\s*(?:лет|года?|years?|мес))"
 _SALARY_RANGE_RE = re.compile(
     rf"({_AMOUNT}){_NOT_YEARS}\s*(?:до|-|–|—|\.\.\.|…)\s*({_AMOUNT}){_NOT_YEARS}", re.IGNORECASE
@@ -91,9 +94,11 @@ def _parse_amount(raw: str) -> int | None:
     suffix = _thousands_suffix(s)
     if suffix:
         s = s[: -len(suffix)]
+    if len(s) > 12:
+        return None  # not a salary, and float() of 309+ digits is inf
     try:
         value = int(float(s.replace(",", ".")) * (1000 if suffix else 1))
-    except ValueError:
+    except (ValueError, OverflowError):
         return None
     return value if 10_000 <= value <= 10_000_000 else None
 
@@ -365,7 +370,8 @@ class FakeLlm:
         elif _NET_RE.search(text):
             sal_type = "net"
 
-        for line in text.splitlines():
+        for full_line in text.splitlines():
+            line = full_line[:_SALARY_LINE_MAX]  # a salary statement is short; bounds the regex work
             if not _SALARY_CUE_RE.search(line):
                 continue
             for m in _SALARY_RANGE_RE.finditer(line):  # "2019-2023" is skipped, a later range counts

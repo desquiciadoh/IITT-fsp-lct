@@ -1,4 +1,5 @@
 """Unit tests for FakeLlm rule-based extraction and AI-R6 regressions."""
+import time
 from pathlib import Path
 
 import pytest
@@ -136,6 +137,16 @@ Leading projects под руководством senior архитектора.
 def test_fake_llm_salary_lines(text, expected):
     draft = FakeLlm().jd(text)
     assert (draft.salary_min, draft.salary_max) == expected
+
+
+def test_fake_llm_hostile_salary_lines_are_fast_and_safe():
+    """400 digits used to raise OverflowError; a long digit run made the regex quadratic (35 s)."""
+    assert FakeLlm().jd("Зарплата " + "1" * 400 + " руб").salary_min is None
+
+    started = time.perf_counter()
+    draft = FakeLlm().jd("Зарплата руб " + "1 " * 50_000)
+    assert time.perf_counter() - started < 3.0
+    assert (draft.salary_min, draft.salary_max) == (None, None)
 
 
 def test_fake_llm_does_not_invent_values():
