@@ -99,3 +99,12 @@ export const TOPIC_LEVEL_LABEL: Record<string, string> = {
   moderate: 'средняя',
   limited: 'слабая',
 }
+
+export const APPLICATION_STATUS_LABEL: Record<string, string> = {
+  applied: 'отклик отправлен',
+  reviewing: 'на рассмотрении',
+  interview: 'интервью',
+  offer: 'оффер',
+  rejected: 'отклонён',
+  withdrawn: 'отозван',
+}

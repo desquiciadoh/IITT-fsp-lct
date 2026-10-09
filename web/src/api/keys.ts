@@ -20,4 +20,7 @@ export const keys = {
   talentSearch: ['talent', 'search'] as const,
   talent: (publicId: string) => ['talent', publicId] as const,
   labReport: ['lab', 'report'] as const,
+  vacancies: ['vacancies'] as const,
+  applications: ['applications'] as const,
+  positionApplications: (positionId: string) => ['applications', 'position', positionId] as const,
 }

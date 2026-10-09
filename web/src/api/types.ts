@@ -221,3 +221,44 @@ export type AssessmentResult = Omit<
 export type Eligibility = Omit<EligibilityResponse, 'next_attempt_at'> & {
   next_attempt_at?: string | null
 }
+
+// ── vacancies & applications (FE-15) ──
+// Gap G18 / BE-17: contract agreed with BE (BE.md §2.3 G18, TASKS §1.4);
+// mocked until the backend ships it.
+
+export type ApplicationStatus =
+  | 'applied'
+  | 'reviewing'
+  | 'interview'
+  | 'offer'
+  | 'rejected'
+  | 'withdrawn'
+
+export type Vacancy = {
+  id: string
+  company: { id: string; name: string; trust_level: TrustLevel }
+  title: string
+  specialization: Spec
+  grades: Grade[]
+  salary_min: number
+  salary_max: number
+  salary_type: SalaryType
+  work_formats: WorkFormat[]
+  location?: string
+  team_context?: string
+  is_applied: boolean
+  /** BE-17: position fields the employer controls (publish toggle). */
+  is_public?: boolean
+  status?: 'open' | 'closed'
+}
+
+export type Application = {
+  id: string
+  vacancy: Pick<Vacancy, 'id' | 'title' | 'company' | 'specialization' | 'grades'> &
+    Pick<Vacancy, 'salary_min' | 'salary_max' | 'salary_type'>
+  candidate: { public_id: string; display_name: string; city?: string }
+  status: ApplicationStatus
+  note?: string
+  created_at: string
+  updated_at: string
+}

@@ -13,6 +13,7 @@ import { TalentRow } from '@/components/domain/talent-row'
 import { FspBadge } from '@/components/domain/fsp-badge'
 import { TrustBadge } from '@/components/domain/trust-badge'
 import { EmptyState, ErrorState } from '@/components/domain/states'
+import { ApplicationStatusChip } from '@/components/domain/application-status-chip'
 import { RowSkeleton, ProfileSkeleton, CardSkeleton } from '@/components/ui/skeleton'
 import type { Offer, TalentShort } from '@/api/types'
 
@@ -169,6 +170,15 @@ export function DevUiPage() {
         {ALL_STATUSES.map((s) => (
           <StatusChip key={s} status={s} />
         ))}
+      </Section>
+
+      <Section title="Отклики (ApplicationStatusChip)">
+        <ApplicationStatusChip status="applied" />
+        <ApplicationStatusChip status="reviewing" />
+        <ApplicationStatusChip status="interview" />
+        <ApplicationStatusChip status="offer" />
+        <ApplicationStatusChip status="rejected" />
+        <ApplicationStatusChip status="withdrawn" />
       </Section>
 
       <Section title="Чипы причин (ReasonChips)">

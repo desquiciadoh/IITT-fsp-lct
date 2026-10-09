@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
-import { Trophy, Zap } from 'lucide-react'
+import { Search, Trophy, Zap } from 'lucide-react'
 import { useOffers } from '@/api/offers'
+import { useApplications } from '@/api/vacancies'
 import { useProfile } from '@/api/profile'
 import { useEligibility } from '@/api/assessments'
 import { useCountdown } from '@/lib/hooks/useCountdown'
@@ -9,6 +10,7 @@ import { GRADE_LABEL, SPEC_LABEL } from '@/lib/labels'
 import { LeagueBadge } from '@/components/domain/league-badge'
 import { OfferCard } from '@/components/domain/offer-card'
 import { EmptyState, ErrorState } from '@/components/domain/states'
+import { ApplicationStatusChip } from '@/components/domain/application-status-chip'
 import { CardSkeleton, RowSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 
@@ -28,6 +30,7 @@ export function DashboardPage() {
   const spec = profile?.specialization || 'backend'
   const { data: eligibility } = useEligibility(spec)
   const { data: offers, isLoading, isError, refetch } = useOffers()
+  const { data: applications } = useApplications()
 
   const league = profile?.league
   const cooldown = eligibility && !eligibility.can_start ? eligibility.next_attempt_at : null
@@ -87,6 +90,38 @@ export function DashboardPage() {
           {profile?.claimed_grade ? ` · заявлен ${GRADE_LABEL[profile.claimed_grade]}` : ''}
           {league ? ` · подтверждён ${GRADE_LABEL[league.grade]}` : ''}
         </p>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Ваши отклики</h2>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/candidate/vacancies">
+              <Search className="h-4 w-4" /> Найти вакансии
+            </Link>
+          </Button>
+        </div>
+        {applications && applications.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {applications.map((application) => (
+              <li
+                key={application.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{application.vacancy.title}</span>
+                  <span className="text-xs text-muted-foreground">{application.vacancy.company.name}</span>
+                </div>
+                <ApplicationStatusChip status={application.status} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            title="Откликов пока нет"
+            description="Найдите подходящую вакансию и отправьте отклик — статус будет виден здесь."
+          />
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

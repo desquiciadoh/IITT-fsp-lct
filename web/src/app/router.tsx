@@ -43,6 +43,12 @@ const SettingsPage = lazy(() =>
   import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })),
 )
 const LabPage = lazy(() => import('@/features/lab/lab-page').then((m) => ({ default: m.LabPage })))
+const VacanciesPage = lazy(() =>
+  import('@/features/vacancies/vacancies-page').then((m) => ({ default: m.VacanciesPage })),
+)
+const EmployerPreviewPage = lazy(() =>
+  import('@/features/vacancies/employer-preview-page').then((m) => ({ default: m.EmployerPreviewPage })),
+)
 
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
@@ -65,6 +71,7 @@ export const router = createBrowserRouter([
   { path: '/verify', element: <VerifyPage /> },
   { path: '/dev/ui', element: <DevUiPage /> },
   { path: '/dev/design', element: <DesignVariantsPage /> },
+  { path: '/dev/vacancies-employer', element: <EmployerPreviewPage /> },
   {
     // Public pages inside the shell (no RequireAuth; no SSE for anonymous users)
     element: <AppLayout />,
@@ -103,6 +110,7 @@ export const router = createBrowserRouter([
                     element: <ResultPage />,
                   },
                   { path: '/candidate/offers', element: <OffersListPage /> },
+                  { path: '/candidate/vacancies', element: <VacanciesPage /> },
                   {
                     path: '/candidate/offers/:id',
                     element: <OfferDetailPage />,

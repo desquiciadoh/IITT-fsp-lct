@@ -103,6 +103,7 @@ Until ML ships, the current stub stays behind the adapter, so the API shape does
 | G15 | OIDC `fsp-id/login`, `callback` | ✅ (H1) |
 | G16 | `GET /api/positions/{id}/shortlist` | ✅ (R5 visibility) |
 | G17 | `POST`/`GET /api/companies` | ✅ (R20) |
+| G18 | Vacancies & applications (FE-15, BE-17): `GET /api/vacancies` (public, salary first) · `POST /api/vacancies/{id}/apply` (creates a contact grant) · `GET /api/candidates/me/applications` · `GET /api/positions/{id}/applications` · `PUT /api/applications/{id}` `{status}` (pipeline) · publish via `PUT /api/positions/{id}` `{is_public}` | ⚠️ P1 BE-17, not started; FE mocks it (`web/src/mocks/handlers/vacancies.ts`). Types: `Vacancy`, `Application`, `ApplicationStatus` in `web/src/api/types.ts` |
 
 **Error codes added by the hotfix** (FE must handle them): `offer_expired`, `fallback_not_eligible`, `fallback_already_used`, `account_exists`, `fsp_oidc_required`, `fsp_id_unavailable`.
 
