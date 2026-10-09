@@ -1,6 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DECLINE_REASON_LABEL } from '@/lib/labels'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { DeclineReason } from '@/api/types'
 
 const REASONS = Object.keys(DECLINE_REASON_LABEL) as DeclineReason[]
@@ -20,29 +28,31 @@ export function DeclineModal({
   const [reason, setReason] = useState<DeclineReason | ''>('')
   const [comment, setComment] = useState('')
 
-  if (!open) return null
+  // Reset the form every time the dialog reopens.
+  useEffect(() => {
+    if (open) {
+      setReason('')
+      setComment('')
+    }
+  }, [open])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="presentation"
-      onClick={onClose}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !pending) onClose()
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="decline-title"
-        className="w-full max-w-md rounded-xl border border-border bg-card p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 id="decline-title" className="text-base font-semibold">
-          Отклонить оффер
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Причина обязательна — работодатель увидит её в обобщённом виде.
-        </p>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Отклонить оффер</DialogTitle>
+          <DialogDescription>
+            Причина обязательна — работодатель увидит её и сможет прислать более подходящее
+            предложение.
+          </DialogDescription>
+        </DialogHeader>
 
-        <fieldset className="mt-4">
+        <fieldset>
           <legend className="text-sm font-medium">Причина *</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {REASONS.map((r) => (
@@ -63,19 +73,19 @@ export function DeclineModal({
           </div>
         </fieldset>
 
-        <label className="mt-4 block text-sm">
+        <label className="block text-sm">
           Комментарий (необязательно)
           <textarea
             rows={3}
             maxLength={1000}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Что можно улучшить в предложении"
+            placeholder="Что повлияло на решение?"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </label>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Отмена
           </Button>
@@ -86,8 +96,8 @@ export function DeclineModal({
           >
             {pending ? 'Отклоняем…' : 'Отклонить'}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
