@@ -21,13 +21,13 @@ docker start fsp-postgres || docker run -d --name fsp-postgres -p 5432:5432 -e P
 
 ## Layout
 
-`apps/{core,identity,profiles,assessment,matching,outreach,fsp_sync}` is a Django modular monolith. `core/services.py` holds contact gating, `core/errors.py` returns RFC 7807 problem+json, `outreach/services.py` runs the offer state machine. Pure engines (target, see `ML.md` §2) live in `apps/assessment/{families,engine}/` and `apps/matching/engine/`. Tests are in `tests/`; pure ML tests go in `tests/ml/`.
+`apps/{core,identity,profiles,assessment,matching,outreach,fsp_sync}` is a Django modular monolith. `outreach/services.py` holds contact gating (`ContactAccessService`; `core/services.py` is a deprecated re-export shim) and the offer state machine, `core/errors.py` returns RFC 7807 problem+json. Pure engines (target, see `ML.md` §2) live in `apps/assessment/{families,engine}/` and `apps/matching/engine/`. Tests are in `tests/`; pure ML tests go in `tests/ml/`.
 
 ## Invariants (a change that breaks one is a bug, even when tests pass)
 
 1. An LLM never decides a grade or a score. Grading is deterministic IRT over oracle-computed keys.
 2. Answer keys and their fingerprints never leave the server: not in a serializer, `Instance.view()`, a log, or an error body.
-3. Contacts are read only through `core/services.py` after an accepted offer creates a `ContactGrant`. Denials return 403 and write `AuditLog`.
+3. Contacts are read only through `ContactAccessService` (`outreach/services.py`) after an accepted offer creates a `ContactGrant`. Denials return 403 and write `AuditLog`.
 4. FSP results change Strength and ranking, never the grade. Unconfirmed profiles stay visible, ranked ×0.75.
 5. `salary_min > 0`, `salary_max >= salary_min`, and `salary_type` are required, checked in both the DB and DRF.
 6. Engine packages import no Django, ORM, or `core.enums`. They are deterministic from a seed: no global `random`, and no iteration over an unsorted `set`/`dict` of strings when the order affects output.

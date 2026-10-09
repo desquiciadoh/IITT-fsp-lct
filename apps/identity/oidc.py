@@ -4,17 +4,14 @@ import hashlib
 import json
 import logging
 import secrets
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from authlib.jose import JsonWebKey, jwt
+from authlib.jose import JsonWebKey, JsonWebToken
 from core.errors import FSPAPIError
 from django.conf import settings
-from django.core import signing
 from django.urls import reverse
-from fsp_mock.keys import get_jwks, sign_id_token
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +27,7 @@ def generate_pkce_pair() -> tuple[str, str]:
 def get_oidc_endpoints() -> dict:
     """Retrieve OIDC endpoints from settings."""
     issuer = getattr(settings, 'OIDC_ISSUER', 'http://localhost:8000/idp/realms/fsp').rstrip('/')
-    internal_url = getattr(settings, 'OIDC_INTERNAL_URL', issuer).rstrip('/')
+    internal_url = (getattr(settings, 'OIDC_INTERNAL_URL', '') or issuer).rstrip('/')
     client_id = getattr(settings, 'OIDC_CLIENT_ID', 'fsp-draft')
     client_secret = getattr(settings, 'OIDC_CLIENT_SECRET', 'dev-secret')
 
@@ -78,72 +75,86 @@ def build_authorization_url(request, intent: str) -> tuple[str, str]:
     return auth_url, state
 
 
-def exchange_code_for_tokens(code: str, code_verifier: str, redirect_uri: str) -> dict:
-    """Exchange authorization code for tokens via token endpoint or local mock fallback."""
-    endpoints = get_oidc_endpoints()
-
-    post_data = urllib.parse.urlencode({
-        'grant_type': 'authorization_code',
-        'code': code,
-        'client_id': endpoints['client_id'],
-        'client_secret': endpoints['client_secret'],
-        'redirect_uri': redirect_uri,
-        'code_verifier': code_verifier,
-    }).encode('utf-8')
-
+def _http_post_form(url: str, data: dict) -> dict:
+    """POST a form to the IdP and return the JSON body (tests patch this)."""
     req = urllib.request.Request(
-        endpoints['token_endpoint'],
-        data=post_data,
+        url,
+        data=urllib.parse.urlencode(data).encode('utf-8'),
         headers={'Content-Type': 'application/x-www-form-urlencoded'},
         method='POST',
     )
+    with urllib.request.urlopen(req, timeout=5) as response:
+        return json.loads(response.read().decode('utf-8'))
 
+
+def _http_get_json(url: str) -> dict:
+    """GET a JSON document from the IdP (tests patch this)."""
+    with urllib.request.urlopen(url, timeout=5) as response:
+        return json.loads(response.read().decode('utf-8'))
+
+
+def exchange_code_for_tokens(code: str, code_verifier: str, redirect_uri: str) -> dict:
+    """Exchange the authorization code at the IdP token endpoint.
+
+    There is deliberately no local fallback: minting tokens in-process would
+    skip PKCE and let a forged code log in as anyone.
+    """
+    endpoints = get_oidc_endpoints()
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except Exception as exc:
-        logger.debug("OIDC HTTP token exchange failed (%s), using local mock fallback", exc)
-        # Fallback for in-process test runs without background web server
-        try:
-            code_data = signing.loads(code, salt='fsp-oidc-code', max_age=300)
-            participant_id = code_data['participant_id']
-            now = int(time.time())
-            id_token_payload = {
-                'iss': endpoints['issuer'],
-                'sub': participant_id,
-                'aud': endpoints['client_id'],
-                'fsp_participant_id': participant_id,
-                'name': f'Participant {participant_id}',
-                'email': f'{participant_id.lower().replace("-", "")}@fsp-sports.ru',
-                'iat': now,
-                'exp': now + 3600,
-            }
-            if code_data.get('nonce'):
-                id_token_payload['nonce'] = code_data['nonce']
+        return _http_post_form(endpoints['token_endpoint'], {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': endpoints['client_id'],
+            'client_secret': endpoints['client_secret'],
+            'redirect_uri': redirect_uri,
+            'code_verifier': code_verifier,
+        })
+    except urllib.error.HTTPError as exc:
+        logger.warning("OIDC token endpoint rejected the code: HTTP %s", exc.code)
+        raise FSPAPIError(
+            'token_exchange_failed', 'Token exchange failed', 'The identity provider rejected the code', 400,
+        ) from exc
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        logger.error("OIDC token endpoint unavailable", exc_info=True)
+        raise FSPAPIError(
+            'fsp_id_unavailable', 'FSP ID unavailable', 'The identity provider is unavailable', 502,
+        ) from exc
 
-            return {
-                'access_token': f'mock_at_{participant_id}',
-                'id_token': sign_id_token(id_token_payload),
-                'token_type': 'Bearer',
-                'expires_in': 3600,
-            }
-        except Exception:
-            raise FSPAPIError('token_exchange_failed', 'Token exchange failed', str(exc), 400)
+
+def _get_jwks() -> dict:
+    endpoints = get_oidc_endpoints()
+    try:
+        return _http_get_json(endpoints['jwks_uri'])
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        logger.error("OIDC JWKS unavailable", exc_info=True)
+        raise FSPAPIError(
+            'fsp_id_unavailable', 'FSP ID unavailable', 'The identity provider is unavailable', 502,
+        ) from exc
 
 
 def verify_and_decode_id_token(id_token: str, nonce: str | None = None) -> dict:
-    """Verify RS256 signature and claims of the ID token using JWKS."""
+    """Verify the RS256 signature (IdP JWKS) and the iss, aud, exp and nonce claims."""
+    endpoints = get_oidc_endpoints()
+    if not nonce:
+        raise FSPAPIError('invalid_token', 'Invalid ID Token', 'Missing nonce in session', 400)
+    claims_options = {
+        'iss': {'essential': True, 'value': endpoints['issuer']},
+        'aud': {'essential': True, 'value': endpoints['client_id']},
+        'exp': {'essential': True},
+        'nonce': {'essential': True, 'value': nonce},
+    }
     try:
-        jwks = get_jwks()
-        key_set = JsonWebKey.import_key_set(jwks)
-        claims = jwt.decode(id_token, key_set)
-        claims.validate()
-        return dict(claims)
-    except Exception as exc:
-        logger.error("Failed to verify ID token: %s", exc)
-        # Fallback decode if key validation fails
-        try:
-            claims = jwt.decode(id_token, None)
-            return dict(claims)
-        except Exception:
-            raise FSPAPIError('invalid_token', 'Invalid ID Token', 'Failed to decode or verify ID token', 400)
+        key_set = JsonWebKey.import_key_set(_get_jwks())
+        claims = JsonWebToken(['RS256']).decode(id_token, key_set, claims_options=claims_options)
+        claims.validate(leeway=30)
+        # Explicit check: don't rely on authlib validating custom claims
+        if not secrets.compare_digest(str(claims.get('nonce', '')), nonce):
+            raise ValueError('nonce mismatch')
+    except FSPAPIError:
+        raise
+    except Exception as exc:  # authlib raises several unrelated error types
+        logger.warning("Rejected FSP ID token: %s", type(exc).__name__)
+        raise FSPAPIError(
+            'invalid_token', 'Invalid ID Token', 'Failed to verify ID token', 400,
+        ) from exc
+    return dict(claims)

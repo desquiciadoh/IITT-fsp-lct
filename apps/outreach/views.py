@@ -363,29 +363,51 @@ class SSEEventsView(views.APIView):
     """Server-Sent Events (SSE) endpoint for real-time notifications."""
     permission_classes = [permissions.IsAuthenticated]
     renderer_classes = [EventStreamRenderer]
+    MAX_LIMIT = 1000
 
     @extend_schema(
         responses={(200, 'text/event-stream'): str},
         description='Server-Sent Events (SSE) notification stream',
     )
     def get(self, request):
+        import queue
+
+        from django.http import HttpResponse
+
+        from outreach.events import register_subscriber, unregister_subscriber
+
+        # Validate before the 200 headers go out; a streaming body cannot carry an error.
+        raw_limit = request.query_params.get('limit', '0')
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = -1
+        if limit < 0 or limit > self.MAX_LIMIT:
+            problem = {
+                'type': 'https://fsp-draft.local/problems/validation_failed',
+                'title': 'Validation failed',
+                'status': 422,
+                'code': 'validation_failed',
+                'detail': 'One or more fields failed validation.',
+                'errors': [{'field': 'limit', 'msg': f'Must be an integer between 0 and {self.MAX_LIMIT}.'}],
+            }
+            return HttpResponse(json.dumps(problem), status=422, content_type='application/problem+json')
+
+        user_id = request.user.id
+        company_ids = list(request.user.company_memberships.values_list('company_id', flat=True))
+
         def event_stream():
-            import queue
-
-            from outreach.events import register_subscriber, unregister_subscriber
-
-            sub = register_subscriber(replay_recent=True)
+            sub = register_subscriber(user_id=user_id, company_ids=company_ids, replay_recent=True)
             try:
                 yield "event: connected\ndata: {\"status\": \"connected\"}\n\n"
 
-                limit = int(request.query_params.get('limit', 0))
                 count = 0
-                # In standard streaming, run until disconnected; when limit is provided (e.g. tests), stop after limit events
+                # Run until disconnected; with a limit (e.g. tests), stop after `limit` events.
                 while True:
                     try:
                         msg = sub.get(timeout=1.0 if limit else 15.0)
                         event_name = msg.get('event', 'message')
-                        data_json = json.dumps(msg.get('data', {}))
+                        data_json = json.dumps(msg.get('data', {}), default=str)
                         yield f"event: {event_name}\ndata: {data_json}\n\n"
                         count += 1
                         if limit and count >= limit:

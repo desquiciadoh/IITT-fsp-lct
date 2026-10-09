@@ -1,6 +1,7 @@
 """Tests for FSP ID OIDC and Mock IdP / Registry (AI-08 / G15)."""
 import base64
 import hashlib
+import urllib.error
 import urllib.parse
 
 import pytest
@@ -11,10 +12,37 @@ from identity.models import Identity, User
 from profiles.models import CandidateProfile, generate_public_id
 from rest_framework.test import APIClient
 
+MOCK_ISSUER = 'http://localhost:8000/idp/realms/fsp'
+
 
 @pytest.fixture
 def client():
     return APIClient()
+
+
+@pytest.fixture(autouse=True)
+def demo_idp(settings, monkeypatch):
+    """Run the in-app mock IdP (DEMO_MODE) and route the OIDC client's
+    server-to-server HTTP calls into it through the Django test client."""
+    settings.DEMO_MODE = True
+    settings.OIDC_ISSUER = MOCK_ISSUER
+    settings.OIDC_INTERNAL_URL = ''
+    idp = APIClient()
+
+    def to_path(url):
+        return '/idp/realms/fsp' + url[len(MOCK_ISSUER):]
+
+    def post_form(url, data):
+        res = idp.post(to_path(url), data)
+        if res.status_code >= 400:
+            raise urllib.error.HTTPError(url, res.status_code, 'error', {}, None)
+        return res.json()
+
+    def get_json(url):
+        return idp.get(to_path(url)).json()
+
+    monkeypatch.setattr('identity.oidc._http_post_form', post_form)
+    monkeypatch.setattr('identity.oidc._http_get_json', get_json)
 
 
 @pytest.fixture

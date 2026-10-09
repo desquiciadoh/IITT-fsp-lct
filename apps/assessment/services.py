@@ -20,7 +20,7 @@ from core.errors import (
     ItemNotCurrent,
 )
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from fsp_sync.services import recompute_strength
 from outreach.events import publish_domain_event
@@ -42,6 +42,15 @@ GRADE_ORDER = {
     Grade.SENIOR: 4,
 }
 
+LOWER_GRADE = {
+    Grade.SENIOR: Grade.MIDDLE,
+    Grade.MIDDLE: Grade.JUNIOR,
+    Grade.JUNIOR: Grade.INTERN,
+}
+
+# Network/clock slack accepted after an item's deadline before the answer counts as late.
+DEADLINE_GRACE_S = 3
+
 
 def get_current_time_for_user(user) -> timezone.datetime:
     """Return current time adjusted for user's clock offset in DEMO_MODE.
@@ -60,7 +69,7 @@ class AssessmentService:
     Enforces invariants:
     1. Only one in-progress session per candidate per specialization.
     2. Stale sessions (>24h) auto-expire.
-    3. Item deadlines are enforced server-side.
+    3. Item deadlines are enforced server-side; an item's clock starts when it becomes current.
     4. Cooldown applied ONLY after a failed/unconfirmed attempt.
     5. FSP boost is preserved during league membership updates.
     """
@@ -113,14 +122,20 @@ class AssessmentService:
                 409,
             )
 
-        # 4. Create the AssessmentSession
-        session = AssessmentSession.objects.create(
-            candidate=user,
-            specialization=specialization,
-            claimed_grade=claimed_grade,
-            mode=mode,
-            status=AssessmentStatus.IN_PROGRESS,
-        )
+        # 4. Create the AssessmentSession. The partial unique constraint
+        # uq_one_in_progress_assessment_per_spec closes the race the pre-check
+        # above cannot (select_for_update locks no rows when none exist yet).
+        try:
+            with transaction.atomic():
+                session = AssessmentSession.objects.create(
+                    candidate=user,
+                    specialization=specialization,
+                    claimed_grade=claimed_grade,
+                    mode=mode,
+                    status=AssessmentStatus.IN_PROGRESS,
+                )
+        except IntegrityError as exc:
+            raise AssessmentInProgress() from exc
 
         # 5. Seed items with HMAC
         item_seed_secret = getattr(settings, 'ITEM_SEED_SECRET', 'item-seed-secret-dev')
@@ -146,7 +161,9 @@ class AssessmentService:
                 },
             )
 
-            deadline = now_real + timedelta(seconds=instance.time_limit_s)
+            # Only the first item is current at start; later items get their
+            # deadline when they are served (see _serve_item).
+            deadline = now_real + timedelta(seconds=instance.time_limit_s) if seq == 1 else None
             AssessmentItem.objects.create(
                 assessment=session,
                 seq=seq,
@@ -200,42 +217,83 @@ class AssessmentService:
 
         now_real = timezone.now()
 
-        # Enforce deadline
-        if current_item.deadline_at and now_real > current_item.deadline_at:
-            current_item.answer = {'value': None, 'timed_out': True}
+        # A late answer is scored as incorrect and the test carries on. It must
+        # not raise: the atomic block would roll the whole session back.
+        late = bool(
+            current_item.deadline_at
+            and now_real > current_item.deadline_at + timedelta(seconds=DEADLINE_GRACE_S)
+        )
+        if late:
+            current_item.answer = {'value': None, 'timed_out': True, 'late': True}
             current_item.correct = False
-            current_item.answered_at = now_real
-            current_item.save()
-
-            for remaining in session.items.filter(answered_at__isnull=True):
-                remaining.answer = {'value': None, 'timed_out': True}
-                remaining.correct = False
-                remaining.answered_at = now_real
-                remaining.save()
-
-            AssessmentService.finalize_assessment(session, user, timed_out=True)
-            raise FSPAPIError(
-                'deadline_exceeded',
-                'Time expired',
-                'Item deadline has passed',
-                400,
-            )
-
-        correct = (answer_val == current_item.key)
-        current_item.answer = {'value': answer_val}
-        current_item.correct = correct
+        else:
+            current_item.answer = {'value': answer_val}
+            current_item.correct = (answer_val == current_item.key)
         current_item.answered_at = now_real
         current_item.integrity = integrity or {}
         current_item.save()
 
         next_item = session.items.filter(answered_at__isnull=True).order_by('seq').first()
         if next_item:
+            AssessmentService._serve_item(next_item, now_real)
             return session, next_item, False
 
         # All items answered: finalize
         AssessmentService.finalize_assessment(session, user)
         session.refresh_from_db()
         return session, None, True
+
+    @staticmethod
+    def _serve_item(item: AssessmentItem, now) -> None:
+        """Make `item` current: its clock starts now."""
+        time_limit_s = (item.view or {}).get('time_limit_s') or item.family.time_limit_s
+        item.served_at = now
+        item.deadline_at = now + timedelta(seconds=time_limit_s)
+        item.save(update_fields=['served_at', 'deadline_at'])
+
+    @staticmethod
+    def _instant_fallback_eligible(session: AssessmentSession, lower_grade: str) -> bool:
+        """The session's own answers support lower_grade (not abandoned, has items)."""
+        items = list(session.items.select_related('family').all())
+        if not items or AssessmentService._was_abandoned(session):
+            return False
+        _, _, _, achieved, _ = score_assessment([
+            {'correct': it.correct, 'b': it.family.b, 'a': it.family.a}
+            for it in items
+        ])
+        return GRADE_ORDER.get(achieved, 0) >= GRADE_ORDER[lower_grade]
+
+    @staticmethod
+    def _short_test_used(session: AssessmentSession, lower_grade: str) -> bool:
+        """A later session at lower_grade for this spec means the short test was taken."""
+        return AssessmentSession.objects.filter(
+            candidate=session.candidate_id,
+            specialization=session.specialization,
+            claimed_grade=lower_grade,
+            started_at__gt=session.finished_at or session.started_at,
+        ).exists()
+
+    @staticmethod
+    def fallback_offer(session: AssessmentSession) -> dict | None:
+        """The fallback the result screen may offer; mirrors fallback()'s checks."""
+        if session.status != AssessmentStatus.FINISHED or session.decision != GradeDecision.UNCONFIRMED:
+            return None
+        lower_grade = LOWER_GRADE.get(session.claimed_grade)
+        if not lower_grade:
+            return None
+        if AssessmentService._instant_fallback_eligible(session, lower_grade):
+            return {'grade': lower_grade, 'mode': 'instant'}
+        if not AssessmentService._short_test_used(session, lower_grade):
+            return {'grade': lower_grade, 'mode': 'short_test'}
+        return None
+
+    @staticmethod
+    def _was_abandoned(session: AssessmentSession) -> bool:
+        """abandon_assessment marks every unanswered item with answer.abandoned."""
+        return any(
+            isinstance(it.answer, dict) and it.answer.get('abandoned')
+            for it in session.items.all()
+        )
 
     @staticmethod
     @transaction.atomic
@@ -382,12 +440,7 @@ class AssessmentService:
                 400,
             )
 
-        lower_grades = {
-            Grade.SENIOR: Grade.MIDDLE,
-            Grade.MIDDLE: Grade.JUNIOR,
-            Grade.JUNIOR: Grade.INTERN,
-        }
-        lower_grade = lower_grades.get(session.claimed_grade)
+        lower_grade = LOWER_GRADE.get(session.claimed_grade)
         if not lower_grade:
             raise FSPAPIError(
                 'fallback_not_available',
@@ -397,6 +450,19 @@ class AssessmentService:
             )
 
         if mode == 'instant':
+            # ARCHITECTURE.md §2.5: the lower grade must be supported by the same
+            # answers. Abandoned sessions, sessions without items, and sessions
+            # whose own items re-score below lower_grade are refused; the
+            # cooldown is left untouched.
+            if not AssessmentService._instant_fallback_eligible(session, lower_grade):
+                raise FSPAPIError(
+                    'fallback_not_eligible',
+                    'Instant fallback not available',
+                    f'Your answers do not confirm {lower_grade}. '
+                    f'Take the short test at {lower_grade} instead (mode "short_test").',
+                    409,
+                )
+
             session.result_grade = lower_grade
             session.decision = GradeDecision.CONFIRMED
             session.save(update_fields=['result_grade', 'decision'])
@@ -425,6 +491,16 @@ class AssessmentService:
             recompute_strength(user)
             return session, False
         elif mode == 'short_test':
+            # One short test per original session: any later session at the
+            # lower grade for this spec means the fallback was already used.
+            if AssessmentService._short_test_used(session, lower_grade):
+                raise FSPAPIError(
+                    'fallback_already_used',
+                    'Fallback already used',
+                    'The short test at the lower grade was already taken for this assessment.',
+                    409,
+                )
+
             membership = LeagueMembership.objects.filter(
                 candidate=user,
                 specialization=session.specialization,

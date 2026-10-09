@@ -1,6 +1,7 @@
 """FSP Sync views — thin wrappers delegating to fsp_sync.services."""
 from core.errors import FSPAPIError, FSPIdAlreadyLinked
 from core.permissions import IsCandidate
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, views
@@ -23,6 +24,15 @@ class FSPLinkView(views.APIView):
         })}
     )
     def post(self, request):
+        # Outside DEMO_MODE ownership must be proven via OIDC
+        # (GET /api/auth/fsp-id/login?intent=link); a bare ID is just a claim.
+        if not settings.DEMO_MODE:
+            raise FSPAPIError(
+                'fsp_oidc_required',
+                'FSP ID verification required',
+                'Link FSP ID via /api/auth/fsp-id/login?intent=link',
+                403,
+            )
         participant_id = request.data.get('participant_id')
         if not participant_id:
             raise FSPAPIError('validation_failed', 'Missing ID', 'participant_id is required', 422)

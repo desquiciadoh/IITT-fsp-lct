@@ -123,7 +123,8 @@ SESSION_COOKIE_NAME = 'sid'
 TESTING = 'pytest' in sys.modules or any('pytest' in arg for arg in sys.argv) or 'test' in sys.argv
 SESSION_COOKIE_SECURE = not DEBUG and not TESTING
 CSRF_COOKIE_SECURE = not DEBUG and not TESTING
-CSRF_COOKIE_HTTPONLY = True
+# The SPA reads the csrftoken cookie and sends it as X-CSRFToken (G1)
+CSRF_COOKIE_HTTPONLY = False
 
 # --- HTTPS hardening (production) ---
 _ssl_redirect_env = os.environ.get('SECURE_SSL_REDIRECT')
@@ -208,6 +209,10 @@ CELERY_TASK_ROUTES = {
 
 # --- FSP / OIDC ---
 OIDC_ISSUER = os.environ.get('OIDC_ISSUER', 'http://localhost:8090/realms/fsp')
+# Server-to-server base URL of the IdP (token, JWKS); defaults to OIDC_ISSUER
+OIDC_INTERNAL_URL = os.environ.get('OIDC_INTERNAL_URL', '')
+# Optional PEM for the DEMO_MODE mock IdP signing key (else var/fsp_mock_rsa.pem)
+FSP_MOCK_PRIVATE_KEY_PEM = os.environ.get('FSP_MOCK_PRIVATE_KEY_PEM', '')
 OIDC_CLIENT_ID = os.environ.get('OIDC_CLIENT_ID', 'fsp-draft')
 OIDC_CLIENT_SECRET = os.environ.get('OIDC_CLIENT_SECRET', 'dev-secret')
 FSP_REGISTRY_URL = os.environ.get('FSP_REGISTRY_URL', 'http://localhost:8090/registry/v1')

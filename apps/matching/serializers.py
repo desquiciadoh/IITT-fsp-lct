@@ -53,7 +53,8 @@ class PositionSerializer(serializers.ModelSerializer):
             'status',
             'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        # company comes from the caller's membership, never from input (B9)
+        read_only_fields = ['id', 'company', 'created_at']
 
     def validate(self, attrs):
         salary_min = attrs['salary_min'] if 'salary_min' in attrs else (

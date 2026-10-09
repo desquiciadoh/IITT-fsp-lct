@@ -1,4 +1,6 @@
 """Identity app serializers and views."""
+import secrets
+
 from core.enums import ConsentType, IdentityProvider, UserRole
 from core.errors import FSPAPIError, FSPIdAlreadyLinked
 from django.conf import settings
@@ -447,14 +449,14 @@ class FspIdCallbackView(views.APIView):
         if not code or not state:
             raise FSPAPIError('validation_failed', 'Validation failed', 'code and state are required', 400)
 
-        expected_state = request.session.get('oidc_state')
-        if not expected_state or state != expected_state:
+        # One-shot: pop the flow state so a callback URL can't be replayed
+        expected_state = request.session.pop('oidc_state', None)
+        intent = request.session.pop('oidc_intent', 'login')
+        code_verifier = request.session.pop('oidc_verifier', '')
+        redirect_uri = request.session.pop('oidc_redirect_uri', '')
+        nonce = request.session.pop('oidc_nonce', None)
+        if not expected_state or not secrets.compare_digest(state, expected_state):
             raise FSPAPIError('invalid_state', 'Invalid state', 'OIDC state mismatch', 400)
-
-        intent = request.session.get('oidc_intent', 'login')
-        code_verifier = request.session.get('oidc_verifier', '')
-        redirect_uri = request.session.get('oidc_redirect_uri', '')
-        nonce = request.session.get('oidc_nonce')
 
         token_response = exchange_code_for_tokens(code, code_verifier, redirect_uri)
         id_token = token_response.get('id_token')
@@ -462,9 +464,12 @@ class FspIdCallbackView(views.APIView):
             raise FSPAPIError('token_exchange_failed', 'Token exchange failed', 'No id_token in token response', 400)
 
         claims = verify_and_decode_id_token(id_token, nonce=nonce)
-        participant_id = claims.get('fsp_participant_id') or claims.get('sub')
-        if not participant_id:
-            raise FSPAPIError('invalid_claims', 'Invalid claims', 'Missing participant ID in token claims', 400)
+        # Identity is keyed on the IdP's immutable `sub`; the participant ID is data.
+        subject = claims.get('sub')
+        participant_id = claims.get('fsp_participant_id') or subject
+        for value in (subject, participant_id):
+            if not value or not isinstance(value, str) or len(value) > 50:
+                raise FSPAPIError('invalid_claims', 'Invalid claims', 'Missing or invalid sub / participant ID', 400)
 
         if intent == 'link':
             if not request.user.is_authenticated:
@@ -473,7 +478,7 @@ class FspIdCallbackView(views.APIView):
             # Invariant: Each participant_id maps to exactly one candidate
             existing_identity = Identity.objects.filter(
                 provider=IdentityProvider.FSP_ID,
-                subject=participant_id,
+                subject=subject,
             ).exclude(user=request.user).first()
             if existing_identity:
                 raise FSPIdAlreadyLinked()
@@ -488,7 +493,7 @@ class FspIdCallbackView(views.APIView):
                 Identity.objects.update_or_create(
                     user=request.user,
                     provider=IdentityProvider.FSP_ID,
-                    defaults={'subject': participant_id},
+                    defaults={'subject': subject},
                 )
                 link_fsp_id(request.user, participant_id)
 
@@ -497,34 +502,42 @@ class FspIdCallbackView(views.APIView):
         else:  # intent == 'login'
             identity = Identity.objects.filter(
                 provider=IdentityProvider.FSP_ID,
-                subject=participant_id,
+                subject=subject,
             ).select_related('user').first()
 
             if identity:
                 user = identity.user
             else:
                 email = claims.get('email') or f'{participant_id.lower().replace("-", "")}@fsp-sports.ru'
-                user = User.objects.filter(email=email).first()
-                if not user:
+                # Never attach an FSP identity to an existing account by email:
+                # the owner must log in and use intent=link instead.
+                if User.objects.filter(email__iexact=email).exists():
+                    raise FSPAPIError(
+                        'account_exists',
+                        'Account exists',
+                        'An account with this email exists. Log in and link FSP ID from your profile.',
+                        409,
+                    )
+                from profiles.models import CandidateProfile, generate_public_id
+
+                with transaction.atomic():
                     user = User.objects.create_user(
                         email=email,
                         password=None,
                         role=UserRole.CANDIDATE,
-                        email_verified_at=timezone.now(),
+                        email_verified_at=timezone.now() if claims.get('email_verified') is True else None,
                     )
-                    from profiles.models import CandidateProfile, generate_public_id
                     CandidateProfile.objects.create(
                         user=user,
                         public_id=generate_public_id(),
                         full_name=claims.get('name') or f'Спортсмен {participant_id}',
                     )
-
-                Identity.objects.update_or_create(
-                    user=user,
-                    provider=IdentityProvider.FSP_ID,
-                    defaults={'subject': participant_id},
-                )
-                link_fsp_id(user, participant_id)
+                    Identity.objects.create(
+                        user=user,
+                        provider=IdentityProvider.FSP_ID,
+                        subject=subject,
+                    )
+                    link_fsp_id(user, participant_id)
 
             login(request, user)
             return HttpResponseRedirect('/?login=success')

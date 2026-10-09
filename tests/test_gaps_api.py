@@ -2,7 +2,7 @@
 from datetime import timedelta
 
 import pytest
-from assessment.models import AssessmentSession, ItemFamily, LeagueMembership
+from assessment.models import AssessmentItem, AssessmentSession, ItemFamily, LeagueMembership
 from core.enums import (
     AssessmentStatus,
     ConsentType,
@@ -264,22 +264,45 @@ def test_g16_position_shortlist_endpoint(employer_with_position, candidate_user)
     assert isinstance(item['verified_topics'], list)
 
 
-@pytest.mark.django_db
-def test_g5_assessment_fallback_instant(candidate_user, candidate_client):
-    """Verify G5 instant fallback: drops grade to lower grade and confirms membership."""
-    # Candidate had an unconfirmed Senior assessment
+def _unconfirmed_senior_session(user, corrects):
+    """Finished, unconfirmed Senior session whose items were answered with `corrects`.
+
+    Items use the fixture families (b=0.4, b=0.8): 1 of 2 correct re-scores to
+    theta 0.6 = Middle, 0 of 2 to -0.4 = Intern.
+    """
     session = AssessmentSession.objects.create(
-        candidate=candidate_user,
+        candidate=user,
         specialization=Specialization.BACKEND,
         claimed_grade=Grade.SENIOR,
         mode='full',
         status=AssessmentStatus.FINISHED,
         decision=GradeDecision.UNCONFIRMED,
-        theta=0.1,
-        se=0.3,
-        rating=1050,
+        theta=0.6,
+        se=0.71,
+        rating=1120,
         finished_at=timezone.now(),
     )
+    family_ids = ['be.sql.group_having.v1', 'be.algo.complexity.v1']
+    for seq, (family_id, correct) in enumerate(zip(family_ids, corrects, strict=True), start=1):
+        AssessmentItem.objects.create(
+            assessment=session,
+            seq=seq,
+            family_id=family_id,
+            seed=f'seed-{seq}',
+            view={'stem_md': 'q', 'options': [], 'input_type': 'choice', 'time_limit_s': 60},
+            key='o1',
+            answer={'value': 'o1' if correct else 'o2'},
+            correct=correct,
+            answered_at=timezone.now(),
+            deadline_at=timezone.now(),
+        )
+    return session
+
+
+@pytest.mark.django_db
+def test_g5_assessment_fallback_instant(candidate_user, candidate_client):
+    """G5 instant fallback: confirms the lower grade when the same answers support it."""
+    session = _unconfirmed_senior_session(candidate_user, corrects=[True, False])
 
     membership, _ = LeagueMembership.objects.get_or_create(
         candidate=candidate_user,
@@ -308,6 +331,40 @@ def test_g5_assessment_fallback_instant(candidate_user, candidate_client):
     assert membership.grade == Grade.MIDDLE
     assert membership.status == LeagueStatus.CONFIRMED
     assert membership.next_attempt_at is None
+
+
+@pytest.mark.django_db
+def test_g5_assessment_fallback_instant_not_eligible(candidate_user, candidate_client):
+    """G5 instant fallback is refused (409) when the answers do not support the lower grade."""
+    session = _unconfirmed_senior_session(candidate_user, corrects=[False, False])
+    membership = LeagueMembership.objects.get(candidate=candidate_user, specialization=Specialization.BACKEND)
+    membership.status = LeagueStatus.UNCONFIRMED
+    membership.next_attempt_at = timezone.now() + timedelta(days=30)
+    membership.save()
+    cooldown = membership.next_attempt_at
+
+    res = candidate_client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'instant'}, format='json')
+
+    assert res.status_code == 409
+    assert res.json()['code'] == 'fallback_not_eligible'
+    session.refresh_from_db()
+    assert session.decision == GradeDecision.UNCONFIRMED
+    membership.refresh_from_db()
+    assert membership.status == LeagueStatus.UNCONFIRMED
+    assert membership.next_attempt_at == cooldown
+
+
+@pytest.mark.django_db
+def test_g5_result_offers_only_an_allowed_fallback(candidate_user, candidate_client):
+    """The result screen must not advertise instant when the service would refuse it."""
+    eligible = _unconfirmed_senior_session(candidate_user, corrects=[True, False])
+    res = candidate_client.get(f'/api/assessments/{eligible.id}/result')
+    assert res.json()['fallback'] == {'grade': Grade.MIDDLE, 'mode': 'instant'}
+
+    eligible.delete()
+    ineligible = _unconfirmed_senior_session(candidate_user, corrects=[False, False])
+    res = candidate_client.get(f'/api/assessments/{ineligible.id}/result')
+    assert res.json()['fallback'] == {'grade': Grade.MIDDLE, 'mode': 'short_test'}
 
 
 @pytest.mark.django_db

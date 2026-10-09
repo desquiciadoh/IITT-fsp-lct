@@ -117,6 +117,16 @@ class InvalidTransition(FSPAPIError):
         )
 
 
+class OfferExpired(FSPAPIError):
+    def __init__(self):
+        super().__init__(
+            'offer_expired',
+            'Offer expired',
+            'This offer has expired and can no longer change status.',
+            409,
+        )
+
+
 class AssessmentInProgress(FSPAPIError):
     def __init__(self):
         super().__init__(
