@@ -2,11 +2,14 @@
 import io
 import json
 import urllib.error
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from llm_gateway.base import GatewayConfig, LlmSchemaError, LlmUnavailable
 from llm_gateway.gigachat import GigaChatLlm
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "gigachat"
 
 
 def _make_http_response(status: int, body_dict: dict | str) -> io.BytesIO:
@@ -70,6 +73,40 @@ def test_gigachat_repair_attempt_on_invalid_json():
         # Verify the second call received the repair message prompt
         repair_messages = mock_exec.call_args_list[1][0][0]
         assert any("исправленный JSON" in m["content"] for m in repair_messages if m["role"] == "user")
+
+
+@pytest.mark.parametrize(
+    ("fixture", "spec", "salary_min"),
+    [
+        ("valid_resume.json", "backend", 220000),
+        ("markdown_fenced.txt", "backend", 220000),
+        ("prose_wrapped.txt", "frontend", 90000),
+        ("string_salaries_inverted.json", "frontend", 150000),
+        ("invalid_enums.json", "backend", 200000),
+    ],
+)
+def test_gigachat_recorded_answers_parse_without_repair(fixture, spec, salary_min):
+    """Bare, fenced and prose-wrapped answers parse on the first try; values are normalised."""
+    content = (FIXTURES_DIR / fixture).read_text(encoding="utf-8")
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="fake-key"))
+
+    with patch.object(client, "_execute_request", return_value=content) as mock_exec:
+        draft = client.resume("[NAME] dev")
+
+    assert mock_exec.call_count == 1
+    assert draft.specialization == spec
+    assert draft.salary_min == salary_min
+    assert draft.claimed_grade in ("junior", "middle", "senior")
+
+
+def test_gigachat_repair_call_network_failure_keeps_its_reason():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="fake-key"))
+    side_effect = ["not json", LlmUnavailable("down", reason="timeout")]
+
+    with patch.object(client, "_execute_request", side_effect=side_effect):
+        with pytest.raises(LlmUnavailable) as exc_info:
+            client.resume("[NAME] dev")
+    assert exc_info.value.reason == "timeout"
 
 
 def test_gigachat_invalid_json_twice_raises_schema_error():

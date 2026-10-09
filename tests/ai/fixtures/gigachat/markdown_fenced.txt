@@ -1,4 +1,4 @@
-`json
+```json
 {
   "specialization": "backend",
   "claimed_grade": "middle",
@@ -24,4 +24,4 @@
   "about": "Опытный бэкенд разработчик.",
   "experience_text": "3.5 года коммерческого опыта на Python."
 }
-`
+```

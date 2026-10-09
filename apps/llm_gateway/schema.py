@@ -20,9 +20,21 @@ _SPEC_MAP = {
     "frontend": "frontend",
     "фронтенд": "frontend",
     "front-end": "frontend",
+    "back end": "backend",
+    "бекенд": "backend",
+    "бэк": "backend",
+    "front end": "frontend",
+    "фронт": "frontend",
+    "фронтэнд": "frontend",
     "ml_data": "ml_data",
     "ml": "ml_data",
+    "ml/data": "ml_data",
+    "data": "ml_data",
     "data science": "ml_data",
+    "data scientist": "ml_data",
+    "data engineer": "ml_data",
+    "ml engineer": "ml_data",
+    "ml-инженер": "ml_data",
     "дата саентист": "ml_data",
     "машинное обучение": "ml_data",
     "machine learning": "ml_data",
@@ -31,21 +43,26 @@ _SPEC_MAP = {
 
 _GRADE_MAP = {
     "intern": "intern",
+    "trainee": "intern",
     "стажер": "intern",
     "стажёр": "intern",
     "junior": "junior",
+    "junior+": "junior",
     "джуниор": "junior",
     "джун": "junior",
     "младший": "junior",
     "middle": "middle",
+    "middle+": "middle",
     "мидл": "middle",
     "миддл": "middle",
     "senior": "senior",
+    "senior+": "senior",
     "сеньор": "senior",
     "сениор": "senior",
     "ведущий": "senior",
     "старший": "senior",
     "lead": "senior",
+    "team lead": "senior",
     "тимлид": "senior",
 }
 
@@ -77,6 +94,13 @@ _SALARY_TYPE_MAP = {
     "с учетом ндфл": "gross",
     "с учётом ндфл": "gross",
 }
+
+
+def _enum_key(val: Any) -> str:
+    """'  Middle+ ' -> 'middle+', 'Back-End.' -> 'back-end'."""
+    if val is None or isinstance(val, (bool, dict, list)):
+        return ""
+    return re.sub(r"\s+", " ", str(val)).strip().strip(".,;:!").lower()
 
 
 def _clean_str(val: Any, max_len: int = 100) -> str | None:
@@ -111,41 +135,34 @@ def _clean_enum_list(vals: Any, mapping: dict[str, str]) -> list[str]:
     for v in vals:
         if not v:
             continue
-        mapped = mapping.get(str(v).strip().lower())
+        mapped = mapping.get(_enum_key(v))
         if mapped and mapped not in seen:
             seen.add(mapped)
             res.append(mapped)
     return res
 
 
+_SALARY_STR_RE = re.compile(
+    r"^\D*?(\d[\d\s\xa0]*(?:[.,]\d+)?)\s*(k|к|тыс\.?|тысяч[а-я]*|млн|mln)?(?![a-zа-яё])",
+    re.IGNORECASE,
+)
+
+
 def _clean_salary_num(val: Any) -> int | None:
-    if val is None:
+    """250000, "250 000", "250k", "150 тыс", "1,5 млн" -> RUB; out of (0, 10 000 000] -> None."""
+    if val is None or isinstance(val, bool):
         return None
     if isinstance(val, (int, float)):
         num = int(val)
-        return num if 0 < num <= 10_000_000 else None
-
-    s = str(val).strip().lower()
-    if not s:
-        return None
-
-    # Handle '250k', '250к', '250 тыс'
-    if "k" in s or "к" in s or "тыс" in s:
-        digits = re.sub(r"[^\d.]", "", s)
-        try:
-            num = int(float(digits) * 1000)
-            return num if 0 < num <= 10_000_000 else None
-        except ValueError:
+    else:
+        m = _SALARY_STR_RE.match(str(val).strip())
+        if not m:
             return None
-
-    digits = re.sub(r"\D", "", s)
-    if digits:
-        try:
-            num = int(digits)
-            return num if 0 < num <= 10_000_000 else None
-        except ValueError:
-            return None
-    return None
+        number = float(re.sub(r"[\s\xa0]", "", m.group(1)).replace(",", "."))
+        suffix = (m.group(2) or "").lower()
+        scale = 1_000_000 if suffix in ("млн", "mln") else 1000 if suffix else 1
+        num = int(number * scale)
+    return num if 0 < num <= 10_000_000 else None
 
 
 def validate_resume_payload(d: dict[str, Any], *, require_data: bool = True) -> ResumeDraft:
@@ -156,15 +173,12 @@ def validate_resume_payload(d: dict[str, Any], *, require_data: bool = True) -> 
     if not isinstance(d, dict):
         raise LlmSchemaError("Payload is not a dictionary", reason="schema")
 
-    raw_spec = str(d.get("specialization", "")).strip().lower()
-    specialization = _SPEC_MAP.get(raw_spec)
-
-    raw_grade = str(d.get("claimed_grade", "")).strip().lower()
-    claimed_grade = _GRADE_MAP.get(raw_grade)
+    specialization = _SPEC_MAP.get(_enum_key(d.get("specialization")))
+    claimed_grade = _GRADE_MAP.get(_enum_key(d.get("claimed_grade")))
 
     years_raw = d.get("years_experience")
     years_exp: float | None = None
-    if years_raw is not None:
+    if years_raw is not None and not isinstance(years_raw, bool):
         try:
             y = float(str(years_raw).replace(",", "."))
             if 0.0 <= y <= 50.0:
@@ -181,8 +195,7 @@ def validate_resume_payload(d: dict[str, Any], *, require_data: bool = True) -> 
     if sal_min is not None and sal_max is not None and sal_max < sal_min:
         sal_min, sal_max = sal_max, sal_min
 
-    raw_sal_type = str(d.get("salary_type", "")).strip().lower()
-    salary_type = _SALARY_TYPE_MAP.get(raw_sal_type)
+    salary_type = _SALARY_TYPE_MAP.get(_enum_key(d.get("salary_type")))
 
     city = _clean_str(d.get("city"), max_len=100)
     about = _clean_str(d.get("about"), max_len=500)
@@ -219,8 +232,7 @@ def validate_jd_payload(d: dict[str, Any], *, require_data: bool = True) -> JdDr
 
     title = _clean_str(d.get("title"), max_len=200)
 
-    raw_spec = str(d.get("specialization", "")).strip().lower()
-    specialization = _SPEC_MAP.get(raw_spec)
+    specialization = _SPEC_MAP.get(_enum_key(d.get("specialization")))
 
     grades = _clean_enum_list(d.get("grades"), _GRADE_MAP)
     must_skills = _clean_list_str(d.get("must_skills_raw"), max_item_len=60, max_items=60)
@@ -237,8 +249,7 @@ def validate_jd_payload(d: dict[str, Any], *, require_data: bool = True) -> JdDr
     if sal_min is not None and sal_max is not None and sal_max < sal_min:
         sal_min, sal_max = sal_max, sal_min
 
-    raw_sal_type = str(d.get("salary_type", "")).strip().lower()
-    salary_type = _SALARY_TYPE_MAP.get(raw_sal_type)
+    salary_type = _SALARY_TYPE_MAP.get(_enum_key(d.get("salary_type")))
 
     team_context = _clean_str(d.get("team_context"), max_len=1000)
     description = _clean_str(d.get("description"), max_len=4000)

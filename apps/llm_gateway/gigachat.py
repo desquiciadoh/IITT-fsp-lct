@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import ssl
 import threading
 import time
@@ -36,6 +37,29 @@ from .schema import validate_jd_payload, validate_resume_payload
 from .types import JdDraft, ResumeDraft
 
 logger = logging.getLogger(__name__)
+
+_FENCED_RE = re.compile(r"^\s*`{1,3}[a-zA-Z]*\s*(.*?)\s*`{1,3}\s*$", re.DOTALL)
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    """Parse the JSON object in a model answer: bare, in a ``` fence, or wrapped in prose.
+
+    Raises ValueError (json.JSONDecodeError included) if there is no JSON object.
+    """
+    cleaned = text.strip()
+    fenced = _FENCED_RE.match(cleaned)
+    if fenced:
+        cleaned = fenced.group(1)
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start == -1 or end <= start:
+            raise
+        parsed = json.loads(cleaned[start:end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("JSON root is not an object")
+    return parsed
 
 
 class GigaChatLlm:
@@ -191,29 +215,13 @@ class GigaChatLlm:
                 raise LlmUnavailable(f"Unexpected error: {e}", reason="http_error") from e
 
     def _clean_and_parse_json(self, raw_content: str, messages: list[dict[str, str]], deadline: float) -> dict[str, Any]:
-        """Strip markdown fences and parse JSON. Performs 1 repair attempt if malformed."""
-        def extract_json(text: str) -> dict[str, Any]:
-            cleaned = text.strip()
-            if cleaned.startswith("```"):
-                lines = cleaned.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                cleaned = "\n".join(lines).strip()
-            parsed = json.loads(cleaned)
-            if not isinstance(parsed, dict):
-                raise ValueError("JSON root is not an object")
-            return parsed
-
+        """Parse the model's JSON object; one repair call if it is not one (AI-R3)."""
         try:
-            return extract_json(raw_content)
-        except Exception as first_err:
-            logger.warning(f"GigaChat output is not valid JSON ({first_err}), attempting 1 repair call")
-            # Repair attempt per AI-R3
-            remaining = deadline - time.monotonic()
-            if remaining <= 1.0:
-                raise LlmSchemaError(f"Malformed JSON and no budget for repair: {first_err}", reason="schema") from first_err
+            return extract_json_object(raw_content)
+        except ValueError as first_err:  # json.JSONDecodeError is a ValueError
+            logger.warning("GigaChat answer is not a JSON object (%s), one repair call", type(first_err).__name__)
+            if deadline - time.monotonic() <= 1.0:
+                raise LlmSchemaError("Malformed JSON and no budget for repair", reason="schema") from first_err
 
             repair_messages = list(messages) + [
                 {"role": "assistant", "content": raw_content},
@@ -222,11 +230,11 @@ class GigaChatLlm:
                     "content": f"Твой ответ не является валидным JSON: {first_err}. Верни ТОЛЬКО исправленный JSON-объект по схеме без комментариев.",
                 },
             ]
+            repair_content = self._execute_request(repair_messages, temperature=0.0, max_tokens=1500, deadline=deadline)
             try:
-                repair_content = self._execute_request(repair_messages, temperature=0.0, max_tokens=1500, deadline=deadline)
-                return extract_json(repair_content)
-            except Exception as repair_err:
-                raise LlmSchemaError(f"Malformed JSON after repair attempt: {repair_err}", reason="schema") from repair_err
+                return extract_json_object(repair_content)
+            except ValueError as repair_err:
+                raise LlmSchemaError("Malformed JSON after the repair call", reason="schema") from repair_err
 
     def resume(self, redacted_text: str) -> ResumeDraft:
         """Extract structured resume draft via GigaChat.

@@ -69,6 +69,43 @@ def test_schema_caps_and_sanitization():
     assert len(jd_draft.description) <= 4000
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (250000, 250000),
+        ("250 000", 250000),
+        ("250k", 250000),
+        ("150к", 150000),
+        ("250 тыс", 250000),
+        ("250 000 (на руки)", 250000),  # "на руки" contains "к": not a thousands suffix
+        ("от 200 000 руб", 200000),
+        ("1,5 млн", 1500000),
+        (True, None),
+        ("abc", None),
+        (0, None),
+        ("20 000 000", None),
+    ],
+)
+def test_schema_salary_strings(raw, expected):
+    draft = validate_resume_payload({"salary_min": raw, "roles": ["Dev"]})
+    assert draft.salary_min == expected
+
+
+def test_schema_enum_spelling_variants():
+    draft = validate_resume_payload({
+        "specialization": " Back-End. ",
+        "claimed_grade": "Middle+",
+        "work_formats": ["Удалённо", "remote", "ОФИС", "fully remote"],
+        "salary_type": "Gross",
+        "years_experience": True,
+    })
+    assert draft.specialization == "backend"
+    assert draft.claimed_grade == "middle"
+    assert draft.work_formats == ["remote", "office"]
+    assert draft.salary_type == "gross"
+    assert draft.years_experience is None
+
+
 def test_schema_rejects_empty_or_non_dict():
     with pytest.raises(LlmSchemaError):
         validate_resume_payload([])  # type: ignore
