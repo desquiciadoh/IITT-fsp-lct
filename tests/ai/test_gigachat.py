@@ -1,6 +1,7 @@
 """Unit tests for GigaChat LLM adapter (AI-R2, AI-R3, AI-R8)."""
 import io
 import json
+import time
 import urllib.error
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +11,35 @@ from llm_gateway.base import GatewayConfig, LlmSchemaError, LlmUnavailable
 from llm_gateway.gigachat import GigaChatLlm
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "gigachat"
+
+
+def _expires_in_30_min() -> int:
+    """GigaChat returns expires_at in milliseconds; keep it relative so tests never expire."""
+    return int((time.time() + 1800) * 1000)
+
+
+def _completion(content: dict) -> dict:
+    return {"choices": [{"message": {"content": json.dumps(content)}}]}
+
+
+def _http_error(code: int, headers: dict | None = None) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        url="https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        code=code, msg=str(code), hdrs=headers or {}, fp=io.BytesIO(b""),  # type: ignore[arg-type]
+    )
+
+
+class FakeClock:
+    """time.monotonic/time.sleep replacement; urlopen advances it by its timeout on a timeout."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
 
 
 def _make_http_response(status: int, body_dict: dict | str) -> io.BytesIO:
@@ -125,8 +155,8 @@ def test_gigachat_transport_401_refreshes_token():
     config = GatewayConfig(provider="gigachat", auth_key="secret-key")
     client = GigaChatLlm(config)
 
-    oauth_resp_1 = {"access_token": "token-1", "expires_at": 1800000000000}
-    oauth_resp_2 = {"access_token": "token-2", "expires_at": 1800000000000}
+    oauth_resp_1 = {"access_token": "token-1", "expires_at": _expires_in_30_min()}
+    oauth_resp_2 = {"access_token": "token-2", "expires_at": _expires_in_30_min()}
     completion_ok = {
         "choices": [{
             "message": {
@@ -195,7 +225,7 @@ def test_gigachat_transport_400_no_retry():
     config = GatewayConfig(provider="gigachat", auth_key="secret-key")
     client = GigaChatLlm(config)
 
-    oauth_resp = {"access_token": "token-1", "expires_at": 1800000000000}
+    oauth_resp = {"access_token": "token-1", "expires_at": _expires_in_30_min()}
     fp = io.BytesIO(b"Bad Request")
     err_400 = urllib.error.HTTPError(
         url="https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
@@ -228,7 +258,7 @@ def test_gigachat_token_reuse():
     client = GigaChatLlm(config)
 
     oauth_calls = 0
-    oauth_resp = {"access_token": "cached-token", "expires_at": 1800000000000}
+    oauth_resp = {"access_token": "cached-token", "expires_at": _expires_in_30_min()}
     completion_resp = {
         "choices": [{
             "message": {
@@ -262,3 +292,125 @@ def test_gigachat_token_reuse():
         client.resume("CV 2")
         # Token must be fetched only once
         assert oauth_calls == 1
+
+
+VALID_JD = {
+    "title": "Python Developer", "specialization": "backend", "grades": ["middle"],
+    "must_skills_raw": ["Python"], "nice_skills_raw": [], "work_formats": ["remote"],
+    "location": None, "salary_min": 200000, "salary_max": 300000, "salary_type": "net",
+    "team_context": None, "description": None,
+}
+
+
+def _transport(completions: list, calls: dict):
+    """urlopen stand-in: OAuth always succeeds; completions are served or raised in order."""
+
+    def fake_urlopen(req, timeout, context):
+        if "oauth" in req.full_url:
+            calls["oauth"] += 1
+            return _make_http_response(200, {"access_token": "t", "expires_at": _expires_in_30_min()})
+        calls["chat"] += 1
+        item = completions.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return _make_http_response(200, item)
+
+    return fake_urlopen
+
+
+@pytest.mark.parametrize(
+    ("errors", "reason"),
+    [
+        ([_http_error(500), _http_error(500)], "http_error"),
+        ([_http_error(502), _http_error(503)], "http_error"),
+        ([TimeoutError("timed out"), TimeoutError("timed out")], "timeout"),
+        ([urllib.error.URLError(TimeoutError("timed out")), urllib.error.URLError("refused")], "http_error"),
+    ],
+)
+def test_gigachat_transient_errors_get_one_retry(errors, reason):
+    """500, 500 -> LlmUnavailable after exactly two attempts (AI-R8)."""
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+
+    with patch("urllib.request.urlopen", side_effect=_transport(list(errors), calls)), \
+            patch("llm_gateway.gigachat.time.sleep"):
+        with pytest.raises(LlmUnavailable) as exc_info:
+            client.jd("vacancy")
+
+    assert calls["chat"] == 2
+    assert exc_info.value.reason == reason
+
+
+def test_gigachat_retry_succeeds_after_one_5xx():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+
+    with patch("urllib.request.urlopen", side_effect=_transport([_http_error(500), _completion(VALID_JD)], calls)), \
+            patch("llm_gateway.gigachat.time.sleep"):
+        draft = client.jd("vacancy")
+
+    assert draft.title == "Python Developer"
+    assert calls["chat"] == 2
+
+
+def test_gigachat_429_honours_retry_after_up_to_2s():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+    calls = {"oauth": 0, "chat": 0}
+    completions = [_http_error(429, {"Retry-After": "30"}), _completion(VALID_JD)]
+
+    with patch("urllib.request.urlopen", side_effect=_transport(completions, calls)), \
+            patch("llm_gateway.gigachat.time.sleep") as sleep:
+        client.jd("vacancy")
+
+    sleep.assert_called_once_with(2.0)
+
+
+def test_gigachat_timeout_budget_is_respected():
+    """OAuth + completion + retry + repair all fit in LLM_TIMEOUT_S, measured on a fake clock."""
+    clock = FakeClock()
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k", timeout_s=10.0))
+    timeouts: list[float] = []
+
+    def slow_urlopen(req, timeout, context):
+        timeouts.append(timeout)
+        if "oauth" in req.full_url:
+            clock.now += 1.5
+            return _make_http_response(200, {"access_token": "t", "expires_at": _expires_in_30_min()})
+        clock.now += timeout  # the server never answers
+        raise TimeoutError("timed out")
+
+    started = clock.now
+    with patch("urllib.request.urlopen", side_effect=slow_urlopen), \
+            patch("llm_gateway.gigachat.time.monotonic", clock.monotonic), \
+            patch("llm_gateway.gigachat.time.sleep", clock.sleep):
+        with pytest.raises(LlmUnavailable) as exc_info:
+            client.jd("vacancy")
+
+    assert exc_info.value.reason == "timeout"
+    assert clock.now - started <= 10.0
+    assert all(t <= 8.0 for t in timeouts)
+
+
+def test_gigachat_oauth_timeout_reason():
+    client = GigaChatLlm(GatewayConfig(provider="gigachat", auth_key="k"))
+
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError(TimeoutError("timed out"))):
+        with pytest.raises(LlmUnavailable) as exc_info:
+            client.jd("vacancy")
+    assert exc_info.value.reason == "timeout"
+
+
+def test_two_parse_calls_share_one_oauth_token():
+    """get_gateway() caches the client per config, so the second parse reuses the token."""
+    from llm_gateway import get_gateway, parse_jd
+
+    config = GatewayConfig(provider="gigachat", auth_key="shared-key-for-this-test")
+    calls = {"oauth": 0, "chat": 0}
+    completions = [_completion(VALID_JD), _completion({**VALID_JD, "title": "Go Developer"})]
+
+    with patch("urllib.request.urlopen", side_effect=_transport(completions, calls)):
+        first = parse_jd("Python developer, зарплата 200 000 - 300 000 руб", gateway=get_gateway(config))
+        second = parse_jd("Go developer, зарплата 200 000 - 300 000 руб", gateway=get_gateway(config))
+
+    assert (first.source, second.source) == ("llm", "llm")
+    assert calls == {"oauth": 1, "chat": 2}

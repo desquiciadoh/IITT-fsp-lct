@@ -38,6 +38,12 @@ from .types import JdDraft, ResumeDraft
 
 logger = logging.getLogger(__name__)
 
+def _is_timeout(error: BaseException) -> bool:
+    """socket.timeout / TimeoutError, raw or wrapped in URLError."""
+    reason = getattr(error, "reason", None)
+    return isinstance(error, TimeoutError) or isinstance(reason, TimeoutError) or "timed out" in str(error).lower()
+
+
 _FENCED_RE = re.compile(r"^\s*`{1,3}[a-zA-Z]*\s*(.*?)\s*`{1,3}\s*$", re.DOTALL)
 
 
@@ -135,18 +141,30 @@ class GigaChatLlm:
                     return self._access_token
             except urllib.error.HTTPError as e:
                 status = e.code
-                reason = "http_error" if status >= 500 else "no_key" if status in (401, 403) else "http_error"
+                reason = "no_key" if status in (401, 403) else "http_error"
                 raise LlmUnavailable(f"OAuth failed with HTTP {status}", reason=reason) from e
             except Exception as e:
-                raise LlmUnavailable(f"OAuth request failed: {e}", reason="http_error") from e
+                reason = "timeout" if _is_timeout(e) else "http_error"
+                raise LlmUnavailable(f"OAuth request failed: {type(e).__name__}", reason=reason) from e
 
     def _execute_request(self, messages: list[dict[str, str]], temperature: float, max_tokens: int, deadline: float) -> str:
-        """Execute chat completion request respecting call deadline and handling retries."""
+        """One chat completion within the call deadline (AI-R8).
+
+        401: refresh the token once and retry. Timeouts, network errors, 429 and 5xx: one retry
+        if the budget allows the pause. Any other 4xx: no retry.
+        """
         refreshed_on_401 = False
-        attempt = 0
+        transient_retry_left = True
+
+        def retry_after_pause(pause_s: float) -> bool:
+            nonlocal transient_retry_left
+            if transient_retry_left and deadline - time.monotonic() > pause_s:
+                transient_retry_left = False
+                time.sleep(pause_s)
+                return True
+            return False
 
         while True:
-            attempt += 1
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise LlmUnavailable("Timeout budget exceeded", reason="timeout")
@@ -182,37 +200,30 @@ class GigaChatLlm:
                     refreshed_on_401 = True
                     continue
 
-                if status == 429 and attempt <= 2:
-                    retry_after = e.headers.get("Retry-After")
-                    sleep_s = 0.5
-                    if retry_after:
-                        try:
-                            sleep_s = min(float(retry_after), 2.0)
-                        except ValueError:
-                            pass
-                    if (deadline - time.monotonic()) > sleep_s:
-                        time.sleep(sleep_s)
+                if status == 429:
+                    pause_s = 0.5
+                    try:
+                        pause_s = min(float(e.headers.get("Retry-After") or pause_s), 2.0)
+                    except ValueError:
+                        pass
+                    if retry_after_pause(pause_s):
                         continue
-                    raise LlmUnavailable("Rate limited (429) and deadline exceeded", reason="http_error") from e
+                    raise LlmUnavailable("GigaChat rate limit (429)", reason="http_error") from e
 
-                if status >= 500 and attempt <= 2:
-                    if (deadline - time.monotonic()) > 0.5:
-                        time.sleep(0.5)
-                        continue
-                    raise LlmUnavailable(f"GigaChat server error {status}", reason="http_error") from e
+                if status >= 500 and retry_after_pause(0.5):
+                    continue
 
-                # 400, 403, 422 or other unrecoverable client errors: do not retry
+                # 5xx after the retry, 400, 403, 422 and other client errors
                 raise LlmUnavailable(f"GigaChat HTTP {status}", reason="http_error") from e
 
             except (urllib.error.URLError, TimeoutError) as e:
-                if attempt <= 2 and (deadline - time.monotonic()) > 0.5:
-                    time.sleep(0.5)
+                if retry_after_pause(0.5):
                     continue
-                reason = "timeout" if "timed out" in str(e).lower() else "http_error"
-                raise LlmUnavailable(f"Connection failure: {e}", reason=reason) from e
+                reason = "timeout" if _is_timeout(e) else "http_error"
+                raise LlmUnavailable(f"Connection failure: {type(e).__name__}", reason=reason) from e
 
             except Exception as e:
-                raise LlmUnavailable(f"Unexpected error: {e}", reason="http_error") from e
+                raise LlmUnavailable(f"Unexpected error: {type(e).__name__}", reason="http_error") from e
 
     def _clean_and_parse_json(self, raw_content: str, messages: list[dict[str, str]], deadline: float) -> dict[str, Any]:
         """Parse the model's JSON object; one repair call if it is not one (AI-R3)."""
