@@ -8,6 +8,7 @@ import { errorMessage } from '@/i18n/errors'
 import { useProfile, useSaveProfile, useUploadResume } from '@/api/profile'
 import type { ResumeParseResult } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { SkillChip } from '@/components/domain/skill-chip'
 
 const MAX_SIZE = 5 * 1024 * 1024
 
@@ -175,9 +176,7 @@ export function ProfileStep() {
 
           <div className="flex flex-wrap gap-1.5">
             {skills.map((s) => (
-              <span key={s} className="rounded-md bg-secondary px-2 py-0.5 text-xs">
-                {s}
-              </span>
+              <SkillChip key={s} name={s} source="declared" />
             ))}
           </div>
 

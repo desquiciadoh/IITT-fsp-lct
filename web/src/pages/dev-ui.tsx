@@ -5,6 +5,7 @@ import { RatingBadge } from '@/components/domain/rating-badge'
 import { SalaryTag } from '@/components/domain/salary-tag'
 import { StatusChip, type OfferStatus } from '@/components/domain/status-chip'
 import { ReasonChips } from '@/components/domain/reason-chips'
+import { SkillChip } from '@/components/domain/skill-chip'
 import type { Reason } from '@/api/types'
 import { ScoreBar } from '@/components/domain/score-bar'
 import { OfferCard } from '@/components/domain/offer-card'
@@ -172,6 +173,13 @@ export function DevUiPage() {
 
       <Section title="Чипы причин (ReasonChips)">
         <ReasonChips reasons={REASONS} />
+      </Section>
+
+      <Section title="Скиллы (SkillChip)">
+        <SkillChip name="Python" source="test" />
+        <SkillChip name="PostgreSQL" source="fsp" />
+        <SkillChip name="Kubernetes" source="declared" />
+        <SkillChip name="Go" />
       </Section>
 
       <Section title="Скоринг — список компонентов (ScoreBar)">
