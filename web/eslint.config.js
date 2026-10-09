@@ -38,6 +38,21 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // R28: orval's `client: 'fetch'` still emits a full client we never use.
+      // The app calls the API through the hand-written hooks in `src/api/*.ts`
+      // (customFetch adds CSRF and translates problem+json), so block the
+      // generated client instead of deleting it from the `api:gen` output.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/api/generated/fSPDraftAPI',
+              message: 'Use the hooks in src/api/*.ts (customFetch adds CSRF and parses problem+json).',
+            },
+          ],
+        },
+      ],
     },
   },
 )
