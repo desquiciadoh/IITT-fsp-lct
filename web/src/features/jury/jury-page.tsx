@@ -92,7 +92,7 @@ export function JuryPage() {
   })
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-10">
+    <section className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Jury Mode
@@ -204,6 +204,6 @@ export function JuryPage() {
           Нужен сид данных: <code className="font-mono text-xs">manage.py seed --mode=mini</code>
         </span>
       </footer>
-    </main>
+    </section>
   )
 }

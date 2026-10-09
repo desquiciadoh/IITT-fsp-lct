@@ -32,7 +32,7 @@ export function OnboardingPage() {
   const Step = STEP_COMPONENT[step as StepId]
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-10">
+    <section className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-col gap-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Онбординг кандидата
@@ -59,6 +59,6 @@ export function OnboardingPage() {
         </ol>
       </header>
       <Step />
-    </main>
+    </section>
   )
 }

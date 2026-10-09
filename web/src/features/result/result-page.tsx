@@ -192,15 +192,15 @@ export function ResultPage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
+      <section className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
         <CardSkeleton />
         <CardSkeleton />
-      </main>
+      </section>
     )
   }
   if (isError || !result) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <section className="mx-auto max-w-3xl px-4 py-8">
         <ErrorState
           code={error instanceof ApiError ? error.code : undefined}
           description={
@@ -208,7 +208,7 @@ export function ResultPage() {
           }
           onRetry={() => void refetch()}
         />
-      </main>
+      </section>
     )
   }
 
@@ -227,7 +227,7 @@ export function ResultPage() {
   })
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-8">
+    <section className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-8">
       <section className="rounded-xl border border-border bg-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -312,6 +312,6 @@ export function ResultPage() {
       </section>
 
       <HistoryList currentId={result.id} />
-    </main>
+    </section>
   )
 }
