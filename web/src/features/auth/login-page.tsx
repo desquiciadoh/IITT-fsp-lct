@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { customFetch, ApiError } from '@/api/client'
@@ -8,6 +8,7 @@ import { keys } from '@/api/keys'
 import type { Me } from '@/api/types'
 import { errorMessage } from '@/i18n/errors'
 import { applyApiErrorToForm } from '@/features/auth/form-errors'
+import { resolveNext } from '@/features/auth/next-route'
 import { loginSchema, type LoginValues } from '@/features/auth/schemas'
 import { AuthShell } from '@/features/auth/auth-shell'
 import { PERSONAS } from '@/lib/personas'
@@ -16,6 +17,7 @@ import { Input } from '@/components/ui/input'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const client = useQueryClient()
   const {
     register,
@@ -32,7 +34,9 @@ export function LoginPage() {
     client.clear()
     if (data) client.setQueryData(keys.me, data)
     client.invalidateQueries({ queryKey: keys.me })
-    navigate('/', { replace: true })
+    // R20: return the user to the page that bounced them, but only inside
+    // their own role area (guard against open redirects).
+    navigate(resolveNext(searchParams.get('next'), data?.role ?? 'candidate'), { replace: true })
   }
 
   const handleError = (error: unknown) => {

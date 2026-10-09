@@ -56,7 +56,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
 
 ### Correctness
 
-- [ ] **R20 · Login ignores `?next=`.** The 401 handler sends users to `/login?next=<path>`, but `features/auth/login-page.tsx` always navigates to `/`.
+- [x] **R20 · Login ignores `?next=`.** The 401 handler sends users to `/login?next=<path>`, but `features/auth/login-page.tsx` always navigates to `/`.
   - **Fix:** after login, navigate to `next` if it starts with `/` and not `//` (no open redirect) and matches the user's role area; otherwise `/`.
   - **Acceptance:** delete the `sessionid` cookie on `/candidate/offers/<id>` → land on `/login` → log in → back on the same offer.
 
