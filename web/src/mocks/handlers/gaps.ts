@@ -10,6 +10,12 @@ const problem = (status: number, code: string, detail: string, errors?: unknown)
     headers: { 'Content-Type': 'application/problem+json', 'X-Stub': 'true' },
   })
 
+/** G5 — `POST /api/assessments/:id/finish` is not on the backend yet (503).
+ *  In `all` mode the stateful store in qualification.ts serves it; MSW picks
+ *  the FIRST matching handler, so gapHandlers must stay first in that list
+ *  only for endpoints without a real mock. For finish we want the stateful
+ *  one to win, hence it is registered via qualificationHandlers below and
+ *  this fallback stays scoped to `missing` mode. */
 export const gapHandlers = [
   http.get('*/api/auth/csrf', () => json({ detail: 'ok' })),
   http.post('*/api/auth/verify-email', async ({ request }) => {

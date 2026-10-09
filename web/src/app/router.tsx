@@ -9,6 +9,8 @@ import { JuryPage } from '@/features/jury/jury-page'
 import { OnboardingPage } from '@/features/onboarding/onboarding-page'
 import { ResultPage } from '@/features/result/result-page'
 import { DashboardPage } from '@/features/candidate/dashboard-page'
+import { StartPage } from '@/features/qualification-runner/start-page'
+import { TestRunnerPage } from '@/features/qualification-runner/test-runner-page'
 import { OffersListPage } from '@/features/offers/offers-list-page'
 import { OfferDetailPage } from '@/features/offers/offer-detail-page'
 import { SettingsPage } from '@/features/settings/settings-page'
@@ -56,11 +58,11 @@ export const router = createBrowserRouter([
                   { path: '/candidate', element: <DashboardPage /> },
                   {
                     path: '/candidate/qualification/start',
-                    element: ph('Вход в тест', 'FE2', 'FE-12'),
+                    element: <StartPage />,
                   },
                   {
                     path: '/candidate/qualification/:id',
-                    element: ph('Тест-раннер', 'FE2', 'FE-12'),
+                    element: <TestRunnerPage />,
                   },
                   {
                     path: '/candidate/qualification/:id/result',

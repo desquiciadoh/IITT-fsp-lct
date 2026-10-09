@@ -1,60 +1,18 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
+# Dependencies
+node_modules/
+
+# Build artifacts
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-!web/src/lib/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+build/
 
 # Environment files
 .env
 .env.local
 .env.*.local
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# Django
+# Logs
 *.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-media/
 
-# Pytest / Coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# IDE & OS
-.idea/
+# Editor/IDE
 .vscode/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# Node / frontend
-node_modules/
-.vite/
-
-# Claude Code personal settings
-.claude/settings.local.json
+.idea/
