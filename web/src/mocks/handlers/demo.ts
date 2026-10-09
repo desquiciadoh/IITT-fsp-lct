@@ -27,19 +27,15 @@ const PERSONA_ME: Record<string, typeof me.candidate> = {
 }
 
 /**
- * Only `POST /api/demo/reset` is a gap (G4) — persona login and time travel
- * exist on the backend, so `missing` mode must NOT intercept them: a mocked
- * response sets no session cookie and breaks `/api/me`.
+ * Demo suite for `all` mode (no backend). Persona login, time travel and the
+ * demo reset are all live on the backend now (G4), so `missing` mode must not
+ * intercept them: a mocked response sets no session cookie and breaks `/api/me`.
  */
-export const demoGapHandlers = [
+export const demoHandlers = [
   http.post('*/api/demo/reset', () => {
     setMockMe(me.candidate)
     return json({ ok: true })
   }),
-]
-
-/** Full demo suite for `all` mode (no backend). */
-export const demoHandlers = [
   http.post('*/api/demo/persona', async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as { persona?: string }
     const id = body.persona ?? 'candidate_fsp'

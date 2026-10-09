@@ -10,6 +10,13 @@ const problem = (status: number, code: string, detail: string, errors?: unknown)
     headers: { 'Content-Type': 'application/problem+json', 'X-Stub': 'true' },
   })
 
+/**
+ * `all`-mode stand-ins for endpoints that are **live on the backend** now
+ * (G1 csrf, G2 verify-email, G3 taxonomy, G6 positions/parse, G7 leagues,
+ * G11 lab/report, G14 finish). They exist only so `all` mode runs without a
+ * backend and must never be used in `missing` mode (R24) — there they would
+ * shadow the real responses with `X-Stub`.
+ */
 export const gapHandlers = [
   http.get('*/api/auth/csrf', () => json({ detail: 'ok' })),
   http.post('*/api/auth/verify-email', async ({ request }) => {
@@ -49,9 +56,6 @@ export const gapHandlers = [
   }),
   http.post('*/api/positions/parse', () =>
     json({ skills: ['python', 'django', 'postgresql'], seniority: 'middle' }),
-  ),
-  http.post('*/api/assessments/:id/finish', () =>
-    problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),
   ),
   http.get('*/api/lab/report', () =>
     json({ id: 'lab-1', summary: 'Черновик отчёта', scores: {} }),

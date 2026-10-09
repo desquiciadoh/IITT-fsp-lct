@@ -1,6 +1,6 @@
 import { setupWorker } from 'msw/browser'
 import { coreHandlers } from '@/mocks/handlers/core'
-import { demoHandlers, demoGapHandlers } from '@/mocks/handlers/demo'
+import { demoHandlers } from '@/mocks/handlers/demo'
 import { gapHandlers } from '@/mocks/handlers/gaps'
 import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { offerHandlers } from '@/mocks/handlers/offers'
@@ -8,11 +8,14 @@ import { fspHandlers } from '@/mocks/handlers/fsp'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
- * VITE_API_MOCKS=missing→ mock only real gaps (G1–G17 + demo/reset),
- *                         pass everything the backend serves through
+ * VITE_API_MOCKS=missing→ mock only what the backend still lacks (today: nothing);
+ *                         everything it serves passes through untagged
  * VITE_API_MOCKS=off    → no mocks (default)
  */
 const mode = import.meta.env.VITE_API_MOCKS ?? 'off'
+
+/** G1–G7 and G11 are live on the backend, so nothing is mocked in `missing` mode (R24). */
+const missingHandlers: Parameters<typeof setupWorker> = []
 
 export async function startMocks(): Promise<void> {
   if (mode === 'off') return
@@ -20,14 +23,14 @@ export async function startMocks(): Promise<void> {
     mode === 'all'
       ? [
           ...gapHandlers,
-          ...demoGapHandlers,
           ...demoHandlers,
           ...assessmentHandlers,
           ...offerHandlers,
           ...fspHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers]
+      : missingHandlers
+  if (handlers.length === 0) return
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',
