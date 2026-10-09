@@ -75,7 +75,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
   - The result page now gets real `rating_ci`, `percentile`, `topics`, `evidence`, `fallback`, `next_attempt_at` (check the regenerated types; hide a section only when the field is truly absent).
   - `GET /api/assessments` is paginated `{items,total,page,pages}` (G14); keep accepting a bare array.
   - **Acceptance:** with `VITE_API_MOCKS=missing` and the live backend, no response on persona → onboarding → result → offers → settings carries `X-Stub`.
-- [ ] **R25 · New error codes.** Add Russian texts to `i18n/errors.ts` for `offer_expired`, `fallback_not_eligible`, `fallback_already_used`, `account_exists`, `fsp_oidc_required`, `fsp_id_unavailable`. On the offer detail, `offer_expired` refetches and shows the expired state.
+- [x] **R25 · New error codes.** Add Russian texts to `i18n/errors.ts` for `offer_expired`, `fallback_not_eligible`, `fallback_already_used`, `account_exists`, `fsp_oidc_required`, `fsp_id_unavailable`. On the offer detail, `offer_expired` refetches and shows the expired state.
 - [ ] **R26 · FSP link follows G15.** Outside DEMO_MODE `POST /api/fsp/link` now returns **403 `fsp_oidc_required`** (`apps/fsp_sync/views.py:29`). In settings: if `me.demo`, keep the POST; otherwise (and on `fsp_oidc_required`) send the browser to `/api/auth/fsp-id/login?intent=link`. Check where `FspIdCallbackView` returns the user and show the outcome (linked / `fsp_id_unavailable` 502) on `/candidate/settings`.
 - [ ] **R27 · Real company picker for the blocklist.** G17 is done: replace the mocked picker in settings with `GET /api/companies` (search by name). Keep the read-only list.
 

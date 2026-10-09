@@ -45,6 +45,11 @@ export function OfferDetailPage() {
       void refetch()
       return
     }
+    if (err instanceof ApiError && err.code === 'offer_expired') {
+      toast.error(errorMessage('offer_expired'))
+      void refetch()
+      return
+    }
     toast.error(
       err instanceof ApiError ? errorMessage(err.code, err.detail) : 'Не удалось выполнить действие',
     )
@@ -63,6 +68,10 @@ export function OfferDetailPage() {
         { id: current.id, body: { version: current.version } },
         {
           onError: async (err) => {
+            if (err instanceof ApiError && err.code === 'offer_expired') {
+              await refetch()
+              return
+            }
             if (isOfferConflict(err) && retries < 1) {
               toast.error('Оффер изменился — обновляем данные')
               const { data } = await refetch()
