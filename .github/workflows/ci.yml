@@ -77,6 +77,7 @@ jobs:
       - name: Run Pytest Suite with Coverage
         env:
           DEBUG: "False"
+          SECURE_SSL_REDIRECT: "False"
           SECRET_KEY: "ci-secret-key-temporary-for-tests"
           ALLOWED_HOSTS: "localhost,127.0.0.1"
           POSTGRES_DB: "fsp_draft_test"

@@ -119,14 +119,21 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_NAME = 'sid'
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+
+TESTING = 'pytest' in sys.modules or any('pytest' in arg for arg in sys.argv) or 'test' in sys.argv
+SESSION_COOKIE_SECURE = not DEBUG and not TESTING
+CSRF_COOKIE_SECURE = not DEBUG and not TESTING
 CSRF_COOKIE_HTTPONLY = True
 
 # --- HTTPS hardening (production) ---
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = 31536000
+_ssl_redirect_env = os.environ.get('SECURE_SSL_REDIRECT')
+if _ssl_redirect_env is not None:
+    SECURE_SSL_REDIRECT = _ssl_redirect_env.lower() in ('true', '1', 'yes')
+else:
+    SECURE_SSL_REDIRECT = not DEBUG and not TESTING
+
+if SECURE_SSL_REDIRECT:
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', 31536000))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
