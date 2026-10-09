@@ -389,3 +389,18 @@ def test_get_gateway_reads_settings_then_env_and_caches_the_client(settings, mon
 
     settings.LLM_PROVIDER = "fake"
     assert get_gateway().name == "fake"
+
+
+def test_get_gateway_normalises_provider_and_reports_bad_config(caplog):
+    assert get_gateway(GatewayConfig(provider=" GigaChat ", auth_key="norm-key")).name == "gigachat"
+
+    with caplog.at_level(logging.ERROR):
+        first = get_gateway(GatewayConfig(provider="gigachad", auth_key="k"))
+        second = get_gateway(GatewayConfig(provider="gigachad", auth_key="k"))
+    assert (first.name, first.fallback_reason, second.fallback_reason) == ("fake", "provider_unknown", "provider_unknown")
+    assert len([r for r in caplog.records if "gigachad" in r.getMessage()]) == 1  # logged once
+
+    for bad in ("10s", "-1", "nan"):
+        gateway = get_gateway(GatewayConfig(provider="gigachat", auth_key=f"timeout-{bad}", timeout_s=bad))
+        assert gateway.config.timeout_s == 10.0
+    assert any("LLM_TIMEOUT_S='10s'" in r.getMessage() for r in caplog.records)

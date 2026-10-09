@@ -109,8 +109,8 @@ def _blueprint(specialization: str | None, skill_ids: list[str]) -> tuple[list[d
     try:
         from assessment.engine.blueprint import blueprint_for
     except ModuleNotFoundError as e:
-        if (e.name or "").startswith("assessment.engine"):
-            return [], False  # expected until ML-2 lands
+        if e.name in ("assessment.engine", "assessment.engine.blueprint"):
+            return [], False  # expected until ML-2 lands; a broken ML module is not silenced
         logger.error("blueprint_for import failed: %s", type(e).__name__)
         return [], True
     except ImportError as e:  # the module exists but does not export blueprint_for
