@@ -1,21 +1,26 @@
 """Identity app serializers and views."""
+from core.enums import ConsentType, IdentityProvider, UserRole
+from core.errors import FSPAPIError, FSPIdAlreadyLinked
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.core import signing
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.utils import timezone
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
-from rest_framework import serializers, status, views, permissions
-from rest_framework.response import Response
-from django.conf import settings
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, inline_serializer
-
-from identity.models import User, Identity, Consent, AuditLog
-from core.enums import UserRole, ConsentType, IdentityProvider
-from core.errors import FSPAPIError, FSPIdAlreadyLinked
+from django.views.decorators.csrf import ensure_csrf_cookie
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from fsp_sync.models import FSPLink
 from fsp_sync.services import link_fsp_id
+from rest_framework import permissions, serializers, status, views
+from rest_framework.response import Response
+
+from identity.models import Identity, User
 from identity.oidc import (
     build_authorization_url,
     exchange_code_for_tokens,
@@ -79,7 +84,6 @@ class MeResponseSerializer(serializers.Serializer):
     onboarding_step = serializers.CharField(required=False)
 
 
-from drf_spectacular.utils import extend_schema, inline_serializer
 
 # --- Views ---
 
@@ -111,7 +115,7 @@ class RegisterView(views.APIView):
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
             raise serializers.ValidationError(serializer.errors)
-        
+
         user = serializer.save()
         resp_data = {
             'user_id': str(user.id),
@@ -173,10 +177,10 @@ class LoginView(views.APIView):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
             raise serializers.ValidationError(serializer.errors)
-        
+
         email = serializer.validated_data['email'].lower()
         password = serializer.validated_data['password']
-        
+
         user = authenticate(request, email=email, password=password)
         if not user:
             raise FSPAPIError(
@@ -185,15 +189,15 @@ class LoginView(views.APIView):
                 detail='Incorrect email or password.',
                 status_code=401
             )
-        
+
         login(request, user)
-        
+
         company_id = None
         if user.role == UserRole.EMPLOYER:
             membership = user.company_memberships.first()
             if membership:
                 company_id = str(membership.company_id)
-        
+
         return Response({
             'id': str(user.id),
             'role': user.role,
@@ -225,7 +229,7 @@ class MeView(views.APIView):
             membership = user.company_memberships.first()
             if membership:
                 company_id = str(membership.company_id)
-        
+
         onboarding_step = 'done'
         if user.role == UserRole.CANDIDATE:
             if not user.consents.filter(type=ConsentType.PROCESSING, granted=True).exists():
@@ -234,7 +238,7 @@ class MeView(views.APIView):
                 onboarding_step = 'profile'
             elif not user.league_memberships.filter(status__in=['confirmed', 'unconfirmed']).exists():
                 onboarding_step = 'qualification'
-        
+
         return Response({
             'id': str(user.id),
             'role': user.role,

@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from core.enums import ContactGrantSource, OfferStatus
+from core.errors import CandidateNotReachable, ContactNotGranted, InvalidTransition, VersionConflict
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-
-from core.errors import InvalidTransition, VersionConflict, CandidateNotReachable, ContactNotGranted
 from identity.models import AuditLog
-from outreach.models import ContactGrant, Offer, OfferEvent, OFFER_TRANSITIONS
 from profiles.models import CandidateContact
-from core.enums import ContactGrantSource, OfferStatus
+
 from outreach.events import publish_domain_event
-from dataclasses import dataclass
+from outreach.models import ContactGrant, Offer, OfferEvent
 
 if TYPE_CHECKING:
     import uuid
@@ -313,10 +313,10 @@ class OfferService:
         expires_in_days: int = 14,
     ) -> Offer:
         """Create a new Draft Offer."""
-        from profiles.models import CandidateProfile
-        from profiles.selectors import is_candidate_visible_to_company
         from matching.models import Company, Position
         from matching.scoring import calculate_match_score
+        from profiles.models import CandidateProfile
+        from profiles.selectors import is_candidate_visible_to_company
 
         # Verify candidate exists
         try:

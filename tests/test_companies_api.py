@@ -1,10 +1,9 @@
 import pytest
-from django.utils import timezone
-from rest_framework.test import APIClient
-
 from core.enums import UserRole
+from django.utils import timezone
 from identity.models import User
 from matching.models import Company, CompanyMember
+from rest_framework.test import APIClient
 
 
 @pytest.fixture

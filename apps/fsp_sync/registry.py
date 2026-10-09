@@ -5,7 +5,6 @@ Currently returns data from a mock registry for development.
 """
 from core.enums import Discipline, PlacementTier, SportsRank
 
-
 MOCK_REGISTRY = {
     'FSP-000123': {
         'sports_rank': SportsRank.KMS,

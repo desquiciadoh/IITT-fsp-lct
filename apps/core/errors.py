@@ -10,7 +10,6 @@ from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-
 # --- Custom Exception Classes ---
 
 def normalize_errors(errors: any) -> list[dict[str, str]]:

@@ -5,14 +5,10 @@ EXCLUSIVELY by the adaptive qualification assessment (CAT).
 FSP achievements (sports ranks, tournament wins) influence Profile Strength
 and ranking within the League, but CANNOT change or elevate a candidate's Grade.
 """
-import pytest
 from datetime import date
-from django.utils import timezone
 
-from identity.models import User
+import pytest
 from assessment.models import LeagueMembership
-from fsp_sync.models import FSPLink, FSPResult
-from fsp_sync.views import sync_candidate_fsp_data
 from core.enums import (
     Discipline,
     Grade,
@@ -22,6 +18,10 @@ from core.enums import (
     SportsRank,
     UserRole,
 )
+from django.utils import timezone
+from fsp_sync.models import FSPLink, FSPResult
+from fsp_sync.services import sync_candidate_fsp_data
+from identity.models import User
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ class TestGradeImmutability:
         assert initial_grade == Grade.JUNIOR
 
         # Candidate links FSP ID with top achievements: MS rank + 1st place
-        link = FSPLink.objects.create(
+        FSPLink.objects.create(
             candidate=user,
             participant_id='FSP-999999',
             sports_rank=SportsRank.MS,

@@ -1,10 +1,6 @@
 """Assessment app models: ItemFamily, AssessmentSession, AssessmentItem, LeagueMembership."""
 import uuid
 
-from django.conf import settings
-from django.contrib.postgres.fields import ArrayField
-from django.db import models
-
 from core.enums import (
     AssessmentKind,
     AssessmentMode,
@@ -16,6 +12,9 @@ from core.enums import (
     LeagueStatus,
     Specialization,
 )
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
 
 
 class ItemFamily(models.Model):

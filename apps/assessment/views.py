@@ -1,40 +1,32 @@
 """Assessment views."""
-import hmac
-import hashlib
-from datetime import timedelta
-from django.conf import settings
-from django.db import transaction
-from django.utils import timezone
-from rest_framework import permissions, status, views
-from rest_framework.response import Response
-
-from assessment.models import AssessmentSession, AssessmentItem, ItemFamily, LeagueMembership
-from assessment.serializers import (
-    AssessmentSessionSerializer,
-    AssessmentResultSerializer,
-    AnswerRequestSerializer,
-    ItemViewSerializer,
-    StartAssessmentSerializer,
-    FallbackRequestSerializer,
-    LeagueShelfSerializer,
-    ValidationReportSerializer,
-)
-from assessment.services import AssessmentService, get_current_time_for_user
 from core.enums import (
     AssessmentStatus,
     Grade,
-    GradeDecision,
     LeagueStatus,
     Specialization,
-    UserRole,
 )
-from core.errors import CooldownActive, AssessmentInProgress, ItemNotCurrent, FSPAPIError
-from core.permissions import IsCandidate
+from core.errors import FSPAPIError
 from core.pagination import FSPPagination
-
-
+from core.permissions import IsCandidate
+from django.conf import settings
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import serializers
+from rest_framework import permissions, serializers, status, views
+from rest_framework.response import Response
+
+from assessment.models import AssessmentSession, LeagueMembership
+from assessment.serializers import (
+    AnswerRequestSerializer,
+    AssessmentResultSerializer,
+    AssessmentSessionSerializer,
+    FallbackRequestSerializer,
+    ItemViewSerializer,
+    LeagueShelfSerializer,
+    StartAssessmentSerializer,
+    ValidationReportSerializer,
+)
+from assessment.services import AssessmentService, get_current_time_for_user
+
 
 class EligibilityView(views.APIView):
     permission_classes = [IsCandidate]
@@ -133,7 +125,7 @@ class AssessmentDetailView(views.APIView):
         session = AssessmentSession.objects.filter(id=pk, candidate=request.user).first()
         if not session:
             raise FSPAPIError('not_found', 'Not found', 'Assessment session not found', 404)
-        
+
         serializer = AssessmentSessionSerializer(session)
         return Response(serializer.data)
 
@@ -208,7 +200,7 @@ class AssessmentResultView(views.APIView):
         session = AssessmentSession.objects.filter(id=pk, candidate=request.user).first()
         if not session or session.status != AssessmentStatus.FINISHED:
             raise FSPAPIError('not_finished', 'Not finished', 'Assessment is not finished yet', 400)
-        
+
         return Response(AssessmentResultSerializer(session).data)
 
 
@@ -258,6 +250,7 @@ class LeagueShelfView(views.APIView):
     )
     def get(self, request):
         import statistics
+
         from profiles.models import CandidateProfile
 
         spec_param = request.query_params.get('specialization')

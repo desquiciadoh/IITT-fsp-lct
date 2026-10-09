@@ -1,26 +1,34 @@
 """Profiles app API views."""
 import logging
-from django.db import transaction
-from django.http import HttpResponse, Http404
-from rest_framework import permissions, status, views
-from rest_framework.response import Response
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import serializers
 
-from core.enums import ConsentType, DeclineReason, Grade, LeagueStatus, OfferStatus, Specialization, UserRole
+from core.enums import (
+    ConsentType,
+    DeclineReason,
+    Grade,
+    LeagueStatus,
+    OfferStatus,
+    Specialization,
+    UserRole,
+)
 from core.errors import FSPAPIError
-from identity.models import Consent, AuditLog
+from django.db import transaction
+from django.http import Http404, HttpResponse
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from identity.models import AuditLog, Consent
 from outreach.models import Offer
 from outreach.services import OfferService
-from profiles.models import CandidateProfile, CandidateContact, Skill, generate_public_id
+from rest_framework import permissions, serializers, views
+from rest_framework.response import Response
+
+from profiles.models import CandidateProfile, Skill, generate_public_id
+from profiles.pdf_service import generate_player_card_pdf
 from profiles.serializers import (
     CandidateProfileSerializer,
     CandidateProfileUpdateSerializer,
-    ConsentUpdateSerializer,
     ConsentsResponseSerializer,
+    ConsentUpdateSerializer,
     TaxonomySerializer,
 )
-from profiles.pdf_service import generate_player_card_pdf
 
 logger = logging.getLogger(__name__)
 

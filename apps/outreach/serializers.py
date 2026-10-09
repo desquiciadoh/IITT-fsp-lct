@@ -1,11 +1,11 @@
 """Outreach app serializers."""
-from drf_spectacular.utils import extend_schema_field
-from rest_framework import serializers
-from outreach.models import Offer, ContactGrant
-from profiles.models import CandidateProfile
-from matching.serializers import CompanySerializer, TalentShortSerializer
-from core.enums import ContactChannel, DeclineReason, OfferStatus, SalaryType
+from core.enums import ContactChannel, DeclineReason, SalaryType
 from core.errors import ContactNotGranted
+from drf_spectacular.utils import extend_schema_field
+from matching.serializers import CompanySerializer, TalentShortSerializer
+from rest_framework import serializers
+
+from outreach.models import Offer
 from outreach.services import ContactAccessService
 
 

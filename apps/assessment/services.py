@@ -7,18 +7,11 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from django.conf import settings
-from django.db import transaction
-from django.utils import timezone
-
-from assessment.engine import FAMILIES_REGISTRY, score_assessment
-from assessment.models import AssessmentItem, AssessmentSession, ItemFamily, LeagueMembership
 from core.enums import (
     AssessmentStatus,
     Grade,
     GradeDecision,
     LeagueStatus,
-    Specialization,
 )
 from core.errors import (
     AssessmentInProgress,
@@ -26,11 +19,18 @@ from core.errors import (
     FSPAPIError,
     ItemNotCurrent,
 )
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
 from fsp_sync.services import recompute_strength
 from outreach.events import publish_domain_event
 
+from assessment.engine import FAMILIES_REGISTRY, score_assessment
+from assessment.models import AssessmentItem, AssessmentSession, ItemFamily, LeagueMembership
+
 if TYPE_CHECKING:
     import uuid
+
     from identity.models import User
 
 logger = logging.getLogger(__name__)

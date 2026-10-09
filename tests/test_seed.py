@@ -1,12 +1,12 @@
 import pytest
+from assessment.models import LeagueMembership
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from identity.models import User
-from profiles.models import CandidateProfile, CandidateContact, Skill, CandidateSkill
-from assessment.models import LeagueMembership
-from matching.models import Company, Position
 from fsp_sync.models import FSPLink, FSPResult
 from fsp_sync.services import recompute_strength
+from identity.models import User
+from matching.models import Company, Position
+from profiles.models import CandidateContact, CandidateProfile, CandidateSkill, Skill
 
 
 @pytest.mark.django_db

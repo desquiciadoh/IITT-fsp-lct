@@ -1,4 +1,5 @@
 from django.contrib import admin
+
 from identity.models import AuditLog, Consent, User
 
 

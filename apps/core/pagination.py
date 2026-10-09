@@ -1,6 +1,7 @@
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+
 class FSPPagination(PageNumberPagination):
     page_size = 20
     max_page_size = 100

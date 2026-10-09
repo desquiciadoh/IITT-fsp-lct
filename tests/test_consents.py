@@ -1,13 +1,12 @@
 import pytest
-from django.utils import timezone
-from rest_framework.test import APIClient
-
 from core.enums import ConsentType, OfferStatus, SalaryType, UserRole
+from django.utils import timezone
 from identity.models import Consent, User
 from matching.models import Company, CompanyMember
 from outreach.models import Offer
 from profiles.models import CandidateProfile, generate_public_id
 from profiles.selectors import visible_candidates_for
+from rest_framework.test import APIClient
 
 
 @pytest.fixture
@@ -88,7 +87,7 @@ def test_employer_cannot_manage_consents(employer_with_company):
 @pytest.mark.django_db
 def test_publication_consent_revocation_withdraws_pending_offers(candidate_user, employer_with_company):
     employer, company = employer_with_company
-    
+
     # Create a pending offer (SENT)
     offer_sent = Offer.objects.create(
         company=company,

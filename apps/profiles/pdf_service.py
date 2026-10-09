@@ -1,6 +1,6 @@
 """Player Card PDF generator service with QR code validation."""
-import io
 import base64
+import io
 import logging
 from html import escape as html_escape
 

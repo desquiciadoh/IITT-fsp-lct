@@ -1,11 +1,10 @@
 """Matching app models: Company, Position, Shortlist."""
 import uuid
 
+from core.enums import Grade, SalaryType, Specialization, TrustLevel, WorkFormat
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
-
-from core.enums import Grade, SalaryType, Specialization, TrustLevel, WorkFormat
 
 
 class Company(models.Model):

@@ -1,9 +1,8 @@
 """Test cases for gap endpoints: G3, G5, G6, G7, G11, G16."""
-import pytest
 from datetime import timedelta
-from django.utils import timezone
-from rest_framework.test import APIClient
 
+import pytest
+from assessment.models import AssessmentSession, ItemFamily, LeagueMembership
 from core.enums import (
     AssessmentStatus,
     ConsentType,
@@ -15,10 +14,11 @@ from core.enums import (
     Specialization,
     UserRole,
 )
-from identity.models import User, Consent
+from django.utils import timezone
+from identity.models import Consent, User
 from matching.models import Company, CompanyMember, Position, Shortlist
-from profiles.models import CandidateProfile, Skill, CandidateSkill
-from assessment.models import AssessmentSession, ItemFamily, LeagueMembership
+from profiles.models import CandidateProfile, CandidateSkill, Skill
+from rest_framework.test import APIClient
 
 
 @pytest.fixture(autouse=True)
@@ -341,8 +341,8 @@ def test_g8_position_pool_filtering_facets_and_components(employer_with_position
     _, client, company, position = employer_with_position
 
     # Add FSP result for candidate_user to test fsp filter and boost
-    from fsp_sync.models import FSPResult
     from core.enums import Discipline, PlacementTier
+    from fsp_sync.models import FSPResult
     FSPResult.objects.create(
         candidate=candidate_user,
         event_id='EVT-01',

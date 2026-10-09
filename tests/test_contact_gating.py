@@ -6,15 +6,14 @@ Any access attempt without an active ContactGrant must raise ContactNotGranted
 and be recorded in AuditLog.
 """
 import pytest
-from django.utils import timezone
-from identity.models import User, AuditLog
-from profiles.models import CandidateProfile, CandidateContact, generate_public_id
-from matching.models import Company, CompanyMember
-from outreach.models import Offer, ContactGrant
-from outreach.services import OfferService
 from core.enums import OfferStatus, SalaryType, UserRole
 from core.errors import ContactNotGranted
-from outreach.services import ContactAccessService
+from django.utils import timezone
+from identity.models import AuditLog, User
+from matching.models import Company, CompanyMember
+from outreach.models import ContactGrant, Offer
+from outreach.services import ContactAccessService, OfferService
+from profiles.models import CandidateContact, CandidateProfile, generate_public_id
 
 
 @pytest.fixture
@@ -25,7 +24,7 @@ def candidate(db):
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
-    profile = CandidateProfile.objects.create(
+    CandidateProfile.objects.create(
         user=user,
         public_id=generate_public_id(),
         full_name='Секретный Кандидат',
@@ -81,7 +80,7 @@ class TestContactGating:
     def test_no_contacts_when_offer_is_sent(self, candidate, employer_company):
         """Contacts remain strictly gated when offer status is SENT."""
         company, employer_user = employer_company
-        offer = Offer.objects.create(
+        Offer.objects.create(
             company=company,
             candidate=candidate,
             created_by=employer_user,

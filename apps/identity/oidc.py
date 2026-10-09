@@ -5,22 +5,16 @@ import json
 import logging
 import secrets
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 
+from authlib.jose import JsonWebKey, jwt
+from core.errors import FSPAPIError
 from django.conf import settings
 from django.core import signing
 from django.urls import reverse
-from django.utils import timezone
-
-from authlib.jose import JsonWebKey, jwt
-from core.enums import IdentityProvider, UserRole
-from core.errors import FSPAPIError, FSPIdAlreadyLinked
 from fsp_mock.keys import get_jwks, sign_id_token
-from fsp_sync.services import link_fsp_id
-from identity.models import Identity, User
-from profiles.models import CandidateProfile
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +127,7 @@ def exchange_code_for_tokens(code: str, code_verifier: str, redirect_uri: str) -
                 'token_type': 'Bearer',
                 'expires_in': 3600,
             }
-        except Exception as inner_exc:
+        except Exception:
             raise FSPAPIError('token_exchange_failed', 'Token exchange failed', str(exc), 400)
 
 

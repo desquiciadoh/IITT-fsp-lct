@@ -1,17 +1,15 @@
 """Tests for FSP ID OIDC and Mock IdP / Registry (AI-08 / G15)."""
 import base64
 import hashlib
-import json
 import urllib.parse
-import pytest
-from django.core import signing
-from rest_framework.test import APIClient
 
+import pytest
 from core.enums import IdentityProvider, UserRole
-from fsp_mock.keys import get_jwks, sign_id_token
+from django.core import signing
 from fsp_sync.models import FSPLink
 from identity.models import Identity, User
 from profiles.models import CandidateProfile, generate_public_id
+from rest_framework.test import APIClient
 
 
 @pytest.fixture

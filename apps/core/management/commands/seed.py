@@ -6,17 +6,17 @@ Generates:
 - 3+ positions with mandatory salary ranges and stack requirements
 - 4 FSP achievement profiles with verified results
 """
-import uuid
 from datetime import date
+
+from assessment.models import LeagueMembership
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
-
-from identity.models import User, Consent
-from profiles.models import CandidateProfile, CandidateContact, Skill, CandidateSkill
-from assessment.models import LeagueMembership
-from matching.models import Company, CompanyMember, Position
 from fsp_sync.models import FSPLink, FSPResult
+from identity.models import Consent, User
+from matching.models import Company, CompanyMember, Position
+from profiles.models import CandidateContact, CandidateProfile, CandidateSkill, Skill
+
 from core.enums import (
     ConsentType,
     Discipline,

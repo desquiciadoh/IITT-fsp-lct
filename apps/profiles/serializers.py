@@ -1,12 +1,13 @@
 """Profiles app serializers."""
 import uuid
+
+from core.enums import ConsentType
 from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
-from rest_framework import serializers
-from profiles.models import CandidateProfile, CandidateContact, Skill, CandidateSkill
-from identity.models import Consent
 from matching.models import Company
-from core.enums import Specialization, Grade, WorkFormat, SalaryType, ConsentType
+from rest_framework import serializers
+
+from profiles.models import CandidateContact, CandidateProfile, CandidateSkill, Skill
 
 
 class CandidateContactSerializer(serializers.ModelSerializer):

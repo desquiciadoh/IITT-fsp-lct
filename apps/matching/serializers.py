@@ -1,9 +1,9 @@
 """Matching app serializers."""
 from drf_spectacular.utils import extend_schema_field
-from rest_framework import serializers
-from matching.models import Company, Position, Shortlist
 from profiles.models import CandidateProfile
-from core.enums import SalaryType, WorkFormat, Grade, Specialization
+from rest_framework import serializers
+
+from matching.models import Company, Position
 
 
 class CompanySerializer(serializers.ModelSerializer):

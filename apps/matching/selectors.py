@@ -1,8 +1,8 @@
 """Selectors and filter utilities for talent matching and pool searches."""
 from typing import Any
-from django.db.models import Q
+
 from core.enums import LeagueStatus
-from profiles.models import CandidateProfile
+from django.db.models import Q
 
 
 def filter_candidate_profiles(queryset, query_params: dict[str, Any]):

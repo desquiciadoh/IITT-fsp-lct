@@ -1,18 +1,18 @@
 """Matching app API views."""
-from django.db import transaction
-from django.db.models import Q
-from rest_framework import permissions, status, views
-from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.response import Response
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import serializers
-
-from core.enums import ConsentType, LeagueStatus, UserRole
-from core.errors import ContactNotGranted, FSPAPIError
+from core.errors import FSPAPIError
 from core.permissions import IsEmployer
+from django.db import transaction
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from outreach.services import ContactAccessService
+from profiles.models import CandidateProfile
+from profiles.selectors import is_candidate_visible_to_company, visible_candidates_for
+from rest_framework import permissions, serializers, status, views
+from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+
 from matching.models import Company, CompanyMember, Position, Shortlist
 from matching.scoring import calculate_match_score
+from matching.selectors import compute_pool_facets, filter_candidate_profiles
 from matching.serializers import (
     CompanyMinimalSerializer,
     CompanySerializer,
@@ -21,10 +21,6 @@ from matching.serializers import (
     PositionSerializer,
     TalentShortSerializer,
 )
-from profiles.models import CandidateProfile
-from profiles.selectors import is_candidate_visible_to_company, visible_candidates_for
-from matching.selectors import filter_candidate_profiles, compute_pool_facets
-from identity.models import Consent
 
 
 def get_employer_company(user):
@@ -368,7 +364,7 @@ class PositionParseView(views.APIView):
             if re.search(r'\b' + re.escape(kw) + r'\b', lower_text):
                 found_skills.add(skill_id)
 
-        must_skills = sorted(list(found_skills))
+        must_skills = sorted(found_skills)
         nice_skills = []
 
         formats = []
@@ -522,7 +518,7 @@ class TalentDetailView(views.APIView):
         data['about'] = profile.about
         data['experience_text'] = profile.experience_text
 
-        from assessment.models import AssessmentItem, AssessmentSession
+        from assessment.models import AssessmentItem
         from core.enums import AssessmentStatus
         passed_topics = set(AssessmentItem.objects.filter(
             assessment__candidate=profile.user,

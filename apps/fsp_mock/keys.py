@@ -1,7 +1,7 @@
 """RSA key generator and JWKS provider for FSP Mock IdP."""
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 from authlib.jose import JsonWebKey, jwt
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 # A deterministic in-memory RSA key pair generated on module load
 _PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)

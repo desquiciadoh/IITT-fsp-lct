@@ -1,5 +1,6 @@
 """Identity app URL patterns."""
 from django.urls import path
+
 from identity import views
 
 urlpatterns = [

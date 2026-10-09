@@ -4,14 +4,14 @@ INVARIANT: The correct answer ('key') is evaluated strictly server-side.
 Neither ItemViewSerializer nor any API response may contain 'key' or any
 derivative of the correct answer.
 """
-import pytest
 from datetime import timedelta
-from django.utils import timezone
 
-from identity.models import User
-from assessment.models import AssessmentSession, AssessmentItem, ItemFamily
-from assessment.serializers import ItemViewSerializer, AssessmentSessionSerializer
+import pytest
+from assessment.models import AssessmentItem, AssessmentSession, ItemFamily
+from assessment.serializers import AssessmentSessionSerializer, ItemViewSerializer
 from core.enums import AssessmentStatus, Grade, Specialization, UserRole
+from django.utils import timezone
+from identity.models import User
 
 
 @pytest.fixture

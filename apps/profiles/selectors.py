@@ -1,7 +1,8 @@
 """Profiles app selectors for clean data retrieval and privacy boundaries."""
-from django.db.models import OuterRef, Subquery
 from core.enums import ConsentType, LeagueStatus
+from django.db.models import OuterRef, Subquery
 from identity.models import Consent
+
 from profiles.models import CandidateProfile
 
 

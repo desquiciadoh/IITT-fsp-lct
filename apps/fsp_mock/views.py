@@ -6,11 +6,11 @@ import uuid
 
 from django.conf import settings
 from django.core import signing
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, HttpResponseRedirect
+from django.http import HttpResponseBadRequest, HttpResponseRedirect, JsonResponse
 from django.views import View
+from fsp_sync.registry import MOCK_REGISTRY, get_registry_data
 
 from fsp_mock.keys import get_jwks, sign_id_token
-from fsp_sync.registry import MOCK_REGISTRY, get_registry_data
 
 
 def _get_issuer() -> str:
@@ -61,7 +61,6 @@ class OidcAuthorizeView(View):
     def get(self, request, *args, **kwargs):
         client_id = request.GET.get('client_id')
         redirect_uri = request.GET.get('redirect_uri')
-        response_type = request.GET.get('response_type', 'code')
         state = request.GET.get('state', '')
         nonce = request.GET.get('nonce', '')
         code_challenge = request.GET.get('code_challenge', '')

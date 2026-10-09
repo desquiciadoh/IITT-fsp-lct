@@ -3,10 +3,11 @@
 INVARIANT: ItemViewSerializer NEVER includes the `key` field or any derivative of it.
 The answer key stays strictly server-side in assessment_items.key.
 """
-from rest_framework import serializers
+from core.enums import Grade, Specialization
 from drf_spectacular.utils import extend_schema_field
-from assessment.models import AssessmentSession, AssessmentItem, LeagueMembership, ItemFamily
-from core.enums import Specialization, Grade
+from rest_framework import serializers
+
+from assessment.models import AssessmentItem, AssessmentSession, LeagueMembership
 
 
 class StartAssessmentSerializer(serializers.Serializer):

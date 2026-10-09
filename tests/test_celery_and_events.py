@@ -1,16 +1,16 @@
 """Tests for Celery tasks, domain event publishing, and SSE streaming."""
-import json
+from datetime import timedelta
+
 import pytest
+from core.enums import ContactChannel, OfferStatus, SalaryType
 from django.conf import settings
 from django.utils import timezone
-from datetime import timedelta
 from identity.models import User
-from profiles.models import CandidateProfile
 from matching.models import Company, CompanyMember, Position
-from outreach.models import Offer
-from core.enums import OfferStatus, SalaryType, ContactChannel
-from outreach.tasks import expire_offers
 from outreach.events import publish_domain_event, register_subscriber, unregister_subscriber
+from outreach.models import Offer
+from outreach.tasks import expire_offers
+from profiles.models import CandidateProfile
 from rest_framework.test import APIClient
 
 

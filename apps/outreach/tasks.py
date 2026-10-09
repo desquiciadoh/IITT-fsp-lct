@@ -1,6 +1,8 @@
 """Celery tasks for outreach application."""
 import logging
+
 from celery import shared_task
+
 from outreach.services import OfferService
 
 logger = logging.getLogger(__name__)

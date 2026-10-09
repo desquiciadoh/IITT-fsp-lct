@@ -1,12 +1,11 @@
 """Tests for Authentication, Email Verification, Demo Persona, Time Travel, and Reset (G1, G2, G4, B3, B25)."""
 import pytest
-from django.core import signing
-from django.utils import timezone
-from rest_framework.test import APIClient
-
-from identity.models import User
 from assessment.models import AssessmentSession, LeagueMembership
 from core.enums import AssessmentStatus, Grade, LeagueStatus, Specialization, UserRole
+from django.core import signing
+from django.utils import timezone
+from identity.models import User
+from rest_framework.test import APIClient
 
 
 @pytest.fixture

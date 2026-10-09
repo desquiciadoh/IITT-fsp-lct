@@ -1,5 +1,6 @@
 """FSP Mock IdP URLs."""
 from django.urls import path
+
 from fsp_mock import views
 
 urlpatterns = [

@@ -1,5 +1,6 @@
 """FSP Registry Mock URLs."""
 from django.urls import path
+
 from fsp_mock import views
 
 urlpatterns = [

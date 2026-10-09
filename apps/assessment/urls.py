@@ -1,5 +1,6 @@
 """Assessment URLs."""
 from django.urls import path
+
 from assessment import views
 
 urlpatterns = [

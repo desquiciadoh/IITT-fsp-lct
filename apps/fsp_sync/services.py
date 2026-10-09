@@ -6,15 +6,14 @@ Views delegate to these functions; they should not contain business logic.
 import hashlib
 import logging
 
-from django.db import IntegrityError, transaction
-from django.utils import timezone
-
-from assessment.models import LeagueMembership
 from core.enums import SyncStatus
 from core.errors import FSPIdAlreadyLinked
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+from outreach.events import publish_domain_event
+
 from fsp_sync.models import FSPLink, FSPResult
 from fsp_sync.registry import get_registry_data
-from outreach.events import publish_domain_event
 
 logger = logging.getLogger(__name__)
 

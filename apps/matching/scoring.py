@@ -6,9 +6,11 @@ INVARIANTS:
 3. Candidates are identified to employers ONLY by public_id.
 """
 from typing import Any
+
+from core.enums import EvidenceSource, LeagueStatus
 from profiles.models import CandidateProfile
+
 from matching.models import Position
-from core.enums import EvidenceSource, GradeDecision, LeagueStatus
 
 
 def calculate_match_score(candidate_profile: CandidateProfile, position: Position) -> dict[str, Any]:
@@ -19,7 +21,6 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
     # 1. Stack fit (35 points)
     candidate_skills = {cs.skill.name.lower(): cs for cs in candidate_profile.skills.select_related('skill').all()}
     must_skills = [s.lower() for s in (position.must_skills or [])]
-    nice_skills = [s.lower() for s in (position.nice_skills or [])]
 
     gaps = []
     must_matches = 0
@@ -110,7 +111,7 @@ def calculate_match_score(candidate_profile: CandidateProfile, position: Positio
         elif cand_min > pos_max:
             reasons.append({
                 'kind': 'minus',
-                'text': f"Ожидания кандидата выше бюджета вакансии",
+                'text': "Ожидания кандидата выше бюджета вакансии",
             })
             gaps.append("Ожидания кандидата выше бюджета вакансии")
             salary_score = 2

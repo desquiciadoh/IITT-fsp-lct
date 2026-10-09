@@ -1,16 +1,14 @@
 """FSP Sync views — thin wrappers delegating to fsp_sync.services."""
-from django.utils import timezone
-from rest_framework import views
-from rest_framework.response import Response
-
 from core.errors import FSPAPIError, FSPIdAlreadyLinked
 from core.permissions import IsCandidate
-from fsp_sync.models import FSPLink
-from fsp_sync.services import link_fsp_id, sync_fsp_data, sync_candidate_fsp_data
-
-
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, views
+from rest_framework.response import Response
+
+from fsp_sync.models import FSPLink
+from fsp_sync.services import link_fsp_id, sync_fsp_data
+
 
 class FSPLinkView(views.APIView):
     permission_classes = [IsCandidate]

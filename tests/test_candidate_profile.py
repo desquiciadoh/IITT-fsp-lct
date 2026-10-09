@@ -1,13 +1,13 @@
 import uuid
-import pytest
-from django.utils import timezone
-from rest_framework.test import APIClient
 
-from core.enums import ConsentType, Grade, LeagueStatus, Specialization, UserRole
+import pytest
 from assessment.models import LeagueMembership
+from core.enums import ConsentType, Grade, LeagueStatus, Specialization, UserRole
+from django.utils import timezone
 from identity.models import Consent, User
 from matching.models import Company
 from profiles.models import CandidateProfile, generate_public_id
+from rest_framework.test import APIClient
 
 
 @pytest.fixture

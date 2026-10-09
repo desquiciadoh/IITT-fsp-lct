@@ -1,29 +1,27 @@
 """Outreach app views: Offer lifecycle with optimistic locking and SSE streaming."""
 import json
 import time
+
+from core.enums import DeclineReason, OfferStatus, UserRole
+from core.errors import CandidateNotReachable, FSPAPIError
+from core.pagination import FSPPagination
+from core.permissions import IsCandidate, IsEmployer
 from django.http import StreamingHttpResponse
-from rest_framework import permissions, status, views
+from drf_spectacular.utils import extend_schema, inline_serializer
+from matching.views import get_employer_company
+from profiles.models import CandidateProfile
+from profiles.selectors import is_candidate_visible_to_company
+from rest_framework import permissions, serializers, status, views
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 
-from core.enums import DeclineReason, OfferStatus, UserRole
-from core.errors import FSPAPIError, SalaryInvalid, CandidateNotReachable
-from core.permissions import IsEmployer, IsCandidate
-from core.pagination import FSPPagination
-from matching.views import get_employer_company
 from outreach.models import Offer
 from outreach.serializers import (
-    OfferSerializer,
     CreateOfferSerializer,
     OfferActionSerializer,
+    OfferSerializer,
 )
 from outreach.services import OfferService
-from profiles.models import CandidateProfile
-from profiles.selectors import is_candidate_visible_to_company
-
-
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
 
 
 class EventStreamRenderer(BaseRenderer):
@@ -373,6 +371,7 @@ class SSEEventsView(views.APIView):
     def get(self, request):
         def event_stream():
             import queue
+
             from outreach.events import register_subscriber, unregister_subscriber
 
             sub = register_subscriber(replay_recent=True)

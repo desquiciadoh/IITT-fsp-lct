@@ -1,6 +1,8 @@
 """Celery tasks for FSP sync."""
 import logging
+
 from celery import shared_task
+
 from fsp_sync.models import FSPLink
 from fsp_sync.services import sync_candidate_fsp_data
 
