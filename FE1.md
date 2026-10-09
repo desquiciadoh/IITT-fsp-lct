@@ -46,7 +46,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
 
 ### Blockers
 
-- [ ] **R18 · Clean clone still fails.** `package.json` keeps `"packageManager": "pnpm@12.10.1"`; pnpm 11 cannot bootstrap it and every script fails before install.
+- [x] **R18 · Clean clone still fails.** `package.json` keeps `"packageManager": "pnpm@12.10.1"`; pnpm 11 cannot bootstrap it and every script fails before install.
   - **Fix:** pin the version the team actually runs (`pnpm -v`, today `11.11.0`) or delete the field.
   - **Acceptance:** in a fresh directory `git clone … && cd web && pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` is green with no manual edits. Paste the output into the PR.
 
@@ -87,7 +87,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
 
 ### Process
 
-- [ ] **R16 · Open the PR** `fe1-p0-tasks → main`, titled `FE1-0 FE-01..08 Scaffold and candidate screens`. Description: the §1 table, the R18 clean-clone output, screenshots of `/jury` (anonymous), onboarding, result (3 variants), offer detail, settings. **`FE1.md` conflicts with `main`** (this file was rewritten there): resolve by taking `main`'s version and ticking the R-items you finished.
+- [x] **R16 · Open the PR** `fe1-p0-tasks → main`, titled `FE1-0 FE-01..08 Scaffold and candidate screens`. Description: the §1 table, the R18 clean-clone output, screenshots of `/jury` (anonymous), onboarding, result (3 variants), offer detail, settings. **`FE1.md` conflicts with `main`** (this file was rewritten there): resolve by taking `main`'s version and ticking the R-items you finished.
 - [ ] **R17 · After merge, tell FE2 the same hour.** They are blocked on `components/domain/`, `lib/labels`, `useCountdown`, the router and guards.
 
 ---
