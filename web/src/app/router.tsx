@@ -49,6 +49,15 @@ const VacanciesPage = lazy(() =>
 const EmployerPreviewPage = lazy(() =>
   import('@/features/vacancies/employer-preview-page').then((m) => ({ default: m.EmployerPreviewPage })),
 )
+const MicrotaskInboxPage = lazy(() =>
+  import('@/features/microtasks/microtask-inbox-page').then((m) => ({ default: m.MicrotaskInboxPage })),
+)
+const MicrotaskSolvePage = lazy(() =>
+  import('@/features/microtasks/microtask-solve-page').then((m) => ({ default: m.MicrotaskSolvePage })),
+)
+const EmployerMicrotasksPage = lazy(() =>
+  import('@/features/microtasks/employer-microtasks-page').then((m) => ({ default: m.EmployerMicrotasksPage })),
+)
 
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
@@ -72,6 +81,7 @@ export const router = createBrowserRouter([
   { path: '/dev/ui', element: <DevUiPage /> },
   { path: '/dev/design', element: <DesignVariantsPage /> },
   { path: '/dev/vacancies-employer', element: <EmployerPreviewPage /> },
+  { path: '/dev/microtasks-employer', element: <EmployerMicrotasksPage /> },
   {
     // Public pages inside the shell (no RequireAuth; no SSE for anonymous users)
     element: <AppLayout />,
@@ -110,7 +120,16 @@ export const router = createBrowserRouter([
                     element: <ResultPage />,
                   },
                   { path: '/candidate/offers', element: <OffersListPage /> },
+                  { path: '/candidate/offers/:id', element: <OfferDetailPage /> },
                   { path: '/candidate/vacancies', element: <VacanciesPage /> },
+                  {
+                    path: '/candidate/microtasks',
+                    element: <MicrotaskInboxPage />,
+                  },
+                  {
+                    path: '/candidate/microtasks/:id',
+                    element: <MicrotaskSolvePage />,
+                  },
                   {
                     path: '/candidate/offers/:id',
                     element: <OfferDetailPage />,

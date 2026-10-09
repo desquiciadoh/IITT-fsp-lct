@@ -44,6 +44,12 @@ export function AppLayout() {
                 <NavLink to="/candidate/offers" className={linkClass}>
                   {RU.nav.offers}
                 </NavLink>
+                <NavLink to="/candidate/vacancies" className={linkClass}>
+                  Вакансии
+                </NavLink>
+                <NavLink to="/candidate/microtasks" className={linkClass}>
+                  Задачи
+                </NavLink>
                 <NavLink to="/candidate/settings" className={linkClass}>
                   {RU.nav.settings}
                 </NavLink>

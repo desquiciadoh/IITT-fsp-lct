@@ -262,3 +262,47 @@ export type Application = {
   created_at: string
   updated_at: string
 }
+
+// ── micro-tasks (FE-16) ──
+// Gap G19 / BE-18: contract agreed with BE (BE.md §2.3 G19); mocked.
+
+export type MicroTaskFormat = 'auto' | 'open'
+
+export type MicroTask = {
+  id: string
+  company: { id: string; name: string; trust_level: TrustLevel }
+  title: string
+  specialization: Spec
+  grades: Grade[]
+  format: MicroTaskFormat
+  prompt_md: string
+  deadline: string
+}
+
+export type MicroTaskDrop = {
+  id: string
+  task: MicroTask
+  candidate: { public_id: string; display_name: string; city?: string }
+  answer: unknown
+  score: number | null
+  employer_rating: number | null
+  shared: boolean
+  submitted_at: string
+  review_note?: string
+}
+
+/** Employer view of a task with its submissions (FE-16). */
+export type EmployerMicroTask = MicroTask & { submissions: MicroTaskDrop[] }
+
+/** POST /api/offers body — invitation from a reviewed submission (FE-16). */
+export type OfferCreate = {
+  candidate_public_id: string
+  title: string
+  description: string
+  salary_min: number
+  salary_max: number
+  salary_type: SalaryType
+  contact_channel: ContactChannel
+  contact_value: string
+  expires_in_days?: number
+}

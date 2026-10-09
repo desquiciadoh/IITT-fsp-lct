@@ -101,7 +101,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
 | FE-13 Validation Lab | M | G11 | ✅ backend serves the report (fixture fallback) |
 | FE-19 Playwright e2e | S | FE-05, FE-10, FE-11 (FE2); CI from BE | ❌ FE2 P0 not started |
 | FE-15 Vacancies & applications | M | BE-17 | ❌ not started (BE.md N11), mock it |
-| FE-16 Micro-tasks | M | BE-18 | ❌ not started (BE.md N11), mock it |
+| FE-16 Micro-tasks | M | BE-18 | ✅ feature done on mocks (G19) |
 | FE-17 Pool power features | M | FE-10 (FE2), ML-10, BE-20 | ❌ mock it, build after FE-10 merges |
 | FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ❌ mock it |
 | FE-18 Polish | M | PD-05 copy; FE2's screens merged | partly unblocked |
@@ -126,7 +126,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - **Employer:** a publish toggle and an applicant pipeline on the position. The page `/employer/positions/:id` belongs to FE2 (FE-10): agree with FE2 on a tab/slot and build your part as components in `features/vacancies/`.
   - *Done:* apply → the employer sees the applicant → status change reaches the candidate.
 
-- [ ] **FE-16 · Micro-tasks** (M). Depends on BE-18; mock it.
+- [x] **FE-16 · Micro-tasks** (M). Depends on BE-18; mock it.
   - **Candidate:** a task inbox and a solve screen. **Employer:** create, review, and "invite from a submission" (creates a Draft Offer through FE2's send-offer modal).
   - A reviewed submission is evidence with source `microtask`: give it its own chip variant on `/dev/ui`, distinct from `declared`.
   - *Done:* create → solve → review → invite works end to end on mocks.

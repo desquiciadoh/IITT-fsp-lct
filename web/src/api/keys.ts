@@ -23,4 +23,8 @@ export const keys = {
   vacancies: ['vacancies'] as const,
   applications: ['applications'] as const,
   positionApplications: (positionId: string) => ['applications', 'position', positionId] as const,
+  microtasks: ['microtasks'] as const,
+  microtask: (id: string) => ['microtask', id] as const,
+  myDrops: ['microtasks', 'drops', 'me'] as const,
+  employerMicrotasks: ['employer', 'microtasks'] as const,
 }

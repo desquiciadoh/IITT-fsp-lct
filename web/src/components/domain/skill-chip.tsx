@@ -13,7 +13,7 @@ export function SkillChip({ name, source = 'declared' }: { name: string; source?
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs',
-        sourceChipClass(meta.verified),
+        sourceChipClass(meta.verified, meta.chipClass),
       )}
     >
       <Icon className="h-3 w-3" />

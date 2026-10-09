@@ -31,6 +31,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   contact_not_granted: 'Контакты пока не раскрыты.',
   no_credits: 'Лимит отправок на неделю исчерпан.',
   company_required: 'Сначала создайте профиль компании.',
+  deadline_passed: 'Срок сдачи микрозадачи истёк.',
   api_error: 'Что-то пошло не так. Попробуйте ещё раз.',
 }
 

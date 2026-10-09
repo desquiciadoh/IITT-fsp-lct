@@ -189,6 +189,7 @@ export function DevUiPage() {
         <SkillChip name="Python" source="test" />
         <SkillChip name="PostgreSQL" source="fsp" />
         <SkillChip name="Kubernetes" source="declared" />
+        <SkillChip name="SQL-витрины" source="microtask" />
         <SkillChip name="Go" />
       </Section>
 

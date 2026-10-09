@@ -108,3 +108,13 @@ export const APPLICATION_STATUS_LABEL: Record<string, string> = {
   rejected: 'отклонён',
   withdrawn: 'отозван',
 }
+
+export const MICROTASK_FORMAT_LABEL: Record<string, string> = {
+  auto: 'авто-проверка',
+  open: 'свободный ответ',
+}
+
+export const MICROTASK_REVIEW_LABEL: Record<string, string> = {
+  pending: 'ждёт ревью',
+  scored: 'проверено',
+}

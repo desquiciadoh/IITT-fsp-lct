@@ -6,6 +6,7 @@ import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
 import { vacancyHandlers } from '@/mocks/handlers/vacancies'
+import { microtaskHandlers } from '@/mocks/handlers/microtasks'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
@@ -29,6 +30,7 @@ export async function startMocks(): Promise<void> {
           ...offerHandlers,
           ...fspHandlers,
           ...vacancyHandlers,
+          ...microtaskHandlers,
           ...coreHandlers,
         ]
       : missingHandlers

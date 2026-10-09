@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
 import { usePollingInterval } from '@/api/events'
-import type { Offer } from '@/api/types'
+import type { Offer, OfferCreate } from '@/api/types'
 
 /** GET /api/offers?status= returns an array today; also accept {items} (gap G14). */
 export function useOffers(status?: string) {
@@ -56,4 +56,20 @@ export function isOfferConflict(error: unknown): boolean {
     (error as { code?: string }).code !== undefined &&
     ['version_conflict', 'invalid_transition'].includes((error as { code: string }).code)
   )
+}
+
+/** POST /api/offers — employer sends a Draft offer (FE-16 invitation from a submission, FE2 modal later). */
+export function useCreateOffer() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: OfferCreate) =>
+      customFetch<Offer>('/api/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['offers'] })
+    },
+  })
 }

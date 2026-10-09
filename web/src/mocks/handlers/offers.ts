@@ -101,6 +101,58 @@ const TRANSITIONS: Record<string, Record<string, Offer['status']>> = {
 }
 
 export const offerHandlers = [
+  http.post('*/api/offers', async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as {
+      candidate_public_id?: string
+      title?: string
+      description?: string
+      salary_min?: number
+      salary_max?: number
+      salary_type?: string
+      contact_channel?: string
+      contact_value?: string
+      expires_in_days?: number
+    }
+    if (
+      !body.candidate_public_id ||
+      !body.title?.trim() ||
+      typeof body.salary_min !== 'number' ||
+      typeof body.salary_max !== 'number' ||
+      typeof body.salary_min !== 'number'
+    ) {
+      return problem(400, 'validation_failed', 'A candidate, title and salary range are required.')
+    }
+    const offer: MutableOffer = {
+      id: `off-${store.length + 1}`,
+      title: body.title.trim(),
+      description: body.description ?? '',
+      company: { id: 'comp-1', name: 'Acme Systems', trust_level: 'verified' },
+      position: body.title.trim(),
+      salary_min: Number(body.salary_min),
+      salary_max: Number(body.salary_max),
+      salary_type: (body.salary_type as Offer['salary_type']) ?? 'gross',
+      currency: 'RUB',
+      contact_channel: (body.contact_channel as Offer['contact_channel']) ?? 'platform',
+      contact_value: body.contact_value ?? undefined,
+      status: 'sent',
+      why_you: [
+        {
+          kind: 'plus',
+          text: 'Выполнена микрозадача — навык подтверждён компанией',
+          source: 'microtask',
+        },
+      ],
+      version: 1,
+      expires_at: new Date(
+        Date.now() + (body.expires_in_days ?? 7) * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      candidate_contacts: null,
+    }
+    store.push(offer)
+    return json(offer, 201)
+  }),
   http.get('*/api/offers', ({ request }) => {
     const status = new URL(request.url).searchParams.get('status')
     const items = status && status !== 'all' ? store.filter((o) => o.status === status) : store
