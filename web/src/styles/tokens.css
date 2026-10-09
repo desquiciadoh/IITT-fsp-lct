@@ -51,6 +51,19 @@
    * All pass; on --fsp-bg the ratios are higher still.
    */
 
+  /*
+   * WCAG AA audit (FE-18) of every token pair used as text (>= 4.5):
+   *   on --fsp-bg       #0b0f14:          fg 16.45 · muted 6.55
+   *   on --fsp-panel    #121821:          fg 15.26 · muted 6.07 · plus 14.77 ·
+   *                                      info 9.36 · warn 11.59 · minus 6.42
+   *   on --fsp-panel-hover #182031:       fg 13.94 · muted 5.55
+   *   tinted 10 % chips over panel:       plus 11.58 · info 7.72 · warn 9.37 ·
+   *                                      minus 5.67
+   *   buttons:                            accent-fg on accent 15.93
+   * All pairs pass AA (min = 5.67). Rule: only these tokens are ever used as
+   * text or tinted chip backgrounds.
+   */
+
   /* type */
   --fsp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fsp-font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;

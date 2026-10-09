@@ -6,3 +6,15 @@ body {
   color: var(--fsp-fg);
   font-family: var(--fsp-font-sans);
 }
+
+/* FE-18: never let a row overflow the 375 px viewport (page-level scroll). */
+html {
+  overflow-x: clip;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}

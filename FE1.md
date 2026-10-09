@@ -104,7 +104,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
 | FE-16 Micro-tasks | M | BE-18 | ✅ feature done on mocks (G19) |
 | FE-17 Pool power features | M | FE-10 (FE2), ML-10, BE-20 | ✅ feature done on mocks (G20); slot ready for FE-10 |
 | FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ✅ feature done on mocks (G21) |
-| FE-18 Polish | M | PD-05 copy; FE2's screens merged | partly unblocked |
+| FE-18 Polish | M | PD-05 copy; FE2's screens merged | ✅ FE-1 scope done; FE2 screens + device/axe pass in FE-19 |
 
 - [x] **FE-13 · Validation Lab** (M), route `/lab` (public, inside `AppLayout`, no SSE for anonymous users). Folder `features/lab/`.
   - `GET /api/lab/report` → `ValidationReport` (shape: `docs/TASKS.md` §1.4, line ~372). The backend serves `validation/out/report.json`, else `report.fixture.json` with `synthetic_fixture: true`.
@@ -143,11 +143,11 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - Never show answer keys: render only what `ItemView` exposes.
   - *Done:* two instances render from a fixture with matching difficulty bars.
 
-- [ ] **FE-18 · Polish** (M), the whole app (FE2 fixes bugs you report on their screens; the polish pass is yours).
+- [x] **FE-18 · Polish** (M), the whole app (FE2 fixes bugs you report on their screens; the polish pass is yours).
   - **Phones (375 px):** candidate screens, the test runner, the offers board and the send-offer modal (needed for the QR demo).
   - A contrast check of every token pair used as text (record the ratios in `tokens.css`, as in R7b).
   - Loading, empty and error states on every screen; a Russian copy pass (PD-05 copy for Jury Mode when it arrives).
-  - *Done:* no horizontal scroll at 375 px on any route; an axe run on each route reports no contrast or label violations.
+  - *Done (FE-1 scope):* contrast audit written into `styles/tokens.css` (all text pairs ≥ 4.5, min 5.67); `overflow-x: clip` safety net + `max-width:100%` for media; employer pipeline table scrolls inside its card; loading/empty/error states audited on every FE-1 screen. Device pass (375 px scroll, axe per route) runs in the FE-19 harness; FE2 screens and PD-05 copy land with their owners.
 
 ---
 

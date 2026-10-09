@@ -74,7 +74,8 @@ export function EmployerVacancyPanel({ positionId }: { positionId: string }) {
           </button>
         </p>
       ) : applications && applications.length > 0 ? (
-        <table className="w-full border-collapse text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-96 border-collapse text-sm">
           <caption className="sr-only">Отклики на вакансию</caption>
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -129,6 +130,7 @@ export function EmployerVacancyPanel({ positionId }: { positionId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <EmptyState
           title="Откликов пока нет"
