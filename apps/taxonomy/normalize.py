@@ -238,6 +238,41 @@ def normalize_many(raws: list[str], catalog: dict[str, SkillEntry] | None = None
     return matches, unknown_terms
 
 
+_WORD_CHARS = "A-Za-zА-Яа-яЁё0-9_"
+
+
+def _key_pattern(key: str) -> re.Pattern[str]:
+    """Free-text pattern for one lower-cased taxonomy key."""
+    if len(key) <= 2:
+        # Short keys ("go", "c", "ml", "tf", "c#") are matched case-sensitively in their usual
+        # spellings only (Go/GO, C, ML, TF, C#), so "ready to go", "C++", "C-level" and
+        # "TF-IDF" do not produce skills.
+        variants = sorted({key.upper(), key[:1].upper() + key[1:]})
+        body = "|".join(re.escape(v) for v in variants)
+        return re.compile(rf"(?<![{_WORD_CHARS}.+#])(?:{body})(?![{_WORD_CHARS}+#]|-[A-Za-z])")
+    escaped = re.escape(key)
+    if not key[-1].isalnum():
+        # "c++", "c#": a version may follow ("C++17"), another symbol may not
+        return re.compile(rf"(?<![{_WORD_CHARS}]){escaped}(?![A-Za-zА-Яа-яЁё_+#])", re.IGNORECASE)
+    return re.compile(rf"(?<![{_WORD_CHARS}]){escaped}(?![{_WORD_CHARS}])", re.IGNORECASE)
+
+
+_PATTERNS_CACHE: tuple[dict[str, SkillEntry], list[tuple[str, SkillEntry, list[tuple[str, re.Pattern[str]]]]]] | None = None
+
+
+def _catalog_patterns(catalog: dict[str, SkillEntry]) -> list[tuple[str, SkillEntry, list[tuple[str, re.Pattern[str]]]]]:
+    """Compile the free-text patterns once per catalog object."""
+    global _PATTERNS_CACHE
+    if _PATTERNS_CACHE is not None and _PATTERNS_CACHE[0] is catalog:
+        return _PATTERNS_CACHE[1]
+    compiled = []
+    for sid, entry in catalog.items():
+        keys = list(dict.fromkeys(k for k in [sid, clean_key(entry.name), *entry.aliases] if k))
+        compiled.append((sid, entry, [(k, _key_pattern(k)) for k in keys]))
+    _PATTERNS_CACHE = (catalog, compiled)
+    return compiled
+
+
 def extract_skills(text: str, catalog: dict[str, SkillEntry] | None = None) -> tuple[list[SkillMatch], list[str]]:
     """Scan free text for mentions of taxonomy skills (used by rules fallback and phrase grounding).
 
@@ -250,31 +285,16 @@ def extract_skills(text: str, catalog: dict[str, SkillEntry] | None = None) -> t
     if catalog is None:
         catalog = load_skills()
 
-    lowered = text.lower()
-    matched_ids: set[str] = set()
     matches: list[SkillMatch] = []
-
-    # Check each skill and its aliases in the text
-    for sid, entry in catalog.items():
-        candidates = [sid, entry.name.lower()] + [a.lower() for a in entry.aliases]
-        for cand in candidates:
-            # Handle special symbols like c++, c#, .net
-            if cand in ("c++", "cpp", "c#", ".net", "drf"):
-                escaped = re.escape(cand)
-                pattern = rf"(?:^|[\s,;/()\[\]]){escaped}(?:$|[\s,;/()\[\]])"
-            else:
-                escaped = re.escape(cand)
-                pattern = rf"(?<![A-Za-zА-Яа-я0-9_]){escaped}(?![A-Za-zА-Яа-я0-9_])"
-
-            if re.search(pattern, lowered):
-                if sid not in matched_ids:
-                    matched_ids.add(sid)
-                    matches.append(SkillMatch(
-                        skill_id=sid,
-                        name=entry.name,
-                        score=1.0,
-                        method="exact" if cand in (sid, clean_key(entry.name)) else "alias",
-                    ))
+    for sid, entry, patterns in _catalog_patterns(catalog):
+        for key, pattern in patterns:
+            if pattern.search(text):
+                matches.append(SkillMatch(
+                    skill_id=sid,
+                    name=entry.name,
+                    score=1.0,
+                    method="exact" if key in (sid, clean_key(entry.name)) else "alias",
+                ))
                 break
 
     return matches, []

@@ -294,3 +294,27 @@
   expected: null
 - raw: Waterflow
   expected: null
+- raw: MS SQL
+  expected: mssql
+- raw: SQL Server
+  expected: mssql
+- raw: OpenCV
+  expected: opencv
+- raw: Sass
+  expected: sass
+- raw: Bash
+  expected: bash
+- raw: GitHub Actions
+  expected: github_actions
+- raw: GitLab CI
+  expected: gitlab_ci
+- raw: Data Structures
+  expected: data_structures
+- raw: Pydantic
+  expected: null
+- raw: CV
+  expected: null
+- raw: ES
+  expected: null
+- raw: TF-IDF
+  expected: null

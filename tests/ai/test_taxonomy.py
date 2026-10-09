@@ -1,6 +1,7 @@
 """Unit tests for Skill Taxonomy and normalization (AI-1, AI-R5)."""
 from pathlib import Path
 
+import pytest
 import yaml
 from taxonomy import (
     extract_skills,
@@ -9,6 +10,8 @@ from taxonomy import (
     normalize_many,
     normalize_skill,
 )
+from taxonomy.loader import clean_key
+from taxonomy.normalize import _CANONICAL_SPELLINGS
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -37,16 +40,17 @@ def test_skills_integrity():
         for rel in entry.related:
             assert rel in all_ids, f"Skill '{sid}' references non-existent related skill '{rel}'"
 
-    # 2. Alias uniqueness (one alias -> one id)
-    aliases: dict[str, str] = {}
+    # 2. Key uniqueness: every id, name and alias maps to exactly one skill id
+    owners: dict[str, set[str]] = {}
     for sid, entry in catalog.items():
-        for alias in entry.aliases:
-            clean_a = alias.strip().lower()
-            if clean_a in aliases:
-                assert aliases[clean_a] == sid, (
-                    f"Duplicate alias '{clean_a}' found in '{sid}' and '{aliases[clean_a]}'"
-                )
-            aliases[clean_a] = sid
+        for key in [sid, entry.name, *entry.aliases]:
+            owners.setdefault(clean_key(key), set()).add(sid)
+    ambiguous = {key: ids for key, ids in owners.items() if len(ids) > 1}
+    assert not ambiguous, f"Keys shared by several skills: {ambiguous}"
+
+    # 3. Canonical spellings point at real skills
+    missing = {k: v for k, v in _CANONICAL_SPELLINGS.items() if v not in all_ids}
+    assert not missing, f"Canonical spellings point at unknown ids: {missing}"
 
 
 def test_skills_index_o1_lookup():
@@ -129,6 +133,30 @@ def test_extract_skills_from_text():
     assert "postgresql" in matched_ids
     assert "docker" in matched_ids
     assert "kubernetes" in matched_ids
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "absent"),
+    [
+        ("C# developer, .NET", {"csharp", "dotnet"}, {"c"}),
+        ("C++17 developer", {"cpp"}, {"c"}),
+        ("Знаю C и Си", {"c"}, set()),
+        ("C-level stakeholders", set(), {"c"}),
+        ("Python, Go, Docker", {"python", "golang", "docker"}, set()),
+        ("Go-разработчик", {"golang"}, set()),
+        ("We are ready to go fast", set(), {"golang"}),
+        ("CV\nPython developer", {"python"}, {"computer_vision"}),
+        ("TF-IDF и word2vec", set(), {"tensorflow"}),
+        ("ES-модули в браузере", set(), {"elasticsearch"}),
+        ("ML-инженер", {"machine_learning"}, set()),
+        ("Опыт с MS SQL и T-SQL", {"mssql"}, {"mysql"}),
+    ],
+)
+def test_extract_skills_short_keys(text, expected, absent):
+    """Short aliases match only in their usual spelling and never inside C++/C#/TF-IDF."""
+    found = {m.skill_id for m in extract_skills(text)[0]}
+    assert expected <= found
+    assert not (absent & found)
 
 
 def test_skills_messy_fixture():

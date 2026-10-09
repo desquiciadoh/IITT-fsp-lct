@@ -30,7 +30,6 @@
   - fast api
   - фастапи
   - фаст апи
-  - pydantic
   related:
   - python
   - asyncio
@@ -99,7 +98,6 @@
   name: Algorithms
   topic: general.computer_science
   aliases:
-  - data structures
   - dsa
   - algorithms and data structures
   - алгоритмы
@@ -312,12 +310,11 @@
   - scss
   - tailwindcss
 - id: scss
-  name: SCSS / SASS
+  name: SCSS
   topic: frontend.markup
   aliases:
-  - sass
-  - scss
   - sass/scss
+  - scss/sass
   related:
   - css
 - id: tailwindcss
@@ -390,6 +387,18 @@
   - мариадб
   related:
   - sql
+- id: mssql
+  name: Microsoft SQL Server
+  topic: backend.databases
+  aliases:
+  - ms sql
+  - mssql
+  - ms sql server
+  - sql server
+  - t-sql
+  - tsql
+  related:
+  - sql
 - id: redis
   name: Redis
   topic: backend.databases
@@ -419,7 +428,6 @@
   topic: backend.databases
   aliases:
   - elastic
-  - es
   - эластик
   - эластиксерч
   related: []
@@ -470,9 +478,7 @@
   - ubuntu
   - debian
   - centos
-  - bash
   - линукс
-  - баbash
   related:
   - git
 - id: git
@@ -492,8 +498,6 @@
   - cicd
   - continuous integration
   - continuous deployment
-  - github actions
-  - gitlab ci
   - jenkins
   - сисиди
   related:
@@ -593,8 +597,6 @@
   name: Computer Vision
   topic: ml.cv
   aliases:
-  - cv
-  - opencv
   - компьютерное зрение
   - комп зрение
   related:
