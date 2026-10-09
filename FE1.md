@@ -64,7 +64,7 @@ All paths relative to `web/`. Fix in order; one commit per item.
   - **Fix:** `retry: (n, e) => !(e instanceof ApiError && (e.status === 401 || e.status === 403)) && n < 1`; `toast.error(…, { id: 'session-expired' })`; skip `navigate` if a redirect to `/login` is already pending.
   - **Acceptance:** on `/candidate` with a dead session, the network tab shows each query once, and there is exactly one toast.
 
-- [ ] **R22 · `all`-mode mock skips the qualification gate.** `mocks/handlers/core.ts` (`PUT /api/candidates/me`) sets `onboarding_step = 'done'` as soon as `claimed_grade` is saved. The backend keeps `qualification` until a test finishes (`apps/identity/views.py:151`), which is exactly the state R2 was about.
+- [x] **R22 · `all`-mode mock skips the qualification gate.** `mocks/handlers/core.ts` (`PUT /api/candidates/me`) sets `onboarding_step = 'done'` as soon as `claimed_grade` is saved. The backend keeps `qualification` until a test finishes (`apps/identity/views.py:151`), which is exactly the state R2 was about.
   - **Fix:** claim keeps `qualification`; the mocked `POST /api/assessments/:id/finish` (all mode) sets `done`.
   - **Acceptance:** in `all` mode, after the claim step, `/candidate` redirects to `/candidate/qualification/start`.
 

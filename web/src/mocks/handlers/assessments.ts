@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { completeQualification } from '@/mocks/handlers/core'
 
 /**
  * `all` mode (no backend): result fixtures, history, eligibility and the
@@ -124,6 +125,11 @@ export const assessmentHandlers = [
   http.get('*/api/assessments/eligibility', () =>
     json({ can_start: true, active_session_id: null, promotion_available: false }),
   ),
+  http.post('*/api/assessments/:id/finish', ({ params }) => {
+    // R22: the backend only clears `qualification` when a test finishes.
+    completeQualification()
+    return json({ id: String(params.id), status: 'finished' })
+  }),
   http.get('*/api/assessments/:id/result', ({ params }) => {
     const fixture = resultFixtures[String(params.id)]
     if (fixture) return json(fixture)

@@ -129,7 +129,9 @@ export function setMockMe(next: typeof me.candidate): void {
 /**
  * `all` mode: mirror the backend's onboarding_step advance so the wizard →
  * gate flow works without a real backend — consent saved → profile,
- * profile saved → qualification, claimed grade saved → done.
+ * profile/claim saved → qualification. The backend keeps `qualification`
+ * until a test finishes (R22), so `done` is set by the mocked finish handler,
+ * not here.
  */
 function advanceStep(
   apply: (step: Me['onboarding_step']) => Me['onboarding_step'] | undefined,
@@ -137,6 +139,11 @@ function advanceStep(
   if (currentMe.role !== 'candidate') return
   const next = apply(currentMe.onboarding_step)
   if (next) currentMe = { ...currentMe, onboarding_step: next }
+}
+
+/** `all` mode: a finished test closes the qualification step (R22). */
+export function completeQualification(): void {
+  advanceStep((step) => (step === 'qualification' ? 'done' : undefined))
 }
 
 export const coreHandlers = [
@@ -206,7 +213,7 @@ export const coreHandlers = [
     const next = { ...profile, ...body } as CandidateProfile
     profileStore.set(currentMe.id, next)
     advanceStep((step) => {
-      if (body.claimed_grade) return step === 'consent' ? 'profile' : 'done'
+      if (body.claimed_grade) return step === 'consent' ? 'profile' : 'qualification'
       if (step === 'profile') return 'qualification'
       return undefined
     })
