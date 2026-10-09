@@ -260,3 +260,147 @@
   - '@artem_sokolov'
   - github.com/artem-sokolov
   - sokolov.tech
+# Re-review of PR #7: leaks and false positives reproduced on 8fe870d
+- name: github_pages_subdomain
+  raw: 'Портфолио: ivanov-ivan.github.io и petrov.github.io/blog'
+  expected_urls:
+  - ivanov-ivan.github.io
+  - petrov.github.io/blog
+  forbidden:
+  - ivanov-ivan
+  - petrov.github
+- name: bare_handle_prefix_of_another
+  raw: 'Контакты: @ivan и @ivan_petrov'
+  expected_tg: '@ivan_petrov'
+  forbidden:
+  - _petrov
+  - ivan_petrov
+- name: labelled_github_username
+  raw: 'GitHub: ivanpetrov, Skype: ivan.petrov.skype'
+  expected_urls:
+  - ivanpetrov
+  - ivan.petrov.skype
+  forbidden:
+  - ivanpetrov
+  - ivan.petrov.skype
+- name: www_profile_link
+  raw: 'Профиль: www.linkedin.com/in/ivan-petrov'
+  expected_url: www.linkedin.com/in/ivan-petrov
+  forbidden:
+  - ivan-petrov
+- name: cyrillic_email_and_domain
+  raw: 'Почта: иван@почта.рф, сайт иванов.рф'
+  expected_email: иван@почта.рф
+  expected_url: иванов.рф
+  forbidden:
+  - иван@почта.рф
+  - иванов.рф
+- name: name_in_body_without_label
+  raw: 'Python Developer
+
+    Я, Иван Петров, разработчик с опытом 5 лет'
+  expected_name: Иван Петров
+  forbidden:
+  - Иван
+  - Петров
+- name: referee_is_not_the_candidate
+  raw: 'Иванов Иван Иванович
+
+    Рекомендации: Сидоров Петр, CTO
+
+    email: ivanov@example.com'
+  expected_full_name: Иванов Иван Иванович
+  expected_name: Сидоров Петр
+  forbidden:
+  - Иванов
+  - Сидоров
+  - Петр
+- name: references_on_request
+  raw: 'Иванов Иван
+
+    Рекомендации: предоставлю по запросу
+
+    Запросы к API'
+  expected_full_name: Иванов Иван
+  must_preserve:
+  - предоставлю по запросу
+  - Запросы к API
+- name: city_line_before_name
+  raw: 'Москва, Россия
+
+    Иванов Иван
+
+    +7 999 111 22 33'
+  expected_full_name: Иванов Иван
+  forbidden:
+  - Иванов
+  - 111 22 33
+  must_preserve:
+  - Москва, Россия
+- name: role_line_before_name
+  raw: 'Product Manager
+
+    Иванов Иван'
+  expected_full_name: Иванов Иван
+  forbidden:
+  - Иванов
+  must_preserve:
+  - Product Manager
+- name: unusual_short_name
+  raw: 'Ли Мин
+
+    Python разработчик'
+  expected_full_name: Ли Мин
+  forbidden:
+  - Ли Мин
+- name: salary_range_is_not_a_phone
+  raw: 'Зарплата: 250 000 - 300 000 руб на руки'
+  expected_phone: null
+  must_preserve:
+  - 250 000 - 300 000
+- name: date_range_is_not_a_phone
+  raw: 'Опыт работы
+
+    03.2019 - 05.2023 ООО Ромашка
+
+    01.2020-12.2023 ООО Лютик'
+  expected_phone: null
+  must_preserve:
+  - 03.2019 - 05.2023
+  - 01.2020-12.2023
+- name: big_numbers_are_not_phones
+  raw: 'Обработка 10 000 - 50 000 запросов в секунду, 1 000 000 000 событий, сервер 192.168.100.200'
+  expected_phone: null
+  must_preserve:
+  - 10 000 - 50 000
+  - 1 000 000 000
+- name: telegram_product_words_are_not_handles
+  raw: 'Разработка Telegram WebApp и Telegram Bots API'
+  expected_tg: null
+  must_preserve:
+  - Telegram WebApp
+  - Telegram Bots API
+- name: spring_annotations_are_not_handles
+  raw: 'Spring: @Autowired, @RestController, @Entity, @Transactional'
+  expected_tg: null
+  must_preserve:
+  - '@Autowired'
+  - '@RestController'
+- name: tech_tokens_shaped_like_domains
+  raw: 'Socket.IO, ADO.NET, VB.NET, ASP.NET Core'
+  expected_url: null
+  must_preserve:
+  - Socket.IO
+  - ADO.NET
+  - VB.NET
+- name: company_and_university_are_not_names
+  raw: 'Company name: Yandex
+
+    Московский Государственный Университет, 2015
+
+    Руководитель Отдела Продаж'
+  expected_full_name: null
+  must_preserve:
+  - Yandex
+  - Московский Государственный Университет
+  - Руководитель Отдела Продаж

@@ -24,6 +24,7 @@ class Redacted:
         "url": [],
         "name": [],
     })
+    full_name: str | None = None  # the candidate's own name (header or "ФИО:"), never a referee
 
 
 @dataclass(frozen=True)

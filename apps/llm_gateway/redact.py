@@ -1,257 +1,467 @@
-"""Local PII redaction module (152-FZ compliance) with safety net (AI-R1).
+"""Local PII redaction (152-FZ) with a safety net (AI-R1).
 
-Extracts and replaces sensitive personal identifiable information (emails, phones,
-Telegram handles, URLs, and personal names) with non-leaking placeholders.
-Provides assert_clean() verification to block LLM transmission on any residual leak.
+redact() runs locally and masks emails, Telegram handles, profile links and personal sites,
+phone numbers and personal names with placeholders: [EMAIL], [TG], [URL], [PHONE], [NAME].
+Every replacement is span-based (re.sub with a function), never str.replace.
+
+assert_clean() re-checks the masked text with broader patterns and searches it for every value
+in `found`; the orchestrators skip the LLM when anything is left ("pii_residual").
 """
 from __future__ import annotations
 
+import bisect
 import re
 
+from taxonomy import clean_key, get_skills_index, normalize_skill
+
+from .pii_lexicon import (
+    CITY_WORDS,
+    CODE_ANNOTATIONS,
+    COMPANY_WORDS,
+    FIRST_NAME_ENDINGS,
+    FIRST_NAMES_CYR,
+    FIRST_NAMES_LAT,
+    PATRONYMIC_RE,
+    ROLE_WORDS,
+    SECTION_WORDS,
+    SURNAME_SUFFIXES_CYR,
+    SURNAME_SUFFIXES_LAT,
+    TECH_DOMAIN_TOKENS,
+)
 from .types import Redacted
 
-_CODE_ANNOTATION_STOPLIST = {
-    "dataclass", "pytest", "property", "staticmethod", "classmethod", "override",
-    "transactional", "component", "injectable", "input", "output", "app", "router",
-    "fixture", "abstractmethod", "validator", "field", "root_validator",
-    "get", "post", "put", "delete", "patch", "route", "test", "describe",
-}
+# ── patterns ────────────────────────────────────────────────────────────────
 
-_ROLE_AND_SKILL_WORDS = {
-    "developer", "engineer", "разработчик", "инженер", "lead", "senior", "middle",
-    "junior", "intern", "стажер", "стажёр", "тимлид", "архитектор", "architect",
-    "devops", "qa", "tester", "frontend", "backend", "fullstack", "scientist",
-    "python", "java", "golang", "react", "docker", "postgres", "sql", "linux",
-}
+_EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-zА-Яа-яЁё]{2,}(?![\w-])")
 
-_SECTION_HEADERS = {
-    "опыт работы", "обо мне", "ключевые навыки", "навыки", "образование",
-    "высшее образование", "курсы", "сертификаты", "контакты", "контактная информация",
-    "желаемая должность", "резюме", "профиль", "портфолио", "информация",
-    "work experience", "experience", "education", "skills", "about me", "contacts",
-}
+_TG_LINK_RE = re.compile(
+    r"(?<![\w.])(?:https?://)?(?:www\.)?(?:t|telegram)\.me/(?:joinchat/|\+)?([A-Za-z0-9_]{3,64})",
+    re.IGNORECASE,
+)
 
-_KNOWN_SKILL_DOMAINS = {"asp.net", "node.js", "vue.js", "next.js", "nuxt.js"}
+_URL_CHARS = r"[^\s<>()\"'{}|\\^`\[\]]"
+_SCHEME_URL_RE = re.compile(rf"(?<![\w])(?:https?://|www\.){_URL_CHARS}+", re.IGNORECASE)
+_DOMAIN_RE = re.compile(
+    r"(?<![\w.@/\-])"
+    r"((?:[a-zа-яё0-9](?:[a-zа-яё0-9\-]*[a-zа-яё0-9])?\.)+"
+    r"(?:ru|рф|su|com|net|org|io|dev|me|site|pro|tech|app|info|online|space|xyz|ai|co|by|kz|ua|uz))"
+    rf"(/{_URL_CHARS}*)?"
+    r"(?![\w\-])",
+    re.IGNORECASE,
+)
+_TRAILING_PUNCT = ".,;:!?»"
+
+_PROFILE_LABEL_RE = re.compile(
+    r"(?<![\w])((?i:github|gitlab|bitbucket|linkedin|habr|хабр|skype|скайп|vk|вк|vkontakte|"
+    r"вконтакте|instagram|инстаграм|facebook|twitter|kaggle|leetcode|codewars|stackoverflow|"
+    r"discord))(\s*[:\-–—]\s*@?)([A-Za-z0-9][\w.:\-]{2,39})"
+)
+
+_TG_LABEL = r"(?i:telegram|телеграмм?|tg|тг)"
+# "Telegram: ivan_petrov", "ТГ - @ivan", "tg @ivan", "Telegram (@ivan)"
+_TG_LABELLED_RE = re.compile(
+    rf"(?<![\w@])({_TG_LABEL})(\s*[:\-–—]\s*@?|\s+@|\s*\(\s*@?)([A-Za-z][A-Za-z0-9_]{{4,31}})(?![\w])"
+)
+# "Телеграм ivan_petrov_dev": no separator, so the handle must contain "_" or a digit
+_TG_SPACED_RE = re.compile(
+    rf"(?<![\w@])({_TG_LABEL})(\s+)([A-Za-z][A-Za-z0-9_]*[_\d][A-Za-z0-9_]*)(?![\w])"
+)
+_BARE_AT_RE = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{2,31})(?![\w])")
+_CONTACT_CUE_RE = re.compile(
+    r"telegram|телеграм|\btg\b|\bтг\b|контакт|связ|мессенджер|contact|\[(?:EMAIL|PHONE|URL|TG)\]",
+    re.IGNORECASE,
+)
+
+_PHONE_RE = re.compile(
+    r"(?<![\w+])(?:"
+    r"\+\s?\d{1,3}[\s\-.]*(?:\(\s?\d{1,5}\s?\)|\d{1,5})(?:[\s\-.]*\d{1,4}){2,4}"
+    r"|[78][\s\-.]*(?:\(\s?\d{3,5}\s?\)|\d{3,5})(?:[\s\-.]*\d{1,4}){2,4}"
+    r"|\(\s?\d{3,5}\s?\)(?:[\s\-.]*\d{1,4}){2,4}"
+    r"|\d{3}[\s\-.]\d{3}[\s\-.]\d{2}[\s\-.]\d{2}"
+    r"|9\d{2}[\s\-.]?\d{3}[\s\-.]?\d{2}[\s\-.]?\d{2}"
+    r"|9\d{2}[\s\-.]?\d{7}"
+    r")(?![\w])"
+)
+# Safety net: any long run of digits and separators on one line
+_DIGIT_RUN_RE = re.compile(r"(?<![\w+])\+?\d[\d \t\xa0\-.()]{8,30}\d(?![\w])")
+_YEAR_RE = re.compile(r"(?:19|20)\d\d")
+_MONTH_YEAR_RE = re.compile(r"(?<!\d)\d{1,2}[./](?:19|20)\d\d(?!\d)")
+_MONEY_RE = re.compile(r"\d{1,3}(?:[\s\xa0]\d{3})+(?:\s*[-–—]\s*\d{1,3}(?:[\s\xa0]\d{3})+)?")
+_IPV4_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+
+_CYR_WORD = r"[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?"
+_CYR_CAPS = r"[А-ЯЁ]{2,}(?:-[А-ЯЁ]{2,})?"
+_LAT_WORD = r"[A-Z][a-z]+(?:-[A-Z][a-z]+)?"
+_LAT_CAPS = r"[A-Z]{2,}(?:-[A-Z]{2,})?"
+_NAME_TOKEN = rf"(?:{_CYR_WORD}|{_CYR_CAPS}|{_LAT_WORD}|{_LAT_CAPS})"
+
+# The candidate's own name, labelled at the start of a line: "ФИО: Иванов Иван", "Имя: Дмитрий"
+_OWN_LABEL_RE = re.compile(
+    r"^[ \t•*\-]*(?i:фио|имя\s+и\s+фамилия|фамилия\s+и\s+имя|имя|full\s+name|name)"
+    rf"[ \t]*[:\-–—][ \t]*({_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}){{0,2}})",
+    re.MULTILINE,
+)
+# Somebody else's name: referees and contact persons, or a manager/mentor that looks like a name
+_OTHER_LABEL_RE = re.compile(
+    r"(?<![\w])(?:((?i:рекомендации|рекомендатели|рекомендатель|рекомендует|контактное\s+лицо|"
+    r"references?|referees?))|(?i:руководитель|ментор|mentor|manager))"
+    rf"\s*[:\-–—]?\s*({_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}){{1,2}})"
+)
+# Two or three capitalised words in the same script, anywhere in the text
+_BODY_NAME_RE = re.compile(
+    rf"(?<![\w\-])({_CYR_WORD}(?:[ \t]+{_CYR_WORD}){{1,2}}|{_LAT_WORD}(?:[ \t]+{_LAT_WORD}){{1,2}})(?![\w\-])"
+)
+_HEADER_SPLIT_RE = re.compile(r"\s*(?:[,|(:;•·/]|\s[-–—]\s|[–—])\s*")
+_PATRONYMIC_TOKEN_RE = re.compile(rf"[а-яё]+{PATRONYMIC_RE}")
+_PLACEHOLDER_RUN_RE = re.compile(r"\[NAME\](?:[ \t\-]+\[NAME\])+")
+
+_HEADER_LINES = 10
 
 
-def _is_name_token_valid(token: str) -> bool:
-    cleaned = token.strip(" ,.-–:;").lower()
-    if not cleaned or len(cleaned) < 2:
+# ── helpers ─────────────────────────────────────────────────────────────────
+
+def _is_skill(token: str) -> bool:
+    return clean_key(token) in get_skills_index()
+
+
+def _is_tech_domain(host: str) -> bool:
+    if host.lower() in TECH_DOMAIN_TOKENS or _is_skill(host):
+        return True
+    match = normalize_skill(host)  # canonical spellings: "asp.net core", ".net"
+    return match is not None and match.method in ("exact", "alias")
+
+
+def _is_non_name_word(token: str) -> bool:
+    low = token.lower()
+    if low in ROLE_WORDS or low in SECTION_WORDS or low in CITY_WORDS or low in COMPANY_WORDS:
+        return True
+    return any(part in ROLE_WORDS or part in CITY_WORDS for part in low.split("-")) or _is_skill(token)
+
+
+def _is_cyrillic(token: str) -> bool:
+    return bool(re.match(r"[А-ЯЁа-яё]", token))
+
+
+def _is_first_name(token: str) -> bool:
+    low = token.lower()
+    names = FIRST_NAMES_CYR if _is_cyrillic(token) else FIRST_NAMES_LAT
+    if low in names:
+        return True
+    if len(low) < 4:
         return False
-    if cleaned in _ROLE_AND_SKILL_WORDS or cleaned in _CODE_ANNOTATION_STOPLIST:
+    # inflected forms: drop up to 3 letters and look for a name whose stem matches
+    for cut in (1, 2, 3):
+        base, ending = low[:-cut], low[-cut:]
+        if ending not in FIRST_NAME_ENDINGS:
+            continue
+        for tail in ("", "а", "я", "й", "ь"):
+            if base + tail in names:
+                return True
+    return False
+
+
+def _is_patronymic(token: str) -> bool:
+    return bool(_PATRONYMIC_TOKEN_RE.fullmatch(token.lower()))
+
+
+def _name_score(tokens: list[str]) -> int:
+    score = 0
+    if any(_is_first_name(t) for t in tokens):
+        score += 3
+    if any(_is_patronymic(t) for t in tokens):
+        score += 3
+    suffixes = SURNAME_SUFFIXES_CYR if _is_cyrillic(tokens[0]) else SURNAME_SUFFIXES_LAT
+    if any(t.lower().endswith(suffixes) for t in tokens):
+        score += 1
+    return score
+
+
+def _same_script(tokens: list[str]) -> bool:
+    return len({_is_cyrillic(t) for t in tokens}) == 1
+
+
+def _is_number_not_phone(raw: str) -> bool:
+    """Years, month.year dates, money amounts and IPv4 addresses are long digit runs too."""
+    if raw.lstrip().startswith("+"):
         return False
-    # Check Cyrillic or Latin letters (hyphen allowed e.g. Римская-Корсакова)
-    return bool(re.match(r"^[А-Яа-яЁёA-Za-z]+(?:-[А-Яа-яЁёA-Za-z]+)?$", cleaned))
+    stripped = raw.strip()
+    return bool(
+        all(_YEAR_RE.fullmatch(g) for g in re.findall(r"\d+", raw))  # "2018 2019 2020 2021"
+        or _MONTH_YEAR_RE.search(raw)  # "03.2019 - 05.2023"
+        or _MONEY_RE.fullmatch(stripped)  # "250 000 - 300 000"
+        or _IPV4_RE.fullmatch(stripped)
+    )
 
 
-def _clean_phone_span(match: re.Match) -> str:
-    raw = match.group(0)
+def _looks_like_phone(raw: str) -> bool:
     digits = re.sub(r"\D", "", raw)
-    # Reject sequence of years like "2018 2019 2020 2021"
-    year_parts = re.findall(r"\b(19\d\d|20\d\d)\b", raw)
-    if year_parts and len("".join(year_parts)) == len(digits):
-        return raw  # keep original text, it's just years
-    if 10 <= len(digits) <= 15:
-        return "[PHONE]"
-    return raw
+    return 10 <= len(digits) <= 15 and not _is_number_not_phone(raw)
 
 
-def redact(text: str) -> Redacted:
-    """Extract and mask all PII from input text according to 152-FZ."""
+def _split_punct(value: str) -> tuple[str, str]:
+    core = value.rstrip(_TRAILING_PUNCT)
+    return core, value[len(core):]
+
+
+def _token_pattern(token: str) -> re.Pattern[str] | None:
+    """Whole-word pattern for a name token and its inflected forms (case-sensitive)."""
+    if len(token) < 2:
+        return None
+    if len(token) <= 3:
+        stem, tail = token, ""
+    else:
+        stem = token[:-2] if len(token) >= 6 else token[:-1] if len(token) == 5 else token
+        tail = "{0,4}"
+    title = stem[:1].upper() + stem[1:].lower()
+    caps = stem.upper()
+    letters_low, letters_up = "[а-яёa-z]", "[А-ЯЁA-Z]"
+    if tail:
+        body = f"{re.escape(title)}{letters_low}{tail}|{re.escape(caps)}{letters_up}{tail}"
+    else:
+        body = f"{re.escape(title)}|{re.escape(caps)}"
+    return re.compile(rf"(?<![\w])(?:{body})(?![\w])")
+
+
+# ── redaction ───────────────────────────────────────────────────────────────
+
+def redact(text: str, *, header_names: bool = True) -> Redacted:
+    """Mask all PII in `text` locally (152-FZ).
+
+    header_names: look for the candidate's name in the first lines (CVs). JD parsing turns it
+    off so a company name in the title is not taken for a person.
+    """
+    found: dict[str, list[str]] = {"email": [], "phone": [], "telegram": [], "url": [], "name": []}
     if not text:
-        return Redacted(text="", found={"email": [], "phone": [], "telegram": [], "url": [], "name": []})
+        return Redacted(text="", found=found)
+
+    def add(kind: str, value: str) -> None:
+        value = value.strip()
+        if value and value not in found[kind]:
+            found[kind].append(value)
 
     working = text
-    found_emails: list[str] = []
-    found_phones: list[str] = []
-    found_telegrams: list[str] = []
-    found_urls: list[str] = []
-    found_names: list[str] = []
 
     # 1. Emails
-    email_re = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-    for m in email_re.finditer(working):
-        em = m.group(0)
-        if em not in found_emails:
-            found_emails.append(em)
-    working = email_re.sub("[EMAIL]", working)
+    def _email(m: re.Match[str]) -> str:
+        add("email", m.group(0))
+        return "[EMAIL]"
 
-    # 2. Telegram:
-    # 2a. t.me / telegram.me links
-    tg_url_re = re.compile(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/([A-Za-z0-9_]{4,32})", re.IGNORECASE)
-    for m in tg_url_re.finditer(working):
-        h = m.group(1)
-        found_telegrams.append(f"@{h}")
-    working = tg_url_re.sub("[TG]", working)
+    working = _EMAIL_RE.sub(_email, working)
 
-    # 2b. Labelled telegram handles: e.g. "Telegram: ivan_petrov" or "тг: @ivan_dev"
-    tg_labelled_re = re.compile(
-        r"(?<![A-Za-zА-Яа-я0-9_])(?:telegram|телеграм|tg|тг)(?![A-Za-zА-Яа-я0-9_])\s*[:\-–]?\s*@?([A-Za-z0-9_]{4,32})\b",
-        re.IGNORECASE,
-    )
-    for m in tg_labelled_re.finditer(working):
-        h = m.group(1)
-        if h.lower() not in _CODE_ANNOTATION_STOPLIST:
-            found_telegrams.append(f"@{h}")
-    working = tg_labelled_re.sub("[TG]", working)
+    # 2. Telegram links
+    def _tg_link(m: re.Match[str]) -> str:
+        add("telegram", "@" + m.group(1))
+        return "[TG]"
 
-    # 2c. Mask bare @handles in text (prevent any handle leak)
-    bare_tg_re = re.compile(r"(?<![\w/])@([A-Za-z0-9_]{3,32})\b")
-    for m in bare_tg_re.finditer(working):
-        h = m.group(1)
-        if h.lower() not in _CODE_ANNOTATION_STOPLIST:
-            # If not in stoplist, record in found only if looks like username
-            if f"@{h}" not in found_telegrams and len(h) >= 4:
-                found_telegrams.append(f"@{h}")
-        # Always mask bare @handle if not code annotation
-        if h.lower() not in _CODE_ANNOTATION_STOPLIST:
-            working = working.replace(m.group(0), "[TG]")
+    working = _TG_LINK_RE.sub(_tg_link, working)
 
-    # 3. URLs and Domains
-    # 3a. Schemes & web links
-    url_re = re.compile(r"\bhttps?://[^\s<>()\"'{}|\\^`\[\]]+", re.IGNORECASE)
-    for m in url_re.finditer(working):
-        u = m.group(0)
-        found_urls.append(u)
-    working = url_re.sub("[URL]", working)
+    # 3. Links and personal sites
+    def _url(m: re.Match[str]) -> str:
+        core, punct = _split_punct(m.group(0))
+        add("url", core)
+        return "[URL]" + punct
 
-    # 3b. Profile domains and personal sites
-    prof_domain_re = re.compile(
-        r"\b(?:github\.com|gitlab\.com|bitbucket\.org|linkedin\.com|hh\.ru|"
-        r"habr\.com|career\.habr\.com|vk\.com|ok\.ru|kaggle\.com|leetcode\.com|"
-        r"stackoverflow\.com|medium\.com|dev\.to|behance\.net|dribbble\.com)/[^\s<>()\"'{}|\\^`\[\]]+",
-        re.IGNORECASE,
-    )
-    for m in prof_domain_re.finditer(working):
-        u = m.group(0)
-        found_urls.append(u)
-    working = prof_domain_re.sub("[URL]", working)
+    working = _SCHEME_URL_RE.sub(_url, working)
 
-    # 3c. Personal domain names (e.g. ivanov.dev, my-site.ru) excluding tech skills
-    pers_domain_re = re.compile(
-        r"\b[A-Za-z0-9][A-Za-z0-9-_]*\.(?:ru|рф|com|dev|io|me|org|net|site|pro|tech|app)(?:/\S*)?\b",
-        re.IGNORECASE,
-    )
-    for m in pers_domain_re.finditer(working):
-        dom = m.group(0)
-        if dom.lower() not in _KNOWN_SKILL_DOMAINS and "[URL]" not in dom:
-            found_urls.append(dom)
-            working = working.replace(dom, "[URL]")
+    def _domain(m: re.Match[str]) -> str:
+        if not m.group(2) and _is_tech_domain(m.group(1)):
+            return m.group(0)  # ASP.NET, Socket.IO
+        return _url(m)
 
-    # 4. Phones (RU and International: +7, 8, +375, etc.)
-    # Match full number string with brackets, spaces, dashes
-    phone_re = re.compile(
-        r"(?:(?:\+\d{1,3}|[78])[\s\-\.]*)?(?:\(\d{2,4}\)|\d{2,4})[\s\-\.]*\d{2,4}[\s\-\.]*\d{1,4}(?:[\s\-\.]*\d{1,4})?"
-    )
+    working = _DOMAIN_RE.sub(_domain, working)
 
-    def _replace_phone(m: re.Match) -> str:
-        raw_val = m.group(0).strip()
-        digits = re.sub(r"\D", "", raw_val)
-        year_parts = re.findall(r"\b(19\d\d|20\d\d)\b", raw_val)
-        if year_parts and len("".join(year_parts)) == len(digits):
-            return raw_val
-        if 10 <= len(digits) <= 15:
-            found_phones.append(raw_val)
-            return "[PHONE]"
-        return raw_val
+    def _profile(m: re.Match[str]) -> str:
+        core, punct = _split_punct(m.group(3))
+        add("url", core)
+        return m.group(1) + m.group(2).rstrip("@") + "[URL]" + punct
 
-    working = phone_re.sub(_replace_phone, working)
+    working = _PROFILE_LABEL_RE.sub(_profile, working)
 
-    # 5. Names:
-    # 5a. Labelled names: "ФИО: Иванов Иван Иванович", "Рекомендации: Сидоров Петр Алексеевич"
-    labelled_name_re = re.compile(
-        r"(?:ФИО|Имя|Name|Рекомендации|Контактное лицо)\s*[:\-–]\s*([А-ЯЁA-Z][а-яёa-zА-ЯЁA-Z\-]+(?:\s+[А-ЯЁA-Z][а-яёa-zА-ЯЁA-Z\-]+){1,2})",
-        re.IGNORECASE,
-    )
-    for m in labelled_name_re.finditer(working):
-        name_cand = m.group(1).strip()
-        tokens = name_cand.split()
-        if all(_is_name_token_valid(t) for t in tokens):
-            found_names.append(name_cand)
+    # 4. Telegram handles: labelled ones are contacts; a bare @handle is masked everywhere but
+    #    recorded only in the contact block, and code annotations are left alone.
+    def _tg_labelled(m: re.Match[str]) -> str:
+        handle = m.group(3)
+        if len(handle) > 32 or handle.lower() in CODE_ANNOTATIONS:
+            return m.group(0)
+        add("telegram", "@" + handle)
+        return m.group(1) + m.group(2).rstrip("@") + "[TG]"
 
-    # 5b. Header heuristic across first 10 non-empty lines
-    lines = working.splitlines()
-    non_empty_count = 0
-    for idx, line in enumerate(lines[:15]):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        non_empty_count += 1
-        if non_empty_count > 10:
-            break
+    working = _TG_LABELLED_RE.sub(_tg_labelled, working)
+    working = _TG_SPACED_RE.sub(_tg_labelled, working)
 
-        if any(h in stripped.lower() for h in _SECTION_HEADERS):
-            continue
-        if any(ph in stripped for ph in ("[EMAIL]", "[PHONE]", "[TG]", "[URL]")):
-            continue
+    line_starts, contact_lines = _contact_lines(working)
 
-        # Extract name part before comma or dash (e.g. "Петров Иван, Python-разработчик")
-        name_part = re.split(r"[,—–\-]\s*(?:python|разработчик|developer|инженер|lead|junior|middle|senior)", stripped, flags=re.IGNORECASE)[0].strip()
-        tokens = name_part.split()
+    def _bare_at(m: re.Match[str]) -> str:
+        handle = m.group(1)
+        if handle.lower() in CODE_ANNOTATIONS:
+            return m.group(0)
+        line_no = bisect.bisect_right(line_starts, m.start()) - 1
+        if line_no in contact_lines and len(handle) >= 5:
+            add("telegram", "@" + handle)
+        return "[TG]"
 
-        # Check 2 or 3 tokens: Title Case OR ALL CAPS
-        if 2 <= len(tokens) <= 3 and all(_is_name_token_valid(t) for t in tokens):
-            # Check Title Case or ALL CAPS
-            valid_case = all(t.isupper() or t.istitle() for t in tokens)
-            if valid_case:
-                found_names.append(name_part)
-                # Mask in the line
-                lines[idx] = line.replace(name_part, "[NAME]")
+    working = _BARE_AT_RE.sub(_bare_at, working)
+
+    # 5. Phones
+    def _phone(m: re.Match[str]) -> str:
+        raw = m.group(0)
+        if not _looks_like_phone(raw):
+            return raw
+        add("phone", raw)
+        return "[PHONE]"
+
+    working = _PHONE_RE.sub(_phone, working)
+
+    # 6. Names
+    own_name, other_names, working = _find_names(working, header_names=header_names)
+    if own_name:
+        add("name", own_name)
+    for name in other_names:
+        add("name", name)
+    for name in found["name"]:
+        for token in re.split(r"[\s\-]+", name):
+            pattern = _token_pattern(token)
+            if pattern is not None:
+                working = pattern.sub("[NAME]", working)
+    working = _PLACEHOLDER_RUN_RE.sub("[NAME]", working)
+
+    return Redacted(text=working, found=found, full_name=own_name)
+
+
+def _contact_lines(text: str) -> tuple[list[int], set[int]]:
+    """Line start offsets, and the lines that form the contact block."""
+    lines = text.split("\n")
+    starts: list[int] = []
+    offset = 0
+    contact: set[int] = set()
+    non_empty = 0
+    for idx, line in enumerate(lines):
+        starts.append(offset)
+        offset += len(line) + 1
+        if line.strip():
+            non_empty += 1
+            if non_empty <= _HEADER_LINES or _CONTACT_CUE_RE.search(line):
+                contact.add(idx)
+    return starts, contact
+
+
+def _find_names(text: str, *, header_names: bool) -> tuple[str | None, list[str], str]:
+    """Return (own name, other names, text with the header name masked)."""
+    own: str | None = None
+    others: list[str] = []
+
+    def valid(tokens: list[str]) -> bool:
+        return _same_script(tokens) and not any(_is_non_name_word(t) for t in tokens)
+
+    for m in _OWN_LABEL_RE.finditer(text):
+        tokens = m.group(1).split()
+        if own is None and valid(tokens) and (len(tokens) > 1 or _name_score(tokens) > 0):
+            own = m.group(1)
+
+    for m in _OTHER_LABEL_RE.finditer(text):
+        tokens = m.group(2).split()
+        # "Рекомендации:" is followed by a name; "Руководитель Отдела Продаж" may be a heading
+        if valid(tokens) and (m.group(1) or _name_score(tokens) > 0):
+            others.append(m.group(2))
+
+    lines = text.split("\n")
+    if header_names:
+        candidates: list[tuple[int, int, str]] = []  # (score, line index, name)
+        seen = 0
+        for idx, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            seen += 1
+            if seen > _HEADER_LINES:
                 break
+            part = _HEADER_SPLIT_RE.split(stripped, maxsplit=1)[0].strip()
+            tokens = part.split()
+            if not 2 <= len(tokens) <= 3 or not valid(tokens):
+                continue
+            if not all(re.fullmatch(_NAME_TOKEN, t) for t in tokens):
+                continue
+            score = _name_score(tokens)
+            if not _is_cyrillic(tokens[0]) and score == 0:
+                continue  # "Spring Boot", "Google Cloud"
+            candidates.append((score, idx, part))
 
-    working = "\n".join(lines)
+        # Lines with a first name or a patronymic are names. Otherwise take the single best line
+        # ("Нурланов Айдар" scores on the surname, "Ли Мин" is the first two-word line).
+        strong = [c for c in candidates if c[0] >= 3]
+        accepted = strong or ([max(candidates, key=lambda c: (c[0], -c[1]))] if candidates else [])
+        if accepted:
+            best = max(accepted, key=lambda c: (c[0], -c[1]))
+            if own is None:
+                own = best[2]
+            elif best[2] != own:
+                others.append(best[2])
+            for _score, idx, part in accepted:
+                lines[idx] = lines[idx].replace(part, "[NAME]", 1)
+                if part != own and part not in others:
+                    others.append(part)
+        text = "\n".join(lines)
 
-    # 5c. Mask all occurrences of found name tokens across the entire text (including inflections)
-    for full_name in list(found_names):
-        tokens = full_name.split()
-        for tok in tokens:
-            cleaned_tok = tok.strip(" ,.-–:;")
-            if len(cleaned_tok) >= 3 and _is_name_token_valid(cleaned_tok):
-                # Build stem: token minus last 1-2 letters for words >= 5 chars
-                stem = cleaned_tok[:-2] if len(cleaned_tok) >= 6 else (cleaned_tok[:-1] if len(cleaned_tok) >= 5 else cleaned_tok)
-                pattern = rf"\b{re.escape(stem)}[а-яёa-zА-ЯЁA-Z]*\b"
-                working = re.sub(pattern, "[NAME]", working, flags=re.IGNORECASE)
+    # Names anywhere: a first name or a patronymic next to other capitalised words
+    for m in _BODY_NAME_RE.finditer(text):
+        tokens = m.group(1).split()
+        cores = [i for i, t in enumerate(tokens) if len(t) >= 3 and (_is_first_name(t) or _is_patronymic(t))]
+        if not cores or _is_non_name_word(tokens[cores[0]]):
+            continue
+        lo = hi = cores[0]
+        while lo > 0 and not _is_non_name_word(tokens[lo - 1]):
+            lo -= 1
+        while hi + 1 < len(tokens) and not _is_non_name_word(tokens[hi + 1]):
+            hi += 1
+        if hi == lo:
+            continue  # a lone first name next to a company or a city
+        name = " ".join(tokens[lo:hi + 1])
+        if name != own and name not in others:
+            others.append(name)
 
-    # Clean duplicates in found collections
-    return Redacted(
-        text=working,
-        found={
-            "email": list(dict.fromkeys(found_emails)),
-            "phone": list(dict.fromkeys(found_phones)),
-            "telegram": list(dict.fromkeys(found_telegrams)),
-            "url": list(dict.fromkeys(found_urls)),
-            "name": list(dict.fromkeys(found_names)),
-        },
-    )
+    return own, others, text
 
+
+# ── safety net ──────────────────────────────────────────────────────────────
 
 def assert_clean(redacted: Redacted) -> tuple[bool, str | None]:
-    """Safety net: verify that redacted text contains zero residual PII leaks.
-
-    Returns:
-        (True, None) if clean, or (False, "pii_residual") if leaked.
-    """
+    """Re-check the masked text; (False, "pii_residual") if anything personal is left."""
     text = redacted.text
     if not text:
         return True, None
-
-    # Check for residual raw emails
-    if re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", text):
+    if _has_residual(text, redacted.found):
         return False, "pii_residual"
-
-    # Check for residual phones
-    phone_matches = re.findall(r"(?:\+\d{1,3}[\s\-\(]{0,2}\d{1,4}[\s\-\)]{0,2})?[\s\-\d]{7,18}\d", text)
-    for raw in phone_matches:
-        digits = re.sub(r"\D", "", raw)
-        year_parts = re.findall(r"\b(19\d\d|20\d\d)\b", raw)
-        if not (year_parts and len("".join(year_parts)) == len(digits)) and len(digits) >= 10:
-            return False, "pii_residual"
-
-    # Check for residual found values
-    for _kind, vals in redacted.found.items():
-        for val in vals:
-            v_clean = val.strip("@").strip()
-            if len(v_clean) >= 4 and v_clean.lower() in text.lower():
-                return False, "pii_residual"
-
     return True, None
+
+
+def _has_residual(text: str, found: dict[str, list[str]]) -> bool:
+    if _EMAIL_RE.search(text) or _TG_LINK_RE.search(text) or _SCHEME_URL_RE.search(text):
+        return True
+    for m in _DOMAIN_RE.finditer(text):
+        if m.group(2) or not _is_tech_domain(m.group(1)):
+            return True
+    if _PROFILE_LABEL_RE.search(text):
+        return True
+    for regex in (_TG_LABELLED_RE, _TG_SPACED_RE):
+        for m in regex.finditer(text):
+            if m.group(3).lower() not in CODE_ANNOTATIONS:
+                return True
+    for m in _BARE_AT_RE.finditer(text):
+        if m.group(1).lower() not in CODE_ANNOTATIONS:
+            return True
+    for m in _DIGIT_RUN_RE.finditer(text):
+        raw = m.group(0)
+        if len(re.sub(r"\D", "", raw)) >= 10 and not _is_number_not_phone(raw):
+            return True
+
+    lowered = text.lower()
+    for kind in ("email", "phone", "telegram", "url"):
+        for value in found.get(kind, []):
+            value = value.lstrip("@").strip().lower()
+            if len(value) >= 4 and value in lowered:
+                return True
+    for name in found.get("name", []):
+        for token in re.split(r"[\s\-]+", name):
+            if len(token) >= 3 and re.search(rf"(?<![\w]){re.escape(token)}(?![\w])", text, re.IGNORECASE):
+                return True
+    return False

@@ -167,7 +167,7 @@ def parse_resume(
 
     # 7. Contacts from local redaction only
     contacts = {
-        "full_name": redacted.found.get("name", [None])[0] if redacted.found.get("name") else None,
+        "full_name": redacted.full_name,
         "email": redacted.found.get("email", [None])[0] if redacted.found.get("email") else None,
         "phone": redacted.found.get("phone", [None])[0] if redacted.found.get("phone") else None,
         "telegram": redacted.found.get("telegram", [None])[0] if redacted.found.get("telegram") else None,

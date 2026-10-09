@@ -2,12 +2,23 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import llm_gateway.resume
+import pytest
 import yaml
 from llm_gateway.pdf_text import extract_text
 from llm_gateway.redact import assert_clean, redact
 from llm_gateway.resume import parse_resume
+from llm_gateway.types import Redacted
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+PII_CASES = yaml.safe_load((FIXTURES_DIR / "pii_cases.yaml").read_text(encoding="utf-8"))
+FOUND_KEYS = {
+    "expected_name": "name",
+    "expected_tg": "telegram",
+    "expected_email": "email",
+    "expected_phone": "phone",
+    "expected_url": "url",
+}
 
 
 def test_redact_contacts_basic():
@@ -27,6 +38,7 @@ GitHub: https://github.com/ivan-dev
     assert "@ivan_code" in redacted.found["telegram"] or "@ivan_alt" in redacted.found["telegram"]
     assert any("github.com" in u for u in redacted.found["url"])
     assert any("Иванов" in n for n in redacted.found["name"])
+    assert redacted.full_name == "Иванов Иван Иванович"
 
     # Crucial 152-FZ check: original PII must NOT be present in redacted.text
     assert "ivan.developer@example.com" not in redacted.text
@@ -44,6 +56,7 @@ GitHub: https://github.com/ivan-dev
 
     # Technical content should remain intact
     assert "Python, Django, PostgreSQL, Docker, Redis" in redacted.text
+    assert assert_clean(redacted) == (True, None)
 
 
 def test_redact_empty():
@@ -51,41 +64,45 @@ def test_redact_empty():
     assert redacted.text == ""
     assert redacted.found["email"] == []
     assert redacted.found["phone"] == []
+    assert redacted.full_name is None
 
 
-def test_pii_cases_fixture():
-    """Verify all >= 30 test cases from fixtures/pii_cases.yaml."""
-    cases_path = FIXTURES_DIR / "pii_cases.yaml"
-    assert cases_path.exists(), "pii_cases.yaml must exist"
+def test_pii_cases_fixture_size():
+    assert len(PII_CASES) >= 30, f"Expected at least 30 cases, found {len(PII_CASES)}"
 
-    with open(cases_path, "r", encoding="utf-8") as f:
-        cases = yaml.safe_load(f)
 
-    assert len(cases) >= 30, f"Expected at least 30 cases, found {len(cases)}"
+@pytest.mark.parametrize("case", PII_CASES, ids=[c["name"] for c in PII_CASES])
+def test_pii_case(case):
+    """Each case: expected `found` values, no original PII in the text, negatives preserved."""
+    redacted = redact(case["raw"])
 
-    for case in cases:
-        c_name = case.get("name", "unnamed")
-        raw = case["raw"]
-        redacted = redact(raw)
+    for key, kind in FOUND_KEYS.items():
+        if key not in case:
+            continue
+        if case[key] is None:
+            assert redacted.found[kind] == [], f"unexpected {kind}: {redacted.found[kind]}"
+        else:
+            assert case[key] in redacted.found[kind], f"{case[key]!r} not in {redacted.found[kind]}"
+    for url in case.get("expected_urls", []):
+        assert url in redacted.found["url"]
+    if "expected_full_name" in case:
+        assert redacted.full_name == case["expected_full_name"]
 
-        # Check forbidden substrings are NOT in redacted.text
-        for forbidden in case.get("forbidden", []):
-            assert forbidden.lower() not in redacted.text.lower(), (
-                f"Case '{c_name}': forbidden PII '{forbidden}' leaked into redacted text:\n{redacted.text}"
-            )
+    for forbidden in case.get("forbidden", []):
+        assert forbidden.lower() not in redacted.text.lower(), (
+            f"forbidden PII {forbidden!r} leaked into redacted text:\n{redacted.text}"
+        )
+    for kept in case.get("must_preserve", []):
+        assert kept in redacted.text, f"{kept!r} was masked:\n{redacted.text}"
 
-        # Check negative controls (must preserve)
-        for pres in case.get("must_preserve", []):
-            assert pres in redacted.text, (
-                f"Case '{c_name}': negative control '{pres}' was incorrectly masked:\n{redacted.text}"
-            )
+    assert assert_clean(redacted) == (True, None)
 
-        # Check that contacts dict does not contain code annotations
-        if "telegram" in redacted.found:
-            for tg in redacted.found["telegram"]:
-                assert tg not in ("@dataclass", "@pytest", "@property", "@staticmethod"), (
-                    f"Case '{c_name}': code annotation {tg} leaked into contacts.telegram"
-                )
+
+def test_header_names_off_for_job_descriptions():
+    """parse_jd turns the header heuristic off: a company in the title is not a person."""
+    redacted = redact("Альфа Банк Ромашка\nPython разработчик", header_names=False)
+    assert redacted.found["name"] == []
+    assert "Альфа Банк Ромашка" in redacted.text
 
 
 def test_hero_cvs_zero_leaks():
@@ -101,63 +118,61 @@ def test_hero_cvs_zero_leaks():
         pdf_path = cv_dir / pdf_name
         assert pdf_path.exists(), f"Hero PDF {pdf_name} must exist"
 
-        pdf_bytes = pdf_path.read_bytes()
-        text = extract_text(pdf_bytes)
+        text = extract_text(pdf_path.read_bytes())
         assert len(text) > 100, f"Expected extracted text from {pdf_name}"
 
         redacted = redact(text)
-        is_clean, residue = assert_clean(redacted)
-        assert is_clean, f"Hero CV {pdf_name} failed assert_clean: {residue}"
+        assert assert_clean(redacted) == (True, None), f"Hero CV {pdf_name} failed assert_clean"
 
         # Original contacts should be in found
-        assert len(redacted.found["name"]) > 0
+        assert redacted.full_name
         assert len(redacted.found["email"]) > 0
         assert len(redacted.found["phone"]) > 0
+        assert len(redacted.found["telegram"]) > 0
 
-        # And zero of found items in text
-        for name in redacted.found["name"]:
-            for token in name.split():
-                if len(token) > 3:
-                    assert token.lower() not in redacted.text.lower()
+        # And none of the found values is left in the text
+        for kind, values in redacted.found.items():
+            for value in values:
+                for token in value.lstrip("@").split():
+                    if len(token) > 3:
+                        assert token.lower() not in redacted.text.lower(), f"{kind} {token!r} leaked"
 
 
-def test_assert_clean_blocks_llm_call():
-    """Test that assert_clean blocks the LLM call if unmasked PII was found."""
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("Связь: ivan@example.com", {}),
+        ("Телефон 8 916 123 45 67", {}),
+        ("Сайт https://ivanov.dev", {}),
+        ("Портфолио ivanov.dev/projects", {}),
+        ("Telegram: @ivan_petrov", {}),
+        ("Пишите @ivan_petrov", {}),
+        ("Иванов Иван любит Python", {"name": ["Иванов Иван"]}),
+        ("Профиль: ivan_petrov_42", {"telegram": ["@ivan_petrov_42"]}),
+    ],
+)
+def test_assert_clean_catches_residual_pii(text, found):
+    """The safety net re-runs every detector and looks for every found value."""
+    full_found = {"email": [], "phone": [], "telegram": [], "url": [], "name": [], **found}
+    assert assert_clean(Redacted(text=text, found=full_found)) == (False, "pii_residual")
+
+
+def test_assert_clean_blocks_llm_call(monkeypatch):
+    """If a name slips through redaction, the LLM is never called and rules take over."""
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
     mock_gw = MagicMock()
     mock_gw.name = "gigachat"
 
-    # Craft text where monkeypatched or abnormal unmasked PII remains in found
-    # We test that parse_resume falls back to rules if assert_clean reports residue
-    import io
+    def leaking_redact(text, **kwargs):
+        return Redacted(
+            text="Иванов Иван still in text",
+            found={"email": [], "phone": [], "telegram": [], "url": [], "name": ["Иванов Иван"]},
+            full_name="Иванов Иван",
+        )
 
-    # Create dummy PDF bytes
-    from fpdf import FPDF
-    from llm_gateway.redact import Redacted
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("helvetica", size=12)
-    pdf.cell(0, 10, "Test developer resume")
-    buf = io.BytesIO()
-    pdf.output(buf)
-    pdf_bytes = buf.getvalue()
+    monkeypatch.setattr(llm_gateway.resume, "redact", leaking_redact)
+    res = parse_resume(pdf_bytes, gateway=mock_gw)
 
-    # Monkeypatch redact to simulate unmasked PII slipping through
-    import llm_gateway.resume
-    orig_redact = llm_gateway.resume.redact
-
-    try:
-        def leaking_redact(text):
-            _ = orig_redact(text)
-            # Simulate a name that leaked without being replaced
-            return Redacted(text="Иванов Иван still in text", found={"name": ["Иванов Иван"]})
-
-        llm_gateway.resume.redact = leaking_redact
-
-        res = parse_resume(pdf_bytes, gateway=mock_gw)
-
-        assert res.source == "rules"
-        assert res.fallback_reason == "pii_residual"
-        # Verify the mock gateway was NEVER called
-        mock_gw.resume.assert_not_called()
-    finally:
-        llm_gateway.resume.redact = orig_redact
+    assert res.source == "rules"
+    assert res.fallback_reason == "pii_residual"
+    mock_gw.resume.assert_not_called()

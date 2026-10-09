@@ -57,8 +57,8 @@ def parse_jd(
     if not text or not text.strip():
         text = ""
 
-    # 1. Redact contacts from JD and verify cleanliness
-    redacted = redact(text)
+    # 1. Redact contacts from JD and verify cleanliness (no header heuristic: titles are not names)
+    redacted = redact(text, header_names=False)
     is_clean, pii_residual = assert_clean(redacted)
 
     from . import get_gateway
