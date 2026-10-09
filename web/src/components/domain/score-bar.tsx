@@ -6,10 +6,10 @@ const SEGMENT_COLOR: Record<ScoreComponent['key'], string> = {
   skill: 'var(--fsp-accent)',
   strength: 'var(--fsp-info)',
   grade: 'var(--fsp-warn)',
-  salary: '#a78bfa',
-  semantic: '#f472b6',
+  salary: 'var(--fsp-score-salary)',
+  semantic: 'var(--fsp-score-semantic)',
   freshness: 'var(--fsp-muted)',
-  fsp: '#ffc857',
+  fsp: 'var(--fsp-score-fsp)',
 }
 
 const SEGMENT_LABEL: Record<ScoreComponent['key'], string> = {

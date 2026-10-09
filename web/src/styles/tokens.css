@@ -38,6 +38,19 @@
   --fsp-league-confirmed: #b8ff3c;
   --fsp-league-unconfirmed: #ffc857;
 
+  /* score-bar segments without a semantic token yet */
+  --fsp-score-salary: #a78bfa;
+  --fsp-score-semantic: #f472b6;
+  --fsp-score-fsp: #ffc857;
+
+  /*
+   * WCAG AA check (R7b), ratio of each colour used as text on --fsp-panel
+   * #121821 (AA normal text needs >= 4.5):
+   *   --fsp-muted 6.07 · sent 9.36 · viewed 11.59 · accepted 14.77 ·
+   *   declined 6.42 · info 9.36 · warn 11.59 · minus 6.42 · plus 14.77.
+   * All pass; on --fsp-bg the ratios are higher still.
+   */
+
   /* type */
   --fsp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fsp-font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
