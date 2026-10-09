@@ -36,7 +36,9 @@ export function OfferDetailPage() {
   const accept = useOfferAction('accept')
   const decline = useOfferAction('decline')
   const [declineOpen, setDeclineOpen] = useState(false)
+  const [viewError, setViewError] = useState<ApiError | null>(null)
   const autoViewed = useRef<string | null>(null)
+  const viewRetries = useRef(0)
 
   const onError = useCallback((err: unknown) => {
     if (isOfferConflict(err)) {
@@ -50,11 +52,30 @@ export function OfferDetailPage() {
   }, [refetch])
 
   useEffect(() => {
-    if (!offer || offer.status !== 'sent') return
+    if (!offer || offer.status !== 'sent' || viewError) return
     if (autoViewed.current === offer.id) return
     autoViewed.current = offer.id
-    view.mutate({ id: offer.id, body: { version: offer.version } }, { onError })
-  }, [offer, view, onError])
+    view.mutate(
+      { id: offer.id, body: { version: offer.version } },
+      {
+        onError: (err) => {
+          // A version conflict means the offer moved on: refetch and retry once.
+          if (isOfferConflict(err) && viewRetries.current < 1) {
+            viewRetries.current += 1
+            autoViewed.current = null
+            toast.error('Оффер изменился — обновляем данные')
+            void refetch()
+            return
+          }
+          setViewError(
+            err instanceof ApiError
+              ? err
+              : new ApiError({ status: 0, code: 'api_error', detail: 'Не удалось открыть оффер' }),
+          )
+        },
+      },
+    )
+  }, [offer, view, refetch, viewError])
 
   if (isLoading) {
     return (
@@ -155,7 +176,21 @@ export function OfferDetailPage() {
       </section>
 
       <section className="flex flex-wrap items-center gap-3">
-        {offer.status === 'viewed' && (
+        {viewError && (
+          <div className="w-full">
+            <ErrorState
+              title="Не удалось открыть оффер"
+              code={viewError.code}
+              description={errorMessage(viewError.code, viewError.detail)}
+              onRetry={() => {
+                viewRetries.current = 0
+                autoViewed.current = null
+                setViewError(null)
+              }}
+            />
+          </div>
+        )}
+        {!viewError && offer.status === 'viewed' && (
           <>
             <Button
               onClick={() => accept.mutate({ id: offer.id, body: { version: offer.version } }, { onError })}
@@ -173,7 +208,9 @@ export function OfferDetailPage() {
             </Button>
           </>
         )}
-        {offer.status === 'sent' && <span className="text-sm text-muted-foreground">Открываем оффер…</span>}
+        {!viewError && offer.status === 'sent' && (
+          <span className="text-sm text-muted-foreground">Открываем оффер…</span>
+        )}
         {['accepted', 'interview', 'hired'].includes(offer.status) && (
           <span className="text-sm text-muted-foreground">
             Оффер принят {formatDate(offer.updated_at)} — работодатель получил ваши контакты.
