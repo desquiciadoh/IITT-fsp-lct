@@ -1,12 +1,12 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 type Variant = {
   id: string
   name: string
   desc: string
-  vars: CSSProperties
-  dark?: boolean
+  cssClass: string
 }
 
 const VARIANTS: Variant[] = [
@@ -14,44 +14,19 @@ const VARIANTS: Variant[] = [
     id: 'arena',
     name: 'Arena (dark)',
     desc: 'Тёмная «спортивная» тема: неон-акцент, крупные цифры рейтинга, ощущение турнирной таблицы.',
-    vars: {
-      '--v-bg': '#0b0f14',
-      '--v-panel': '#121821',
-      '--v-fg': '#e8eef5',
-      '--v-muted': '#8b98a8',
-      '--v-accent': '#b8ff3c',
-      '--v-accent-fg': '#0b0f14',
-      '--v-line': '#1f2836',
-    } as CSSProperties,
-    dark: true,
+    cssClass: 'dv-arena',
   },
   {
     id: 'fsp-red',
     name: 'FSP Red (light)',
     desc: 'Светлая тема с красным акцентом ФСП: энергия, бренд, «официальный» тон федерации.',
-    vars: {
-      '--v-bg': '#f7f7f8',
-      '--v-panel': '#ffffff',
-      '--v-fg': '#17181a',
-      '--v-muted': '#6b7076',
-      '--v-accent': '#e01b24',
-      '--v-accent-fg': '#ffffff',
-      '--v-line': '#e4e4e7',
-    } as CSSProperties,
+    cssClass: 'dv-fsp-red',
   },
   {
     id: 'corporate',
     name: 'Corporate (light)',
     desc: 'Сдержанная деловая тема: синий, плотные данные, «hr-продукт для компании».',
-    vars: {
-      '--v-bg': '#f4f6fa',
-      '--v-panel': '#ffffff',
-      '--v-fg': '#101725',
-      '--v-muted': '#5f6b7f',
-      '--v-accent': '#2456e6',
-      '--v-accent-fg': '#ffffff',
-      '--v-line': '#dfe5ef',
-    } as CSSProperties,
+    cssClass: 'dv-corporate',
   },
 ]
 
@@ -146,9 +121,8 @@ function VariantBlock({ variant }: { variant: Variant }) {
         <p className="text-sm text-muted-foreground">{variant.desc}</p>
       </div>
       <div
-        className="rounded-2xl border p-5"
+        className={cn('rounded-2xl border p-5', variant.cssClass)}
         style={{
-          ...variant.vars,
           background: 'var(--v-bg)',
           color: 'var(--v-fg)',
           borderColor: 'var(--v-line)',

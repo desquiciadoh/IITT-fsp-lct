@@ -59,6 +59,41 @@
   --radius: 0.625rem;
 }
 
+/*
+ * PD-02 palette candidates, shown side by side on /dev/design only.
+ * Dev-only: never applied to the app shell. Kept out of components so the
+ * R7b rule (colour values only in this file) still holds.
+ */
+.dv-arena {
+  --v-bg: #0b0f14;
+  --v-panel: #121821;
+  --v-fg: #e8eef5;
+  --v-muted: #8b98a8;
+  --v-accent: #b8ff3c;
+  --v-accent-fg: #0b0f14;
+  --v-line: #1f2836;
+}
+
+.dv-fsp-red {
+  --v-bg: #f7f7f8;
+  --v-panel: #ffffff;
+  --v-fg: #17181a;
+  --v-muted: #6b7076;
+  --v-accent: #e01b24;
+  --v-accent-fg: #ffffff;
+  --v-line: #e4e4e7;
+}
+
+.dv-corporate {
+  --v-bg: #f4f6fa;
+  --v-panel: #ffffff;
+  --v-fg: #101725;
+  --v-muted: #5f6b7f;
+  --v-accent: #2456e6;
+  --v-accent-fg: #ffffff;
+  --v-line: #dfe5ef;
+}
+
 @theme inline {
   --color-background: var(--fsp-bg);
   --color-foreground: var(--fsp-fg);
