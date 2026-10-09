@@ -192,17 +192,8 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(AssessmentFallbackSerializer(allow_null=True))
     def get_fallback(self, obj):
-        if obj.decision == 'unconfirmed':
-            from core.enums import Grade
-            lower_grades = {
-                Grade.SENIOR: Grade.MIDDLE,
-                Grade.MIDDLE: Grade.JUNIOR,
-                Grade.JUNIOR: Grade.INTERN,
-            }
-            lower = lower_grades.get(obj.claimed_grade)
-            if lower:
-                return {'grade': lower, 'mode': 'instant'}
-        return None
+        from assessment.services import AssessmentService
+        return AssessmentService.fallback_offer(obj)
 
 
 class FallbackRequestSerializer(serializers.Serializer):

@@ -3397,7 +3397,8 @@
                     "deadline_at": {
                         "type": "string",
                         "format": "date-time",
-                        "description": "Item-level time limit deadline"
+                        "nullable": true,
+                        "description": "Item-level deadline; set when the item becomes current, NULL until served"
                     },
                     "served_at": {
                         "type": "string",
@@ -3407,7 +3408,6 @@
                 },
                 "required": [
                     "code",
-                    "deadline_at",
                     "format",
                     "input_type",
                     "item_id",
@@ -4000,7 +4000,8 @@
                     },
                     "company": {
                         "type": "string",
-                        "format": "uuid"
+                        "format": "uuid",
+                        "readOnly": true
                     },
                     "title": {
                         "type": "string",

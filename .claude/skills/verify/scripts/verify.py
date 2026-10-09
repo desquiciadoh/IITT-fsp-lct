@@ -177,14 +177,14 @@ def phase_invariants() -> None:
     all_hits = grep(r"fields\s*=\s*['\"]__all__['\"]|^\s*exclude\s*=", serializers)
     record("inv: explicit serializer fields", "WARN" if all_hits else "PASS", "\n".join(all_hits))
 
-    # 3. Contacts only through core/services.py (owner edits in profiles are allowed; review the rest).
-    allowed = {"apps/core/services.py", "apps/profiles/models.py", "apps/profiles/serializers.py",
+    # 3. Contacts only through ContactAccessService (outreach/services.py) (owner edits in profiles are allowed; review the rest).
+    allowed = {"apps/core/services.py", "apps/outreach/services.py", "apps/profiles/models.py", "apps/profiles/serializers.py",
                "apps/profiles/views.py", "apps/core/management/commands/seed.py",
                # reviewed 2026-10-09: candidate self-view; employer path goes through ContactAccessService
                "apps/outreach/serializers.py"}
     contact_hits = [h for h in grep(r"candidate_contacts|CandidateContact", app_files)
                     if h.split(":")[0] not in allowed and "/migrations/" not in h]
-    record("inv: contact access via core.services", "WARN" if contact_hits else "PASS",
+    record("inv: contact access via ContactAccessService", "WARN" if contact_hits else "PASS",
            ("review each path for ContactGrant gating:\n" + "\n".join(contact_hits)) if contact_hits else "")
 
     # 4. Engine purity: no Django/ORM/core imports.

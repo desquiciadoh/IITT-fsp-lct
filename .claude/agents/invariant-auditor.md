@@ -15,7 +15,7 @@ You audit invariants that, if broken, would sink the product in front of a jury.
 ## Invariants
 
 1. **Answer keys never leave the server.** `AssessmentItem.key`, `Instance.key`, `fingerprint`: absent from serializers, `view()`, responses, SSE, logs, exception text, admin list displays exposed to non-staff, and the PDF card.
-2. **Zero contact leaks.** `CandidateContact` / `candidate_contacts` reach a non-owner only via `core/services.py` with a `ContactGrant` from an accepted offer. Check the outreach and profile serializers, search results, exports, the PDF and seed/demo endpoints. Denials: 403 + `AuditLog`.
+2. **Zero contact leaks.** `CandidateContact` / `candidate_contacts` reach a non-owner only via `ContactAccessService` (`outreach/services.py`) with a `ContactGrant` from an accepted offer. Check the outreach and profile serializers, search results, exports, the PDF and seed/demo endpoints. Denials: 403 + `AuditLog`.
 3. **LLM never grades or scores.** No call into an LLM client or `llm_gateway` from assessment scoring, CAT, grade policy, matching score or strength.
 4. **Grade comes only from the CAT.** FSP sync, profile updates and admin flows don't write grade fields; FSP affects strength/ranking only.
 5. **Unconfirmed policy.** Unconfirmed profiles stay visible and receive offers; ranked ×0.75.

@@ -142,6 +142,13 @@ class AssessmentSession(models.Model):
 
     class Meta:
         db_table = 'assessments'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['candidate', 'specialization'],
+                condition=models.Q(status=AssessmentStatus.IN_PROGRESS),
+                name='uq_one_in_progress_assessment_per_spec',
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=['candidate', '-started_at'],
@@ -203,7 +210,11 @@ class AssessmentItem(models.Model):
     )
 
     served_at = models.DateTimeField(auto_now_add=True)
-    deadline_at = models.DateTimeField(help_text='Item-level time limit deadline')
+    deadline_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Item-level deadline; set when the item becomes current, NULL until served',
+    )
     answered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

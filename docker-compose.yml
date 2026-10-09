@@ -43,6 +43,11 @@ services:
       ALLOWED_HOSTS: "localhost,127.0.0.1,api,web"
       CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:8000,http://127.0.0.1:8000"
       PUBLIC_BASE_URL: "http://localhost:8000"
+      # In-app mock IdP (DEMO_MODE): browser-facing issuer + server-to-server URL
+      OIDC_ISSUER: "http://localhost:8000/idp/realms/fsp"
+      OIDC_INTERNAL_URL: "http://localhost:8000/idp/realms/fsp"
+      # Plain-HTTP local stack: the server-to-server IdP calls must not be redirected to https
+      SECURE_SSL_REDIRECT: "False"
       POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

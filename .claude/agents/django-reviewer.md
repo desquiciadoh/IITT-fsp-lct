@@ -16,7 +16,7 @@ You are a senior Django/DRF reviewer for FSP Draft, a reverse-recruitment modula
 ## Project invariants (CRITICAL if broken)
 
 - **Answer keys:** `AssessmentItem.key`, fingerprints or anything derived from them must not appear in any serializer, response, log line, exception message or SSE event.
-- **Contact gating:** `CandidateContact` may be read for an employer only through `core/services.py` after an accepted offer created a `ContactGrant`. Any other path that reaches `candidate_contacts` for a non-owner (a serializer method field, a `select_related`, an admin or export) is a leak. Denials return 403 problem+json and write `AuditLog`.
+- **Contact gating:** `CandidateContact` may be read for an employer only through `ContactAccessService` (`outreach/services.py`) after an accepted offer created a `ContactGrant`. Any other path that reaches `candidate_contacts` for a non-owner (a serializer method field, a `select_related`, an admin or export) is a leak. Denials return 403 problem+json and write `AuditLog`.
 - **Grades:** only the assessment flow writes the grade. FSP sync, profile edits and matching must never change it.
 - **Salary:** positions and offers require `salary_min > 0`, `salary_max >= salary_min` and `salary_type`, enforced by a `CheckConstraint` and by DRF validation.
 - **Offers:** state transitions go through `outreach/services.py`; optimistic locking via `version` returns 409 on conflict; `ContactGrant` is created atomically with `accepted`.

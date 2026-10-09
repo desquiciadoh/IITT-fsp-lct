@@ -7,7 +7,13 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from core.enums import ContactGrantSource, OfferStatus
-from core.errors import CandidateNotReachable, ContactNotGranted, InvalidTransition, VersionConflict
+from core.errors import (
+    CandidateNotReachable,
+    ContactNotGranted,
+    InvalidTransition,
+    OfferExpired,
+    VersionConflict,
+)
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -191,7 +197,6 @@ class OfferService:
     """
 
     @staticmethod
-    @transaction.atomic
     def transition(
         offer_id: uuid.UUID,
         new_status: str,
@@ -215,33 +220,77 @@ class OfferService:
 
         Raises:
             VersionConflict: If the version doesn't match (409)
+            OfferExpired: If the offer was past expires_at; the expiry is persisted first (409)
             InvalidTransition: If the state machine doesn't allow this transition
         """
-        offer = Offer.objects.select_for_update().filter(id=offer_id).first()
-        if offer is None:
-            from django.http import Http404
-            raise Http404('Offer not found')
+        # The expiry must commit (or be released into the caller's transaction)
+        # before OfferExpired propagates, so it is raised outside this block.
+        with transaction.atomic():
+            offer = Offer.objects.select_for_update().filter(id=offer_id).first()
+            if offer is None:
+                from django.http import Http404
+                raise Http404('Offer not found')
 
-        if offer.version != expected_version:
-            raise VersionConflict()
+            if offer.version != expected_version:
+                raise VersionConflict()
 
-        now = timezone.now()
-        if offer.expires_at and now > offer.expires_at:
-            if offer.can_transition_to(OfferStatus.EXPIRED):
-                from_status = offer.status
-                offer.status = OfferStatus.EXPIRED
-                offer.version = F('version') + 1
-                offer.updated_at = now
-                offer.save()
-                offer.refresh_from_db()
-                OfferEvent.objects.create(
-                    offer=offer,
-                    from_status=from_status if isinstance(from_status, str) else offer.status,
-                    to_status=OfferStatus.EXPIRED,
-                    actor_id=actor_id,
+            now = timezone.now()
+            expired = (
+                offer.expires_at is not None
+                and now > offer.expires_at
+                and offer.can_transition_to(OfferStatus.EXPIRED)
+            )
+            if not expired:
+                return OfferService._apply_transition(
+                    offer, new_status, actor_id, decline_reason, decline_comment,
                 )
-            raise InvalidTransition(offer.status, new_status)
+            OfferService._expire_locked(offer, actor_id, now)
+        raise OfferExpired()
 
+    @staticmethod
+    def _expire_locked(offer: Offer, actor_id: uuid.UUID | None, now) -> None:
+        """Mark a locked sent/viewed offer EXPIRED with event, audit and domain event."""
+        from_status = offer.status
+        offer.status = OfferStatus.EXPIRED
+        offer.version = F('version') + 1
+        offer.updated_at = now
+        offer.save()
+        offer.refresh_from_db()
+        OfferEvent.objects.create(
+            offer=offer,
+            from_status=from_status,
+            to_status=OfferStatus.EXPIRED,
+            actor_id=actor_id,
+        )
+        AuditLog.objects.create(
+            actor_id=actor_id,
+            action='offer_expired',
+            target_type='Offer',
+            target_id=str(offer.id),
+            meta={
+                'new_status': OfferStatus.EXPIRED,
+                'version': offer.version,
+                'lazy': True,
+            },
+        )
+        publish_domain_event('offer.updated', {
+            'offer_id': str(offer.id),
+            'status': OfferStatus.EXPIRED,
+            'candidate_id': str(offer.candidate_id),
+            'company_id': str(offer.company_id),
+            'version': offer.version,
+        })
+
+    @staticmethod
+    def _apply_transition(
+        offer: Offer,
+        new_status: str,
+        actor_id: uuid.UUID,
+        decline_reason: str,
+        decline_comment: str,
+    ) -> Offer:
+        """Apply a normal state-machine transition to a locked offer."""
+        offer_id = offer.id
         if not offer.can_transition_to(new_status):
             raise InvalidTransition(offer.status, new_status)
 

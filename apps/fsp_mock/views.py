@@ -2,15 +2,32 @@
 import base64
 import hashlib
 import time
+import urllib.parse
 import uuid
 
 from django.conf import settings
 from django.core import signing
-from django.http import HttpResponseBadRequest, HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponseBadRequest, HttpResponseRedirect, JsonResponse
+from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from fsp_sync.registry import MOCK_REGISTRY, get_registry_data
 
 from fsp_mock.keys import get_jwks, sign_id_token
+
+
+class DemoOnlyView(View):
+    """The mock IdP and registry exist only in DEMO_MODE; elsewhere they are 404.
+
+    Outside demo they would let anyone mint an authorization code for any
+    participant_id, i.e. log in as any FSP-linked user.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, 'DEMO_MODE', False):
+            raise Http404()
+        return super().dispatch(request, *args, **kwargs)
 
 
 def _get_issuer() -> str:
@@ -18,10 +35,10 @@ def _get_issuer() -> str:
 
 
 def _get_internal_url() -> str:
-    return getattr(settings, 'OIDC_INTERNAL_URL', _get_issuer()).rstrip('/')
+    return (getattr(settings, 'OIDC_INTERNAL_URL', '') or _get_issuer()).rstrip('/')
 
 
-class OidcDiscoveryView(View):
+class OidcDiscoveryView(DemoOnlyView):
     """OIDC Discovery endpoint (/.well-known/openid-configuration)."""
 
     def get(self, request, *args, **kwargs):
@@ -44,14 +61,14 @@ class OidcDiscoveryView(View):
         return JsonResponse(config)
 
 
-class OidcJwksView(View):
+class OidcJwksView(DemoOnlyView):
     """JWKS endpoint returning the RSA public key."""
 
     def get(self, request, *args, **kwargs):
         return JsonResponse(get_jwks())
 
 
-class OidcAuthorizeView(View):
+class OidcAuthorizeView(DemoOnlyView):
     """OIDC authorization endpoint.
 
     In demo / tests, automatically or manually picks a synthetic participant
@@ -68,6 +85,13 @@ class OidcAuthorizeView(View):
 
         if not redirect_uri:
             return HttpResponseBadRequest('Missing redirect_uri')
+        # Only our own callback may receive codes (no open redirect).
+        if urllib.parse.urlparse(redirect_uri).path != reverse('fsp-id-callback'):
+            return HttpResponseBadRequest('redirect_uri is not registered')
+        if client_id != getattr(settings, 'OIDC_CLIENT_ID', 'fsp-draft'):
+            return HttpResponseBadRequest('Unknown client_id')
+        if not code_challenge or code_challenge_method != 'S256':
+            return HttpResponseBadRequest('PKCE (S256 code_challenge) is required')
 
         participant_id = request.GET.get('participant_id')
         if not participant_id:
@@ -87,14 +111,16 @@ class OidcAuthorizeView(View):
         code = signing.dumps(code_data, salt='fsp-oidc-code')
 
         separator = '&' if '?' in redirect_uri else '?'
-        redirect_target = f'{redirect_uri}{separator}code={code}'
+        params = {'code': code}
         if state:
-            redirect_target += f'&state={state}'
+            params['state'] = state
+        redirect_target = f'{redirect_uri}{separator}{urllib.parse.urlencode(params)}'
 
         return HttpResponseRedirect(redirect_target)
 
 
-class OidcTokenView(View):
+@method_decorator(csrf_exempt, name='dispatch')
+class OidcTokenView(DemoOnlyView):
     """OIDC Token endpoint exchanging code for RS256 id_token and access_token."""
 
     def post(self, request, *args, **kwargs):
@@ -112,15 +138,17 @@ class OidcTokenView(View):
         except (signing.BadSignature, signing.SignatureExpired):
             return JsonResponse({'error': 'invalid_grant', 'error_description': 'Code expired or invalid'}, status=400)
 
-        # PKCE validation if code_challenge was provided
+        if request.POST.get('redirect_uri') != code_data.get('redirect_uri'):
+            return JsonResponse({'error': 'invalid_grant', 'error_description': 'redirect_uri mismatch'}, status=400)
+
+        # PKCE is mandatory
         expected_challenge = code_data.get('code_challenge')
-        if expected_challenge:
-            if not code_verifier:
-                return JsonResponse({'error': 'invalid_request', 'error_description': 'Missing code_verifier'}, status=400)
-            digest = hashlib.sha256(code_verifier.encode('ascii')).digest()
-            computed_challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
-            if computed_challenge != expected_challenge:
-                return JsonResponse({'error': 'invalid_grant', 'error_description': 'PKCE verification failed'}, status=400)
+        if not expected_challenge or not code_verifier:
+            return JsonResponse({'error': 'invalid_grant', 'error_description': 'PKCE verification failed'}, status=400)
+        digest = hashlib.sha256(code_verifier.encode('ascii')).digest()
+        computed_challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
+        if computed_challenge != expected_challenge:
+            return JsonResponse({'error': 'invalid_grant', 'error_description': 'PKCE verification failed'}, status=400)
 
         participant_id = code_data['participant_id']
         issuer = _get_issuer()
@@ -134,6 +162,7 @@ class OidcTokenView(View):
             'fsp_participant_id': participant_id,
             'name': f'Participant {participant_id}',
             'email': f'{participant_id.lower().replace("-", "")}@fsp-sports.ru',
+            'email_verified': True,
             'iat': now,
             'exp': now + 3600,
         }
@@ -151,7 +180,7 @@ class OidcTokenView(View):
         })
 
 
-class OidcUserinfoView(View):
+class OidcUserinfoView(DemoOnlyView):
     """OIDC userinfo endpoint."""
 
     def get(self, request, *args, **kwargs):
@@ -175,7 +204,7 @@ class OidcUserinfoView(View):
         })
 
 
-class RegistryAchievementsView(View):
+class RegistryAchievementsView(DemoOnlyView):
     """FSP Registry achievements endpoint: /registry/v1/participants/<id>/achievements."""
 
     def get(self, request, participant_id: str, *args, **kwargs):

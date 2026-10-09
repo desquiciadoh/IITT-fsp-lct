@@ -99,32 +99,38 @@ class TestCeleryAndEvents:
         assert expired_offer.status == OfferStatus.EXPIRED
         assert active_offer.status == OfferStatus.SENT
 
-    def test_publish_and_receive_domain_event(self):
-        """register_subscriber captures published events in-memory."""
-        queue = register_subscriber()
+    def test_publish_and_receive_domain_event(self, django_capture_on_commit_callbacks):
+        """A scoped subscriber receives its own events after commit."""
+        queue = register_subscriber(user_id=self.candidate_user.id)
         try:
-            publish_domain_event('test.event', {'hello': 'world'})
+            with django_capture_on_commit_callbacks(execute=True):
+                publish_domain_event('test.event', {'candidate_id': str(self.candidate_user.id), 'hello': 'world'})
+                assert queue.empty()  # not before commit
             assert not queue.empty()
             event = queue.get_nowait()
             assert event['event'] == 'test.event'
-            assert event['data'] == {'hello': 'world'}
+            assert event['data'] == {'candidate_id': str(self.candidate_user.id), 'hello': 'world'}
             assert 'timestamp' in event
         finally:
             unregister_subscriber(queue)
 
-    def test_sse_endpoint_streaming(self):
-        """GET /api/events streams text/event-stream with published domain events."""
+    def test_sse_endpoint_streaming(self, django_capture_on_commit_callbacks):
+        """GET /api/events streams the employer's own company events only."""
         from outreach.events import _RECENT_EVENTS
         _RECENT_EVENTS.clear()
 
         self.client.force_authenticate(user=self.employer_user)
 
-        publish_domain_event('offer.created', {'offer_id': 42})
+        with django_capture_on_commit_callbacks(execute=True):
+            publish_domain_event('offer.created', {'offer_id': 42, 'company_id': str(self.company.id)})
+            publish_domain_event('offer.created', {'offer_id': 43})  # no audience: delivered to nobody
 
-        response = self.client.get('/api/events?limit=1')
+        response = self.client.get('/api/events?limit=2')
         assert response.status_code == 200
         assert 'text/event-stream' in response['Content-Type']
 
         content = b''.join(response.streaming_content).decode('utf-8')
         assert 'event: offer.created' in content
         assert '"offer_id": 42' in content
+        assert '"offer_id": 43' not in content
+        _RECENT_EVENTS.clear()

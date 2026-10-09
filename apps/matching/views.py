@@ -121,14 +121,12 @@ class PositionListCreateView(views.APIView):
     @extend_schema(request=PositionSerializer, responses={201: PositionSerializer})
     def post(self, request):
         company = get_employer_company(request.user)
-        data = request.data.copy()
-        data['company'] = str(company.id)
-        serializer = PositionSerializer(data=data)
+        serializer = PositionSerializer(data=request.data)
         if not serializer.is_valid():
             is_salary_err = any(k in serializer.errors for k in ('salary_min', 'salary_max', 'salary_type'))
             err_code = 'salary_invalid' if is_salary_err else 'validation_failed'
             raise FSPAPIError(err_code, 'Validation failed', errors=serializer.errors, status_code=422)
-        position = serializer.save()
+        position = serializer.save(company=company)
         return Response(PositionSerializer(position).data, status=status.HTTP_201_CREATED)
 
 
