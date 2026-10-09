@@ -15,7 +15,7 @@ export const me: Record<'candidate' | 'candidatePlain' | 'employer' | 'admin', M
     email: 'alex.dev@example.com',
     email_verified: true,
     demo: true,
-    onboarding_step: 'done',
+    onboarding_step: 'consent',
   },
   employer: {
     id: 'e-1',

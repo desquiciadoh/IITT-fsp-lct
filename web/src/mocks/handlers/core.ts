@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { me } from '@/mocks/fixtures/me'
-import type { CandidateProfile } from '@/api/types'
+import type { CandidateProfile, Me } from '@/api/types'
 
 const stub = (init: ResponseInit = {}) =>
   new Headers({ 'X-Stub': 'true', ...(init.headers ?? {}) })
@@ -126,6 +126,19 @@ export function setMockMe(next: typeof me.candidate): void {
   currentMe = next
 }
 
+/**
+ * `all` mode: mirror the backend's onboarding_step advance so the wizard →
+ * gate flow works without a real backend — consent saved → profile,
+ * profile saved → qualification, claimed grade saved → done.
+ */
+function advanceStep(
+  apply: (step: Me['onboarding_step']) => Me['onboarding_step'] | undefined,
+): void {
+  if (currentMe.role !== 'candidate') return
+  const next = apply(currentMe.onboarding_step)
+  if (next) currentMe = { ...currentMe, onboarding_step: next }
+}
+
 export const coreHandlers = [
   http.get('*/api/me', () => json(currentMe)),
   http.post('*/api/auth/register', async ({ request }) => {
@@ -192,6 +205,11 @@ export const coreHandlers = [
     const profile = currentProfile()
     const next = { ...profile, ...body } as CandidateProfile
     profileStore.set(currentMe.id, next)
+    advanceStep((step) => {
+      if (body.claimed_grade) return step === 'consent' ? 'profile' : 'done'
+      if (step === 'profile') return 'qualification'
+      return undefined
+    })
     return json(next)
   }),
   http.put('*/api/candidates/me/consents', async ({ request }) => {
@@ -203,6 +221,7 @@ export const coreHandlers = [
       fsp_sync: Boolean(body.fsp_sync),
     }
     profileStore.set(currentMe.id, profile)
+    advanceStep((step) => (step === 'consent' ? 'profile' : undefined))
     return json(profile.consents)
   }),
   http.post('*/api/candidates/me/resume', () =>
