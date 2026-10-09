@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { FileText, Sparkles, Upload } from 'lucide-react'
@@ -9,6 +9,7 @@ import { useProfile, useSaveProfile, useUploadResume } from '@/api/profile'
 import type { ResumeParseResult } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { SkillChip } from '@/components/domain/skill-chip'
+import { CardSkeleton } from '@/components/ui/skeleton'
 
 const MAX_SIZE = 5 * 1024 * 1024
 
@@ -28,9 +29,28 @@ export function ProfileStep() {
   const [specialization, setSpecialization] = useState<string>('')
   const [claimedGrade, setClaimedGrade] = useState<string>('')
 
-  const { data: profile } = useProfile()
+  const { data: profile, isLoading } = useProfile()
   const upload = useUploadResume()
   const save = useSaveProfile()
+
+  // Hydrate the form from the saved profile once, so a refresh keeps entries.
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (isLoading || !profile || hydrated.current) return
+    setAbout(profile.about ?? '')
+    setSkills((profile.skills ?? []).map((s) => s.name))
+    setSpecialization(profile.specialization ?? '')
+    setClaimedGrade(profile.claimed_grade ?? '')
+    hydrated.current = true
+  }, [isLoading, profile])
+
+  if (isLoading) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-6">
+        <CardSkeleton />
+      </section>
+    )
+  }
 
   const handleFile = (file: File | undefined) => {
     if (!file) return

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useProfile, useSaveProfile, useTaxonomy } from '@/api/profile'
@@ -7,6 +7,7 @@ import { GRADE_DESCRIPTOR, GRADE_LABEL } from '@/lib/labels'
 import { ApiError } from '@/api/client'
 import { errorMessage } from '@/i18n/errors'
 import { Button } from '@/components/ui/button'
+import { CardSkeleton } from '@/components/ui/skeleton'
 
 const FALLBACK_GRADES = ['intern', 'junior', 'middle', 'senior'] as const
 
@@ -14,7 +15,7 @@ const FALLBACK_GRADES = ['intern', 'junior', 'middle', 'senior'] as const
 export function ClaimStep() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: profile } = useProfile()
+  const { data: profile, isLoading } = useProfile()
   const { data: taxonomy } = useTaxonomy()
   const save = useSaveProfile()
   const [selected, setSelected] = useState<string>('')
@@ -22,6 +23,22 @@ export function ClaimStep() {
   const state = (location.state ?? {}) as { specialization?: string }
   const specialization = state.specialization || profile?.specialization || ''
   const grades: readonly string[] = taxonomy?.grades?.length ? taxonomy.grades : FALLBACK_GRADES
+
+  // Restore a previously claimed grade once the profile arrives.
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (isLoading || !profile || hydrated.current) return
+    if (profile.claimed_grade) setSelected(profile.claimed_grade)
+    hydrated.current = true
+  }, [isLoading, profile])
+
+  if (isLoading) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-6">
+        <CardSkeleton />
+      </section>
+    )
+  }
 
   const claim = () => {
     if (!selected) return

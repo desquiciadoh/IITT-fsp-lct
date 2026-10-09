@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -5,10 +6,12 @@ import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import { errorMessage } from '@/i18n/errors'
 import { useProfile, useSaveProfile } from '@/api/profile'
+import type { CandidateProfile } from '@/api/types'
 import { applyApiErrorToForm } from '@/features/auth/form-errors'
 import { surveySchema, type SurveyValues } from '@/features/onboarding/schemas'
 import { SPEC_LABEL, WORK_FORMAT_LABEL, SALARY_TYPE_LABEL } from '@/lib/labels'
 import { Button } from '@/components/ui/button'
+import { CardSkeleton } from '@/components/ui/skeleton'
 import type { FieldPath } from 'react-hook-form'
 
 const SPECS = Object.keys(SPEC_LABEL) as [string, ...string[]]
@@ -21,39 +24,62 @@ function parseRoles(value: string): string[] {
     .filter(Boolean)
 }
 
+function profileDefaults(
+  profile: CandidateProfile,
+  stateSpec: string | undefined,
+): Partial<SurveyValues> {
+  const rawSpec = stateSpec || profile.specialization || ''
+  const specialization = (SPECS as string[]).includes(rawSpec)
+    ? (rawSpec as SurveyValues['specialization'])
+    : undefined
+  return {
+    specialization,
+    years_experience: profile.years_experience ? Number(profile.years_experience) : null,
+    roles: profile.roles ?? [],
+    work_formats: profile.work_formats ?? [],
+    salary_min: profile.salary_min ?? undefined,
+    salary_max: profile.salary_max ?? undefined,
+    salary_type: profile.salary_type || undefined,
+    salary_floor: profile.salary_floor ?? null,
+    about: profile.about ?? '',
+  }
+}
+
 /** Onboarding step 3: skills/salary survey. */
 export function SurveyStep() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: profile } = useProfile()
+  const { data: profile, isLoading } = useProfile()
   const save = useSaveProfile()
 
   const state = (location.state ?? {}) as { specialization?: string }
-  const rawSpec = state.specialization || profile?.specialization || ''
-  const prefillSpec = (SPECS as string[]).includes(rawSpec)
-    ? (rawSpec as SurveyValues['specialization'])
-    : undefined
-  const prefillYears = profile?.years_experience ?? null
 
   const {
     register,
     handleSubmit,
     setError,
+    reset,
     formState: { errors },
   } = useForm<SurveyValues>({
     resolver: zodResolver(surveySchema),
-    defaultValues: {
-      specialization: prefillSpec,
-      years_experience: prefillYears ? Number(prefillYears) : null,
-      roles: profile?.roles ?? [],
-      work_formats: profile?.work_formats ?? [],
-      salary_min: profile?.salary_min ?? undefined,
-      salary_max: profile?.salary_max ?? undefined,
-      salary_type: profile?.salary_type || undefined,
-      salary_floor: profile?.salary_floor ?? null,
-      about: profile?.about ?? '',
-    },
   })
+
+  // Wait for the profile, then hydrate the form once. Prevents a lost prefill
+  // on refresh (defaults were computed before the query resolved).
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (isLoading || !profile || hydrated.current) return
+    reset(profileDefaults(profile, state.specialization))
+    hydrated.current = true
+  }, [isLoading, profile, state.specialization, reset])
+
+  if (isLoading) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-6">
+        <CardSkeleton />
+      </section>
+    )
+  }
 
   const onSubmit = (values: SurveyValues) => {
     const payload = {
