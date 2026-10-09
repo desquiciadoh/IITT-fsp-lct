@@ -1,6 +1,8 @@
 """Unit tests for LLM Gateway orchestration (AI-R2, AI-R10, AI-R11, AI-R12, AI-R13)."""
 import json
 import logging
+import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -261,51 +263,95 @@ def test_parse_jd_orchestration_and_blueprint():
     assert isinstance(res.draft["team_context"], str)
     assert isinstance(res.draft["location"], str)
 
-    # Test monkeypatched blueprint_for conversions
-    import sys
-    import types
-
-    fake_mod = types.ModuleType("assessment.engine.blueprint")
-
-    # Case A: returns list of tuples -> converted to list of dicts
-    fake_mod.blueprint_for = lambda spec, skills: [("backend.python", 0.6), ("backend.databases", 0.4)]
-    sys.modules["assessment.engine.blueprint"] = fake_mod
-    try:
-        res_bp = parse_jd(jd_text, gateway=FakeLlm())
-        assert res_bp.blueprint == [
-            {"topic": "backend.python", "weight": 0.6},
-            {"topic": "backend.databases", "weight": 0.4},
-        ]
-
-        # Case B: raises ValueError -> returns [] and doesn't crash
-        fake_mod.blueprint_for = MagicMock(side_effect=ValueError("Invalid spec"))
-        res_bp_err = parse_jd(jd_text, gateway=FakeLlm())
-        assert res_bp_err.blueprint == []
-    finally:
-        sys.modules.pop("assessment.engine.blueprint", None)
+JD_TEXT = (FIXTURES_DIR / "jd" / "jd_backend_must_nice.txt").read_text(encoding="utf-8")
 
 
-def test_observability_logging_privacy(caplog):
-    """Verify AI-R12: structured log_llm_call with no CV text and no PII."""
-    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+def _install_blueprint(monkeypatch, blueprint_for) -> types.ModuleType:
+    module = types.ModuleType("assessment.engine.blueprint")
+    module.blueprint_for = blueprint_for
+    monkeypatch.setitem(sys.modules, "assessment.engine.blueprint", module)
+    return module
+
+
+def test_blueprint_tuples_are_converted(monkeypatch):
+    calls = []
+
+    def blueprint_for(spec, skills):
+        calls.append((spec, skills))
+        return [("backend.python", 0.6), ("backend.databases", 0.4)]
+
+    _install_blueprint(monkeypatch, blueprint_for)
+    res = parse_jd(JD_TEXT, gateway=FakeLlm())
+
+    assert res.blueprint == [
+        {"topic": "backend.python", "weight": 0.6},
+        {"topic": "backend.databases", "weight": 0.4},
+    ]
+    assert calls[0][0] == "backend" and "python" in calls[0][1]
+
+
+def test_blueprint_error_is_logged_with_type_only(monkeypatch, caplog):
+    _install_blueprint(monkeypatch, MagicMock(side_effect=ValueError("secret detail")))
 
     with caplog.at_level(logging.INFO):
-        res = parse_resume(pdf_bytes, gateway=FakeLlm())
+        res = parse_jd(JD_TEXT, gateway=FakeLlm())
 
-    llm_logs = [r for r in caplog.records if r.getMessage().startswith("llm_call")]
-    assert len(llm_logs) >= 1, "Expected at least one structured llm_call log record"
+    assert res.blueprint == []
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1 and "ValueError" in errors[0].getMessage()
+    assert all("secret detail" not in r.getMessage() for r in caplog.records)
+    call = next(r for r in caplog.records if getattr(r, "event", None) == "llm_call")
+    assert call.fallback_reason == "provider_fake+blueprint"
 
-    rec = llm_logs[0]
-    # Verify presence of all required fields in the log record
-    assert "kind" in rec.__dict__ or "kind" in rec.message
-    assert "source" in rec.__dict__ or "source" in rec.message
 
-    # Crucial 152-FZ verification:
-    # No candidate personal names or phone numbers appear in any captured log message
-    for contact_val in res.contacts.values():
-        if contact_val and len(contact_val) > 4:
-            for log_rec in caplog.records:
-                assert contact_val.lower() not in log_rec.getMessage().lower()
+def test_blueprint_missing_module_is_silent(monkeypatch, caplog):
+    monkeypatch.setitem(sys.modules, "assessment.engine", None)  # import fails with ModuleNotFoundError
+
+    with caplog.at_level(logging.INFO):
+        res = parse_jd(JD_TEXT, gateway=FakeLlm())
+
+    assert res.blueprint == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_blueprint_not_called_without_specialization(monkeypatch):
+    blueprint_for = MagicMock(return_value=[])
+    _install_blueprint(monkeypatch, blueprint_for)
+
+    res = parse_jd("Текст без специализации", gateway=FakeLlm())
+
+    assert res.draft["specialization"] == ""
+    blueprint_for.assert_not_called()
+
+
+LLM_CALL_FIELDS = (
+    "kind", "provider", "model", "prompt", "input_hash", "latency_ms", "cache_hit", "source",
+    "fallback_reason",
+)
+
+
+def test_observability_one_record_no_text_no_pii(caplog):
+    """AI-R12: one llm_call record with every field; no CV line and no PII in any record."""
+    pdf_bytes = (FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes()
+    cv_lines = [line.strip() for line in extract_text(pdf_bytes).splitlines() if len(line.strip()) >= 12]
+    gw = _gigachat_mock()
+    gw.resume.return_value = _llm_draft(about="Опытный бэкенд разработчик на Python.")
+
+    with caplog.at_level(logging.DEBUG):
+        res = parse_resume(pdf_bytes, gateway=gw)
+
+    calls = [r for r in caplog.records if getattr(r, "event", None) == "llm_call"]
+    assert len(calls) == 1
+    for field in LLM_CALL_FIELDS:
+        assert hasattr(calls[0], field), field
+    assert (calls[0].kind, calls[0].source, calls[0].prompt) == ("resume", "llm", RESUME_PROMPT)
+
+    pii = [v for v in res.contacts.values() if v]
+    assert len(pii) == 4
+    for record in caplog.records:
+        logged = record.getMessage() + " " + " ".join(str(getattr(record, f, "")) for f in LLM_CALL_FIELDS)
+        for value in pii + cv_lines:
+            assert value not in logged, f"{value!r} leaked into a log record"
 
 
 def test_get_gateway_factory():
