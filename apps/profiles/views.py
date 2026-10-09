@@ -1,4 +1,5 @@
 """Profiles app API views."""
+import hashlib
 import logging
 
 from core.enums import (
@@ -263,7 +264,8 @@ class ResumeParseView(views.APIView):
 
         file_bytes = file_obj.read()
         try:
-            # Inline parsing uses FakeLlm until Celery N4 async worker is wired
+            # Rules only inline; the GigaChat path runs in the Celery `llm` task (BE.md N4).
+            # Provider failures never reach this view: parse_resume falls back to rules itself.
             parse_res = parse_resume(file_bytes, gateway=FakeLlm())
         except UnreadablePdf:
             raise FSPAPIError(
@@ -273,20 +275,10 @@ class ResumeParseView(views.APIView):
                 422,
             )
         except Exception as e:
-            import hashlib
+            # A bug, not a bad PDF: log the type and the file hash (never the text), answer 500
             file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
-            logger.error("Unexpected error in ResumeParseView (%s, sha=%s)", type(e).__name__, file_sha)
-            try:
-                parse_res = parse_resume(file_bytes, gateway=FakeLlm())
-            except UnreadablePdf:
-                raise FSPAPIError(
-                    'unreadable_pdf',
-                    'Не удалось прочитать PDF',
-                    'Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.',
-                    422,
-                )
-            except Exception:
-                raise
+            logger.error("Resume parse failed (%s, sha=%s)", type(e).__name__, file_sha)
+            raise
 
         return Response({
             'prefill': parse_res.prefill,
