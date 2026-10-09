@@ -5,8 +5,14 @@ Generates 3 hero CVs with text streams using fpdf2 and Arial TTF font:
 2. Frontend Junior (React, TypeScript, Next.js, Redux)
 3. ML Senior (PyTorch, Computer Vision, Pandas, CatBoost, MLflow)
 And 1 image-only (scanned) PDF that contains zero text stream (raises UnreadablePdf).
+
+Dev-only tool, never imported by the app or the tests:
+    pip install fpdf2 pillow
+    python tools/make_fixture_pdfs.py            # FIXTURE_FONT=/path/to/font.ttf to override
+Any TTF with Cyrillic works (DejaVu Sans on Linux, Arial on Windows).
 """
 import io
+import os
 from pathlib import Path
 
 from fpdf import FPDF
@@ -14,14 +20,27 @@ from PIL import Image
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "ai" / "fixtures" / "cv"
 FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+FONT_CANDIDATES = [
+    os.environ.get("FIXTURE_FONT", ""),
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+]
+
+
+def font_path() -> str:
+    for candidate in FONT_CANDIDATES:
+        if candidate and Path(candidate).exists():
+            return candidate
+    raise SystemExit("No Cyrillic TTF found: set FIXTURE_FONT=/path/to/font.ttf")
 
 
 def create_text_pdf(text: str, filename: str) -> None:
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("Arial", "", FONT_PATH)
-    pdf.set_font("Arial", size=11)
+    pdf.add_font("CyrillicSans", "", font_path())
+    pdf.set_font("CyrillicSans", size=11)
     for line in text.strip().splitlines():
         if not line.strip():
             pdf.ln(5)
