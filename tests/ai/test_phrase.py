@@ -1,4 +1,5 @@
 """Unit tests for phrase generation and AI-R9 grounding checks."""
+import logging
 from unittest.mock import MagicMock
 
 from llm_gateway.base import LlmUnavailable
@@ -73,6 +74,31 @@ def test_phrase_rejects_pii_placeholders():
 
     res = phrase(facts, gateway=mock_gw)
     assert "[NAME]" not in res
+
+
+def test_phrase_accepts_decimals_and_dotted_names():
+    """'4.5 года' and 'Node.js' are not sentence ends: two sentences are accepted."""
+    facts = ["Node.js: 4.5 года", "Vue.js: подтверждено тестом"]
+    mock_gw = MagicMock()
+    mock_gw.name = "gigachat"
+    mock_gw.phrase.return_value = "Кандидат 4.5 года пишет на Node.js. Навык Vue.js подтверждён тестом."
+
+    assert phrase(facts, gateway=mock_gw) == mock_gw.phrase.return_value
+
+
+def test_phrase_logs_one_structured_record(caplog):
+    facts = ["Python 4 года"]
+    mock_gw = MagicMock()
+    mock_gw.name = "gigachat"
+    mock_gw.phrase.return_value = "Кандидат знает Python и Rust."
+
+    with caplog.at_level(logging.INFO, logger="llm_gateway"):
+        phrase(facts, gateway=mock_gw)
+
+    records = [r for r in caplog.records if getattr(r, "event", None) == "llm_call"]
+    assert len(records) == 1
+    assert (records[0].kind, records[0].source, records[0].fallback_reason) == ("phrase", "rules", "grounding_skills")
+    assert all("Rust" not in r.getMessage() for r in caplog.records), "model output must not be logged"
 
 
 def test_phrase_fallback_on_gateway_error():
