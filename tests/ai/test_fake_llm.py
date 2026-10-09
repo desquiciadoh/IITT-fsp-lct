@@ -1,5 +1,11 @@
 """Unit tests for FakeLlm rule-based extraction and AI-R6 regressions."""
+from pathlib import Path
+
+import pytest
+from llm_gateway import extract_text, redact
 from llm_gateway.fake import FakeLlm
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def test_fake_llm_resume_extraction():
@@ -110,3 +116,81 @@ Leading projects под руководством senior архитектора.
     assert draft6.grades == []
     assert draft6.work_formats == []
     assert draft6.salary_type is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # amounts outside a salary line are not a salary
+        ("Python developer\nОбработка 10 000 - 50 000 запросов в секунду в компании", (None, None)),
+        ("Нагрузка: от 10 000 до 50 000 RPS\nКомпания: Яндекс", (None, None)),
+        # a single amount next to a salary word or a currency
+        ("Зарплата: 200 000 руб. Работа с .NET", (200000, None)),
+        ("Ожидаемый доход 250 000 ₽ на руки", (250000, None)),
+        # ranges with an ellipsis, thousands suffixes, a year range before the salary
+        ("Зарплата 200 000…300 000 ₽ на руки", (200000, 300000)),
+        ("Вилка 150-200 тыс руб", (150000, 200000)),
+        ("Зарплата в 2019-2023 росла, сейчас вилка 300 000 - 400 000 руб", (300000, 400000)),
+    ],
+)
+def test_fake_llm_salary_lines(text, expected):
+    draft = FakeLlm().jd(text)
+    assert (draft.salary_min, draft.salary_max) == expected
+
+
+def test_fake_llm_does_not_invent_values():
+    draft = FakeLlm().resume("Какой-то текст без должности\nPython")
+    assert draft.roles == []
+    assert draft.claimed_grade is None
+    assert draft.work_formats == []
+    assert draft.salary_type is None
+
+
+def test_fake_llm_jd_grade_ignores_body_mentions():
+    draft = FakeLlm().jd("Python разработчик\nВы будете работать с Team Lead и senior коллегами")
+    assert draft.grades == []
+
+
+@pytest.mark.parametrize(
+    ("text", "years"),
+    [
+        ("Опыт работы — 4 года 6 месяцев", 4.5),
+        ("Общий стаж: 5 лет", 5.0),
+        ("5+ years of experience in Python", 5.0),
+        ("Опыт более 3 лет", 3.0),
+    ],
+)
+def test_fake_llm_years(text, years):
+    assert FakeLlm().resume(text).years_experience == years
+
+
+def test_fake_llm_sections_from_hero_cv():
+    """about keeps wrapped lines; experience_text is the "Опыт работы" section only."""
+    text = redact(extract_text((FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes())).text
+    draft = FakeLlm().resume(text)
+
+    assert draft.about.endswith("REST API и микросервисов.")
+    assert draft.experience_text.startswith("ООО Технологии Будущего")
+    assert "зарплате" not in draft.experience_text
+    assert "Навыки" not in draft.experience_text
+    assert draft.roles == ["Python Backend Developer"]
+
+
+@pytest.mark.parametrize(
+    ("fixture", "spec", "grades", "salary", "salary_type", "formats"),
+    [
+        ("jd_backend_must_nice.txt", "backend", ["senior"], (320000, 420000), "net", ["remote", "hybrid"]),
+        ("jd_english.txt", "backend", ["senior"], (350000, 450000), "net", ["remote"]),
+        ("jd_experience_range.txt", "backend", ["senior"], (300000, 400000), None, ["remote"]),
+        ("jd_gross.txt", "ml_data", [], (280000, 380000), "gross", ["remote", "office"]),
+        ("jd_no_salary.txt", "frontend", [], (None, None), None, ["hybrid"]),
+    ],
+)
+def test_fake_llm_jd_fixtures(fixture, spec, grades, salary, salary_type, formats):
+    draft = FakeLlm().jd((FIXTURES_DIR / "jd" / fixture).read_text(encoding="utf-8"))
+    assert draft.specialization == spec
+    assert draft.grades == grades
+    assert (draft.salary_min, draft.salary_max) == salary
+    assert draft.salary_type == salary_type
+    assert draft.work_formats == formats
+    assert draft.must_skills_raw

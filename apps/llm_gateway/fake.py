@@ -13,6 +13,115 @@ from taxonomy import extract_skills, load_skills
 
 from .types import JdDraft, ResumeDraft
 
+_PLACEHOLDER_RE = re.compile(r"\[(?:NAME|PHONE|EMAIL|TG|URL)\]")
+
+# "опыт работы: 3.5 года", "стаж: 4 года 6 месяцев", "опыт более 5 лет" (text is lower-cased)
+_YEARS_RU_RE = re.compile(
+    r"(?:опыт|стаж)[а-я]*(?:\s+работы)?(?:\s+составляет)?\s*[:—\-–]?\s*(?:более\s+|около\s+)?"
+    r"(\d+(?:[.,]\d+)?)\s*\+?\s*(?:лет|года?|г\.)(?![а-я])"
+    r"(?:\s*(?:и\s+)?(?P<months>\d{1,2})\s*мес)?"
+)
+_YEARS_EN_RE = re.compile(r"(\d+(?:\.\d+)?)\+?\s*years?\s+of\s+(?:commercial\s+)?experience")
+
+# Salary: amounts count only in lines with a money cue (AI-R6)
+_NET_RE = re.compile(r"(?<![.\w])net\b|на\s+руки|чистыми|после\s+(?:вычета|налогов)", re.IGNORECASE)
+_GROSS_RE = re.compile(
+    r"(?<![.\w])gross\b|до\s+(?:вычета|налогов)|грязными|с\s+уч[её]том\s+ндфл", re.IGNORECASE
+)
+_SALARY_CUE_RE = re.compile(
+    r"зарплат|з/п|(?<![а-яё])зп(?![а-яё])|оклад|доход|вилк|компенсац|ожидани|salary|₽"
+    r"|(?<![а-яё])руб|(?<![a-z])rub|\d\s*[kк](?![a-zа-яё])",
+    re.IGNORECASE,
+)
+_AMOUNT = r"\d[\d \xa0]*(?:[.,]\d+)?\s*(?:тыс\.?|[kк](?![a-zа-яё]))?"
+_NOT_YEARS = r"(?!\s*(?:лет|года?|years?|мес))"
+_SALARY_RANGE_RE = re.compile(
+    rf"({_AMOUNT}){_NOT_YEARS}\s*(?:до|-|–|—|\.\.\.|…)\s*({_AMOUNT}){_NOT_YEARS}", re.IGNORECASE
+)
+_SALARY_FROM_RE = re.compile(rf"(?<![а-яё])от\s*({_AMOUNT}){_NOT_YEARS}", re.IGNORECASE)
+_SALARY_TO_RE = re.compile(rf"(?<![а-яё])до\s*({_AMOUNT}){_NOT_YEARS}", re.IGNORECASE)
+_SALARY_AFTER_CUE_RE = re.compile(
+    rf"(?:зарплат[а-я]*|з/п|зп|оклад|доход|ожидани[а-я]*(?:\s+по\s+зарплате)?|salary)\s*[:\-–—]?\s*({_AMOUNT})",
+    re.IGNORECASE,
+)
+_SALARY_BEFORE_CURRENCY_RE = re.compile(rf"({_AMOUNT})\s*(?:₽|руб|rub)", re.IGNORECASE)
+
+# Roles and sections
+_ROLE_LABEL_RE = re.compile(
+    r"^\s*(?:желаемая\s+должность|должность|позиция|position|title)\s*[:\-–—]\s*(\S.*)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_ROLE_WORD_RE = re.compile(
+    r"developer|engineer|разработчик|инженер|программист|специалист|analyst|аналитик|architect"
+    r"|архитектор|scientist|\blead\b|тимлид|devops|\bqa\b|тестировщик",
+    re.IGNORECASE,
+)
+_SECTION_HEADER_RE = re.compile(
+    r"^\s*(?:опыт\s+работы|опыт|work\s+experience|experience|образование|education|ключевые\s+навыки"
+    r"|навыки|skills|обо\s+мне|о\s+себе|about\s+me|about|summary|проекты|projects|курсы|courses"
+    r"|сертификаты|certificates|языки|languages|контакты|contacts|дополнительная\s+информация"
+    r"|достижения|хобби|желаемая\s+должность(?:\s+и\s+зарплата)?)\s*:?\s*$",
+    re.IGNORECASE,
+)
+_FIELD_LINE_RE = re.compile(r"^\s*[А-ЯЁA-Z][А-ЯЁа-яёA-Za-z ]{1,30}:\s")
+_ABOUT_HEADER_RE = re.compile(r"^\s*(?:обо\s+мне|о\s+себе|about\s+me|summary)\s*:?\s*(.*)$", re.IGNORECASE)
+_EXPERIENCE_HEADER_RE = re.compile(r"^\s*(?:опыт\s+работы|work\s+experience|experience)\s*:?\s*()$", re.IGNORECASE)
+
+# JD grades: the title and "ищем/уровень" lines only
+_GRADE_CUE_RE = re.compile(r"грейд|уровень|level|grade|ищем|ищет|требуется|looking\s+for", re.IGNORECASE)
+_JD_GRADE_PATTERNS = (
+    ("senior", r"\b(?:senior|сеньор\w*|ведущ\w*|старш\w*|lead|тимлид\w*)\b"),
+    ("middle", r"\b(?:middle|мидл\w*)\b"),
+    ("junior", r"\b(?:junior|джун\w*|младш\w*)\b"),
+    ("intern", r"\b(?:intern|стаж[её]р\w*)\b"),
+)
+
+
+_THOUSANDS_SUFFIXES = ("тыс.", "тыс", "k", "к")
+
+
+def _thousands_suffix(raw: str) -> str:
+    s = raw.strip().lower()
+    return next((suffix for suffix in _THOUSANDS_SUFFIXES if s.endswith(suffix)), "")
+
+
+def _parse_amount(raw: str) -> int | None:
+    """"220 000", "150к", "250 тыс" -> RUB; amounts below 10 000 are not salaries."""
+    s = raw.strip().lower().replace(" ", "").replace("\xa0", "")
+    suffix = _thousands_suffix(s)
+    if suffix:
+        s = s[: -len(suffix)]
+    try:
+        value = int(float(s.replace(",", ".")) * (1000 if suffix else 1))
+    except ValueError:
+        return None
+    return value if 10_000 <= value <= 10_000_000 else None
+
+
+def _parse_range(raw_low: str, raw_high: str) -> tuple[int | None, int | None]:
+    """"150-200 тыс": the suffix of the upper bound applies to the lower one too."""
+    low, high = _parse_amount(raw_low), _parse_amount(raw_high)
+    suffix = _thousands_suffix(raw_high)
+    if low is None and high is not None and suffix and not _thousands_suffix(raw_low):
+        low = _parse_amount(raw_low.strip() + suffix)
+    return low, high
+
+
+def _section_lines(text: str, header_re: re.Pattern[str], *, stop_at_fields: bool = False) -> list[str]:
+    """Lines of the first section whose header matches, up to the next section header."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = header_re.match(line)
+        if not m:
+            continue
+        out = [m.group(1)] if m.group(1) else []
+        for nxt in lines[i + 1:]:
+            if _SECTION_HEADER_RE.match(nxt) or (stop_at_fields and _FIELD_LINE_RE.match(nxt)):
+                break
+            out.append(nxt)
+        return out
+    return []
+
 
 class FakeLlm:
     """Rule-based LLM gateway implementation."""
@@ -207,18 +316,15 @@ class FakeLlm:
         return top_specs[0]
 
     def _extract_years_experience(self, lowered: str) -> float | None:
-        """Extract experience in years from text."""
-        # e.g. "опыт 3 года", "опыт работы: 5 лет", "4.5 года"
-        m = re.search(r"опыт(?:а|\s+работы)?\s*(?:составляет)?\s*[:—\-]?\s*(\d+(?:[.,]\d+)?)\s*(?:лет|года|год|г\b)", lowered)
-        if m:
-            val = m.group(1).replace(",", ".")
-            try:
-                years = float(val)
-                if 0 <= years <= 50:
-                    return years
-            except ValueError:
-                pass
-        return None
+        """Experience in years: "опыт 3 года", "стаж: 4 года 6 месяцев", "5+ years of experience"."""
+        m = _YEARS_RU_RE.search(lowered) or _YEARS_EN_RE.search(lowered)
+        if not m:
+            return None
+        years = float(m.group(1).replace(",", "."))
+        months = m.groupdict().get("months")
+        if months:
+            years += int(months) / 12
+        return round(years, 1) if 0 <= years <= 50 else None
 
     def _infer_grade(self, text: str, years: float | None) -> str | None:
         """Extract grade from header lines, or derive from years of experience."""
@@ -252,81 +358,31 @@ class FakeLlm:
         return None
 
     def _extract_salary(self, text: str) -> tuple[int | None, int | None, str | None]:
-        """Extract salary bounds and type adhering strictly to AI-R6."""
-        sal_cues = [
-            "зарплат", "з/п", "зп", "оклад", "доход", "вилка", "компенсац",
-            "salary", "₽", "руб", "rub", "тыс", "к", "k",
-        ]
-
-        # 1. Salary type: word-boundary only, guarded against dots and words
-        p_net = re.compile(r"(?<![.\w])net\b|на руки|чистыми|после\s+(?:вычета|налогов)", re.I)
-        p_gross = re.compile(r"(?<![.\w])gross\b|до\s+(?:вычета|налогов)|грязными|с уч[её]том ндфл", re.I)
+        """Salary bounds and type from lines with a salary cue only (AI-R6)."""
         sal_type: str | None = None
-        if p_gross.search(text):
+        if _GROSS_RE.search(text):
             sal_type = "gross"
-        elif p_net.search(text):
+        elif _NET_RE.search(text):
             sal_type = "net"
 
-        # 2. Amounts in cue lines
-        sal_min: int | None = None
-        sal_max: int | None = None
-
-        lines = text.splitlines()
-        cue_lines = []
-        for line in lines:
-            l_low = line.lower()
-            if any(c in l_low for c in sal_cues):
-                cue_lines.append(line)
-
-        search_texts = cue_lines if cue_lines else [text]
-
-        def parse_num(s: str) -> int | None:
-            s_clean = s.strip().lower().replace(" ", "").replace("\xa0", "")
-            mult = 1
-            if s_clean.endswith("тыс"):
-                mult = 1000
-                s_clean = s_clean[:-3]
-            elif s_clean.endswith("k") or s_clean.endswith("к"):
-                mult = 1000
-                s_clean = s_clean[:-1]
-            try:
-                val = int(s_clean) * mult
-                if val >= 10000:
-                    return val
-            except ValueError:
-                pass
-            return None
-
-        num_pat = r"\d[\d\s\xa0]*(?:тыс|[kк])?"
-        range_p = re.compile(
-            rf"(?:от\s*)?({num_pat})\s*(?:до|-|–|—|\.\.\.)\s*({num_pat})(?!\s*(?:лет|года|год|years))",
-            re.I,
-        )
-        single_from_p = re.compile(rf"от\s*({num_pat})(?!\s*(?:лет|года|год|years))", re.I)
-        single_to_p = re.compile(rf"до\s*({num_pat})(?!\s*(?:лет|года|год|years))", re.I)
-
-        for st in search_texts:
-            m = range_p.search(st)
-            if m:
-                n1 = parse_num(m.group(1))
-                n2 = parse_num(m.group(2))
-                if n1 or n2:
-                    sal_min = n1
-                    sal_max = n2
-                    break
-            m_from = single_from_p.search(st)
-            if m_from:
-                sal_min = parse_num(m_from.group(1))
-            m_to = single_to_p.search(st)
-            if m_to:
-                sal_max = parse_num(m_to.group(1))
-            if sal_min or sal_max:
-                break
-
-        if sal_min is not None and sal_max is not None and sal_max < sal_min:
-            sal_min, sal_max = sal_max, sal_min
-
-        return sal_min, sal_max, sal_type
+        for line in text.splitlines():
+            if not _SALARY_CUE_RE.search(line):
+                continue
+            for m in _SALARY_RANGE_RE.finditer(line):  # "2019-2023" is skipped, a later range counts
+                low, high = _parse_range(m.group(1), m.group(2))
+                if low or high:
+                    if low and high and high < low:
+                        low, high = high, low
+                    return low, high, sal_type
+            low = _parse_amount(m.group(1)) if (m := _SALARY_FROM_RE.search(line)) else None
+            high = _parse_amount(m.group(1)) if (m := _SALARY_TO_RE.search(line)) else None
+            if low or high:
+                return low, high, sal_type
+            # "Зарплата: 200 000 руб", "Ожидания по зарплате 250k", "250 000 ₽"
+            m = _SALARY_AFTER_CUE_RE.search(line) or _SALARY_BEFORE_CURRENCY_RE.search(line)
+            if m and (amount := _parse_amount(m.group(1))):
+                return amount, None, sal_type
+        return None, None, sal_type
 
     def _extract_work_formats(self, lowered: str) -> list[str]:
         """Extract office, hybrid, remote formats."""
@@ -360,42 +416,29 @@ class FakeLlm:
         return None
 
     def _extract_roles(self, text: str, spec: str | None) -> list[str]:
-        """Extract target roles from resume header/title."""
-        for line in text.splitlines()[:5]:
-            stripped = line.strip()
-            if any(w in stripped.lower() for w in ("developer", "инженер", "разработчик", "специалист", "engineer")):
-                if len(stripped) < 60 and not stripped.startswith("["):
-                    return [stripped]
-        fallback_role = {
-            "backend": "Backend Developer",
-            "frontend": "Frontend Developer",
-            "ml_data": "ML Engineer",
-        }.get(spec or "", "Software Engineer")
-        return [fallback_role]
+        """Target role from a "Желаемая должность:" line or a role line in the header; never invented."""
+        m = _ROLE_LABEL_RE.search(text)
+        if m:
+            return [m.group(1).strip()[:100]]
+        lines = [line.strip() for line in text.splitlines() if line.strip()][:10]
+        for line in lines:
+            role = re.split(r",|\s[—–-]\s", line, maxsplit=1)[0].strip()  # "Python developer, опыт 3 года"
+            if (_ROLE_WORD_RE.search(role) and len(role) < 60
+                    and not _PLACEHOLDER_RE.search(role) and ":" not in role):
+                return [role]
+        return []
 
     def _extract_about(self, text: str) -> str | None:
-        """Extract short <= 500 chars summary without PII placeholders."""
-        m = re.search(r"(?:обо мне|about me)[:\s]+(.*?)(?=\n\s*\n|\n[А-ЯЁA-Z]|$)", text, re.IGNORECASE | re.DOTALL)
-        if m:
-            snippet = m.group(1).strip()
-            # drop lines with placeholders
-            clean_lines = [line_item for line_item in snippet.splitlines() if not re.search(r"\[(NAME|PHONE|EMAIL|TG|URL)\]", line_item)]
-            clean_text = " ".join(clean_lines).strip()
-            if clean_text:
-                return clean_text[:500]
-
-        return None
+        """The "Обо мне" section (inline or below the header), <= 500 chars, no placeholders."""
+        lines = _section_lines(text, _ABOUT_HEADER_RE, stop_at_fields=True)
+        clean = " ".join(line.strip() for line in lines if line.strip() and not _PLACEHOLDER_RE.search(line))
+        return clean[:500] or None
 
     def _extract_experience_text(self, text: str) -> str | None:
-        """Extract only 'Опыт работы' section, dropping placeholder lines, capped at 1500 chars."""
-        m = re.search(r"(?:опыт работы|experience)[:\s]+(.*?)(?=\n\s*(?:образование|обо мне|навыки|skills|education)|$)", text, re.IGNORECASE | re.DOTALL)
-        if m:
-            exp_raw = m.group(1).strip()
-            clean_lines = [line_item for line_item in exp_raw.splitlines() if not re.search(r"\[(NAME|PHONE|EMAIL|TG|URL)\]", line_item)]
-            clean_text = "\n".join(clean_lines).strip()
-            if clean_text:
-                return clean_text[:1500]
-        return ""
+        """The "Опыт работы" section only, without placeholder lines, <= 1500 chars (AI-R1 item 6)."""
+        lines = _section_lines(text, _EXPERIENCE_HEADER_RE)
+        clean = "\n".join(line.rstrip() for line in lines if line.strip() and not _PLACEHOLDER_RE.search(line))
+        return clean[:1500]
 
     def _extract_jd_skills(self, text: str) -> tuple[list[str], list[str]]:
         """Split skills into must-have and nice-to-have."""
@@ -432,15 +475,15 @@ class FakeLlm:
         return None
 
     def _extract_jd_grades(self, text: str) -> list[str]:
-        """Extract applicable grades for the position without inventing defaults."""
-        lowered = text.lower()
+        """Grades from the title (first line) and "ищем/уровень" lines; never a default.
+
+        A body line such as "работа с Team Lead и senior коллегами" is not a grade.
+        """
+        lines = [line for line in text.splitlines() if line.strip()]
+        scope = " ".join(lines[:1] + [line for line in lines[1:] if _GRADE_CUE_RE.search(line)]).lower()
+        scope = re.sub(r"под\s+руководством\s+\w+", "", scope)
         grades: list[str] = []
-        if re.search(r"\b(?:senior|сеньор|ведущий|lead)\b", lowered):
-            grades.append("senior")
-        if re.search(r"\b(?:middle|мидл)\b", lowered):
-            grades.append("middle")
-        if re.search(r"\b(?:junior|джун)\b", lowered):
-            grades.append("junior")
-        if re.search(r"\b(?:intern|стаж[её]р)\b", lowered):
-            grades.append("intern")
+        for grade, pattern in _JD_GRADE_PATTERNS:
+            if re.search(pattern, scope):
+                grades.append(grade)
         return grades
