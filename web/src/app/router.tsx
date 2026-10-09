@@ -58,6 +58,9 @@ const MicrotaskSolvePage = lazy(() =>
 const EmployerMicrotasksPage = lazy(() =>
   import('@/features/microtasks/employer-microtasks-page').then((m) => ({ default: m.EmployerMicrotasksPage })),
 )
+const PoolPage = lazy(() =>
+  import('@/features/pool/pool-page').then((m) => ({ default: m.PoolPage })),
+)
 
 const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
@@ -82,6 +85,7 @@ export const router = createBrowserRouter([
   { path: '/dev/design', element: <DesignVariantsPage /> },
   { path: '/dev/vacancies-employer', element: <EmployerPreviewPage /> },
   { path: '/dev/microtasks-employer', element: <EmployerMicrotasksPage /> },
+  { path: '/dev/pool', element: <PoolPage /> },
   {
     // Public pages inside the shell (no RequireAuth; no SSE for anonymous users)
     element: <AppLayout />,

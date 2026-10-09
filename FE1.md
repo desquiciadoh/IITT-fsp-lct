@@ -102,7 +102,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
 | FE-19 Playwright e2e | S | FE-05, FE-10, FE-11 (FE2); CI from BE | ❌ FE2 P0 not started |
 | FE-15 Vacancies & applications | M | BE-17 | ❌ not started (BE.md N11), mock it |
 | FE-16 Micro-tasks | M | BE-18 | ✅ feature done on mocks (G19) |
-| FE-17 Pool power features | M | FE-10 (FE2), ML-10, BE-20 | ❌ mock it, build after FE-10 merges |
+| FE-17 Pool power features | M | FE-10 (FE2), ML-10, BE-20 | ✅ feature done on mocks (G20); slot ready for FE-10 |
 | FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ❌ mock it |
 | FE-18 Polish | M | PD-05 copy; FE2's screens merged | partly unblocked |
 
@@ -131,7 +131,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - A reviewed submission is evidence with source `microtask`: give it its own chip variant on `/dev/ui`, distinct from `declared`.
   - *Done:* create → solve → review → invite works end to end on mocks.
 
-- [ ] **FE-17 · Pool power features** (M), on FE2's scouting page (`/employer/positions/:id`). Start after FE-10 is merged. Depends on ML-10 (relaxations, acceptance likelihood) and BE-20 (floor warning, Need Health); mock it.
+- [x] **FE-17 · Pool power features** (M), on FE2's scouting page (`/employer/positions/:id`). Start after FE-10 is merged. Depends on ML-10 (relaxations, acceptance likelihood) and BE-20 (floor warning, Need Health); mock it.
   - Weight presets (balanced / skills / budget) and sliders that re-rank live. Re-ranked rows must still show contributions that sum to the shown score (use `normalizeComponents()`).
   - Counterfactual hints from `relaxations` ("убрать Kubernetes → +23 кандидата").
   - An acceptance-likelihood badge (low / medium / high) next to "Send".

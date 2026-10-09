@@ -306,3 +306,45 @@ export type OfferCreate = {
   contact_value: string
   expires_in_days?: number
 }
+
+// ── pool power (FE-17) ──
+// Gap G20 / BE-20, ML-10: pool re-rank weights, relaxations, acceptance
+// likelihood and Need Health; all mocked.
+
+export type WeightPreset = 'balanced' | 'skills' | 'budget'
+
+export type AcceptLikelihood = 'low' | 'medium' | 'high'
+
+export type PoolWeights = Partial<Record<ScoreComponent['key'], number>>
+
+export type PoolCandidate = {
+  public_id: string
+  display_name: string
+  city?: string
+  skills: string[]
+  components: ScoreComponentsDict
+  /** score under the current weights (backend sends the balanced one) */
+  score: number
+  accept_likelihood: AcceptLikelihood
+  declared_salary_min: number
+}
+
+export type Relaxation = {
+  label: string
+  added_candidates: number
+}
+
+export type NeedHealth = {
+  active: number
+  declined_last_30d: number
+  acceptance_rate: number
+  by_reason: { reason: string; count: number; share: number }[]
+}
+
+/** `GET /api/positions/{id}/pool` — the scouting page payload (FE2 FE-10). */
+export type PositionPool = {
+  candidates: PoolCandidate[]
+  weights: PoolWeights
+  relaxations: Relaxation[]
+  health: NeedHealth
+}
