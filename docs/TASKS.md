@@ -522,7 +522,7 @@ Kickoff order. **Day 1:** BE runs F-01 → F-02 → F-03 (persona login by eveni
 - [x] **F-03** · P0 · M · BE: **API skeleton.** App settings, PostgreSQL connection, RFC 7807 problem+json handler (`core/errors.py`), Argon2 cookie sessions, SSE endpoint (`/api/events`), and `POST /api/demo/persona`.
 - [x] **F-04** · P0 · M · BE: **Schema v1.** Enums (`core/enums.py`) and all P0 tables in Django migrations, models across 6 apps, CheckConstraints for salaries, indexes.
 - [x] **F-05** · P0 · M · BE: **Contract & OpenAPI.** Full OpenAPI 3.0 schema at `docs/openapi.json` generated via drf-spectacular (`/api/docs/` Swagger UI, `/api/schema/`).
-- [x] **F-06** [GM] · P0 · S · FE: **Web skeleton.** Vite + React + TS, Tailwind + shadcn/ui. (Done: `apps/web/`, `npm run build` green, shadcn CLI works, dev proxy to `:8000`.)
+- [x] **F-06** [GM] · P0 · S · FE: **Web skeleton.** Vite + React + TS, Tailwind + shadcn/ui. (Done: `web/`, `pnpm build` green, shadcn CLI works, dev proxy to `:8000`.)
 - [x] **F-07** · P0 · S · AI: **Engine interfaces & families.** Parametric item generators (`ItemFamily` with `generate(seed)` and `oracle()`), IRT EAP scoring engine (`apps/assessment/engine.py`), sample families (Python loop, SQL group-by, JS event loop).
 - [x] **F-08** · P0 · S · PD + BE: **Mini seed (MK7).** `python manage.py seed --mode=mini` (6 candidates, 2 companies, 3 positions, 4 FSP participants), fully idempotent.
 
