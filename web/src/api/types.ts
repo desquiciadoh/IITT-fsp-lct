@@ -348,3 +348,44 @@ export type PositionPool = {
   relaxations: Relaxation[]
   health: NeedHealth
 }
+
+// ── test twins (FE-14) ──
+// Gap G21 / BE-22, ML-12, AI-14: JD → blueprint → two unique test instances
+// with the same difficulty profile. Items mirror `ItemView` exactly — answer
+// keys must never be present (SECURITY INVARIANT).
+
+export type TwinDifficultyProfile = { skill: number; grade: number; strength: number }
+
+export type TwinItem = {
+  seq: number
+  level: string
+  format: string
+  stem_md: string
+  input_type: string
+  time_limit_s: number
+  options?: unknown
+}
+
+export type Blueprint = {
+  id: string
+  position_id: string
+  derived_from: string
+  requirements: string[]
+  target_grade: Grade
+  difficulty: TwinDifficultyProfile
+}
+
+export type TwinInstance = {
+  id: string
+  status: 'draft' | 'ready'
+  item_ids: string[]
+  items: TwinItem[]
+  difficulty: TwinDifficultyProfile
+}
+
+/** `GET /api/lab/twins?position_id=` — the Test Twins section payload. */
+export type TestTwins = {
+  blueprint: Blueprint
+  instances: TwinInstance[]
+  generated_at: string
+}

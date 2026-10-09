@@ -8,6 +8,7 @@ import { fspHandlers } from '@/mocks/handlers/fsp'
 import { vacancyHandlers } from '@/mocks/handlers/vacancies'
 import { microtaskHandlers } from '@/mocks/handlers/microtasks'
 import { poolHandlers } from '@/mocks/handlers/pool'
+import { twinsHandlers } from '@/mocks/handlers/twins'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
@@ -33,6 +34,7 @@ export async function startMocks(): Promise<void> {
           ...vacancyHandlers,
           ...microtaskHandlers,
           ...poolHandlers,
+          ...twinsHandlers,
           ...coreHandlers,
         ]
       : missingHandlers

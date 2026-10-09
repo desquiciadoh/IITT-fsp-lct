@@ -8,6 +8,7 @@ import { RowSkeleton } from '@/components/ui/skeleton'
 import { ConfusionMatrix } from './components/confusion-matrix'
 import { TifChart, LeakChart } from './components/charts'
 import { SystemsTable } from './components/systems-table'
+import { TwinsSection } from './components/twins-section'
 import type { ValidationReport } from '@/api/types'
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -158,6 +159,17 @@ export function LabPage() {
       >
         <SystemsTable systems={matching.systems} />
       </SectionCard>
+
+      <section id="twins" aria-label="Test Twins" className="scroll-mt-20 flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold">Test Twins</h2>
+          <p className="text-sm text-muted-foreground">
+            Две уникальные тест-инстанции по одному blueprint — одинаковый профиль сложности, разные
+            задания. Ссылка идёт со страницы позиции (пока из превью вакансии).
+          </p>
+        </div>
+        <TwinsSection positionId="pos-1" />
+      </section>
     </section>
   )
 }

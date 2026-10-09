@@ -103,7 +103,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
 | FE-15 Vacancies & applications | M | BE-17 | ❌ not started (BE.md N11), mock it |
 | FE-16 Micro-tasks | M | BE-18 | ✅ feature done on mocks (G19) |
 | FE-17 Pool power features | M | FE-10 (FE2), ML-10, BE-20 | ✅ feature done on mocks (G20); slot ready for FE-10 |
-| FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ❌ mock it |
+| FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ✅ feature done on mocks (G21) |
 | FE-18 Polish | M | PD-05 copy; FE2's screens merged | partly unblocked |
 
 - [x] **FE-13 · Validation Lab** (M), route `/lab` (public, inside `AppLayout`, no SSE for anonymous users). Folder `features/lab/`.
@@ -139,7 +139,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - A below-salary-floor warning in the send-offer modal before sending (do not reveal the floor value).
   - *Done:* all five render from fixtures; moving a slider reorders the pool without a request.
 
-- [ ] **FE-14 · Test Twins & Blueprint Builder** (S). JD → blueprint → two unique test instances side by side with the same difficulty profile. Depends on BE-22 (`GET /api/lab/twins?position_id=`), ML-12 and AI-14; mock it. Lives under `/lab` (a "Test Twins" section) and as a link from the position page.
+- [x] **FE-14 · Test Twins & Blueprint Builder** (S). JD → blueprint → two unique test instances side by side with the same difficulty profile. Depends on BE-22 (`GET /api/lab/twins?position_id=`), ML-12 and AI-14; mock it. Lives under `/lab` (a "Test Twins" section) and as a link from the position page.
   - Never show answer keys: render only what `ItemView` exposes.
   - *Done:* two instances render from a fixture with matching difficulty bars.
 

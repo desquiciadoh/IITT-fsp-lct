@@ -7,6 +7,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { LabPage } from '@/features/lab/lab-page'
 import type { ValidationReport } from '@/api/types'
+import { twinsHandlers } from '@/mocks/handlers/twins'
 
 /** jsdom has no layout engine; keep ResponsiveContainer from crashing (FE-13). */
 class ResizeObserverStub {
@@ -54,7 +55,10 @@ const fixture: ValidationReport = {
   },
 }
 
-const server = setupServer(http.get('*/api/lab/report', () => HttpResponse.json(fixture)))
+const server = setupServer(
+  http.get('*/api/lab/report', () => HttpResponse.json(fixture)),
+  ...twinsHandlers,
+)
 
 beforeAll(() => {
   document.cookie = 'csrftoken=test-token'
@@ -91,6 +95,9 @@ describe('LabPage (FE-13)', () => {
     expect(screen.getByText('Кривая информации (TIF)')).toBeInTheDocument()
     expect(screen.getByText('Атаки на утечки')).toBeInTheDocument()
     expect(screen.getByText('Матчинг')).toBeInTheDocument()
+    expect(screen.getByText('Test Twins')).toBeInTheDocument()
+    expect(await screen.findByText('twin-a-1')).toBeInTheDocument()
+    expect(screen.getByText('twin-b-1')).toBeInTheDocument()
     expect(screen.getByText('0000000')).toBeInTheDocument()
   })
 

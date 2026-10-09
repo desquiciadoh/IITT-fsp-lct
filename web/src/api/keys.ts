@@ -27,4 +27,5 @@ export const keys = {
   microtask: (id: string) => ['microtask', id] as const,
   myDrops: ['microtasks', 'drops', 'me'] as const,
   employerMicrotasks: ['employer', 'microtasks'] as const,
+  labTwins: (positionId: string) => ['lab', 'twins', positionId] as const,
 }

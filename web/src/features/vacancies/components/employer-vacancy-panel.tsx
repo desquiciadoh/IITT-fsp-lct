@@ -1,5 +1,6 @@
-import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import {
   usePosition,
   usePositionApplications,
@@ -52,10 +53,17 @@ export function EmployerVacancyPanel({ positionId }: { positionId: string }) {
             {applications?.length ?? 0} откликов · панель для страницы позиции (FE2, FE-10)
           </span>
         </div>
-        <Button variant="outline" size="sm" disabled={setPublic.isPending} onClick={togglePublic}>
-          {position?.is_public ?? true ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          {position?.is_public ?? true ? 'Скрыть вакансию' : 'Опубликовать'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/lab#twins">
+              <FlaskConical className="h-4 w-4" /> Test Twins
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" disabled={setPublic.isPending} onClick={togglePublic}>
+            {position?.is_public ?? true ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {position?.is_public ?? true ? 'Скрыть вакансию' : 'Опубликовать'}
+          </Button>
+        </div>
       </header>
 
       {isError ? (
