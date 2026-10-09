@@ -361,3 +361,19 @@ def test_get_gateway_factory():
     # GigaChat with dummy key
     gw_giga = get_gateway(GatewayConfig(provider="gigachat", auth_key="dummy-key"))
     assert gw_giga.name == "gigachat"
+
+
+def test_get_gateway_reads_settings_then_env_and_caches_the_client(settings, monkeypatch):
+    """Django settings win (config/settings.py defines LLM_PROVIDER); env fills the rest."""
+    settings.LLM_PROVIDER = "gigachat"
+    settings.LLM_TIMEOUT_S = "7.5"
+    monkeypatch.setenv("GIGACHAT_AUTH_KEY", "env-key")
+    monkeypatch.setenv("GIGACHAT_MODEL", "GigaChat-2-Pro")
+
+    first, second = get_gateway(), get_gateway()
+
+    assert first is second
+    assert (first.name, first.config.model, first.config.timeout_s) == ("gigachat", "GigaChat-2-Pro", 7.5)
+
+    settings.LLM_PROVIDER = "fake"
+    assert get_gateway().name == "fake"

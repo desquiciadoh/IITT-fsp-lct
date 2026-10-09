@@ -58,6 +58,3 @@ node_modules/
 
 # Claude Code personal settings
 .claude/settings.local.json
-
-# Local tools
-.git_bin/
