@@ -111,7 +111,8 @@ ML, AI and FE add a row here when they need a model, endpoint or contract change
 
 | From | Request | Status |
 |---|---|---|
-| — | — | — |
+| ML-0 | **Engine contract is published** (ML.md §3). `apps/assessment/engine.py` is now the package `apps/assessment/engine/`; `from assessment.engine import FAMILIES_REGISTRY, score_assessment` still works through `engine/legacy.py` until N2 lands, then ML deletes it. Wire through your adapters, never import ML internals elsewhere: `assessment.engine.cat` (`CatEngine`, `CatState.to_json/from_json`, `CatResult`, `item_level`), `assessment.families.registry` (`all_families`, `active_metas`, `make_rng`), `matching.engine.score` (`score_pool`, `passes_hard_filters`, `preset`), `matching.engine.types` (DTOs), `matching.engine.strength` (`strength`, `percentiles`, `fsp_boost`). Two optional fields were added with defaults: `CatState.seen` and `CandidateCtx.microtask_dates`. | open |
+| ML-1 | **CI for item families** (R25): add `actions/setup-node` (Node ≥ 20) to `.github/workflows/ci.yml`, set `CI=true` (the real-Node event-loop test fails instead of skipping when `CI` is set), and add a step `cd apps && python -m assessment.families.verify --n 1000` (about 70 s today; exit 1 blocks the merge). **`sync_families` (N2) must upsert** `a`, `b`, `c`, `topic`, `format`, `time_limit_s` from `active_metas(spec)`: `services.py` currently `get_or_create`s rows with the legacy values (format `'choice'`, b from the legacy adapter), which never update. The legacy registry now serves the fixed v2 families (keys are random option ids, ML-F1 closed). It keeps the old b/time limits only because `test_assessment_lifecycle.py` pins the legacy scorer's numbers. | open |
 
 ---
 
