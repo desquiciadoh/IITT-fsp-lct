@@ -6,6 +6,7 @@ import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
+import { employerHandlers } from '@/mocks/handlers/employer'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
@@ -33,9 +34,10 @@ export async function startMocks(): Promise<void> {
           ...assessmentHandlers,
           ...offerHandlers,
           ...fspHandlers,
+          ...employerHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers]
+      : [...gapHandlers, ...demoGapHandlers, ...employerHandlers]
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',

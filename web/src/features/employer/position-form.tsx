@@ -193,6 +193,17 @@ export function PositionForm({
 
   const skillSuggestions = taxonomy?.skills ?? []
 
+  // Prefer the live taxonomy lists (G3) when the mock/BE returns them; fall
+  // back to the static constants so the form keeps working without taxonomy.
+  const specs: readonly string[] =
+    taxonomy?.specs && taxonomy.specs.length > 0 ? taxonomy.specs : SPECS
+  const gradeOptions: readonly string[] =
+    taxonomy?.grades && taxonomy.grades.length > 0 ? taxonomy.grades : GRADES
+  const formatOptions: readonly string[] =
+    taxonomy?.work_formats && taxonomy.work_formats.length > 0
+      ? taxonomy.work_formats
+      : FORMATS
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
       {parseSource && (
@@ -222,10 +233,10 @@ export function PositionForm({
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Специализация</legend>
         <div className="flex flex-wrap gap-3">
-          {SPECS.map((s) => (
+          {specs.map((s) => (
             <label key={s} className="flex items-center gap-1.5 text-sm capitalize">
               <input type="radio" value={s} {...register('specialization')} className="accent-[color:var(--fsp-accent)]" />
-              {SPEC_LABEL[s]}
+              {SPEC_LABEL[s] ?? s}
             </label>
           ))}
         </div>
@@ -234,7 +245,7 @@ export function PositionForm({
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Грейды</legend>
         <div className="flex flex-wrap gap-3">
-          {GRADES.map((g) => (
+          {gradeOptions.map((g) => (
             <label key={g} className="flex items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
@@ -248,7 +259,7 @@ export function PositionForm({
                 }
                 className="accent-[color:var(--fsp-accent)]"
               />
-              {GRADE_LABEL[g]}
+              {GRADE_LABEL[g] ?? g}
             </label>
           ))}
         </div>
@@ -282,7 +293,7 @@ export function PositionForm({
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Формат работы</legend>
         <div className="flex flex-wrap gap-3">
-          {FORMATS.map((f) => (
+          {formatOptions.map((f) => (
             <label key={f} className="flex items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
@@ -296,7 +307,7 @@ export function PositionForm({
                 }
                 className="accent-[color:var(--fsp-accent)]"
               />
-              {WORK_FORMAT_LABEL[f]}
+              {WORK_FORMAT_LABEL[f] ?? f}
             </label>
           ))}
         </div>

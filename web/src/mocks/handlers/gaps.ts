@@ -53,9 +53,8 @@ export const gapHandlers = [
       page: 1,
     })
   }),
-  http.post('*/api/positions/parse', () =>
-    json({ skills: ['python', 'django', 'postgresql'], seniority: 'middle' }),
-  ),
+  // POST /api/positions/parse (gap G6) is served by the stateful FE-09 mock
+  // in employer.ts — do not shadow it with a static stub here.
   http.post('*/api/assessments/:id/finish', () =>
     problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),
   ),
