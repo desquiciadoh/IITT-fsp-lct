@@ -30,11 +30,19 @@ let company: Company | null = null
 
 const positions: Position[] = []
 
+/** id → title, so other mocks (offers, FE-11) can resolve a position label. */
+export const POSITION_TITLES: Record<string, string> = {}
+
 const uid = () => crypto.randomUUID()
+
+function rememberPosition(p: Position) {
+  POSITION_TITLES[p.id] = p.title
+}
 
 function resetStore() {
   company = null
   positions.length = 0
+  for (const k of Object.keys(POSITION_TITLES)) delete POSITION_TITLES[k]
 }
 
 // --- JD parse (gap G6) -------------------------------------------------------
@@ -271,6 +279,7 @@ export const employerHandlers = [
       created_at: new Date().toISOString(),
     } as Position
     positions.unshift(position)
+    rememberPosition(position)
     return stub(position, 201)
   }),
 
