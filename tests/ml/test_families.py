@@ -151,6 +151,18 @@ class _BiggestIsRight(_Good):
                         fingerprint=fingerprint_of(p), options=opts)
 
 
+class _AnswerNearFixedValue(_Good):
+    """The answer is always close to 50 while distractors are spread out: a per-value leak."""
+
+    def generate(self, rng):
+        p = {"a": rng.randint(20, 30), "b": rng.randint(20, 30)}
+        s = p["a"] + p["b"]
+        others = rng.sample([x for x in range(1, 200) if abs(x - s) > 15], 3)
+        opts, key = choice_options(rng, str(s), [str(x) for x in others])
+        return Instance(stem_md=f"{p['a']} + {p['b']} = ?", input="choice", key=key,
+                        fingerprint=fingerprint_of(p), options=opts)
+
+
 class _TypedGood:
     meta = dataclasses.replace(_Good.meta, id="t.test.typed.v1", version=1, c=0.0, format="numeric_scenario")
 
@@ -192,6 +204,7 @@ class _TypedKeyInStem(_TypedGood):
     (_EchoOracle, "oracle"),
     (_AnswerNotOffered, "oracle"),
     (_BiggestIsRight, "guessing: 'value rank 4 of 4'"),
+    (_AnswerNearFixedValue, "guessing: 'closest to the typical answer'"),
     (_TypedTooLenient, "near miss"),
     (_TypedKeyInStem, "leak: the typed answer"),
 ])
@@ -205,6 +218,32 @@ def test_harness_rejects_broken_family(cls, expected):
 def test_harness_accepts_the_reference_families(cls):
     rep = harness.verify_family(cls(), n=300, skills=SKILLS)
     assert rep.errors == []
+
+
+def test_guess_margin_shrinks_with_sample_size():
+    assert harness.guess_margin(0.25, 1000) == pytest.approx(4 * (0.25 * 0.75 / 1000) ** 0.5)   # 0.0548
+    assert harness.guess_margin(0.25, 300) == pytest.approx(0.1)
+    assert harness.guess_margin(0.25, 100_000) == 0.05                                           # floor
+
+
+def test_event_loop_distractors_respect_what_a_junior_knows():
+    """Distractors keep sync logs first in program order (only the 'program order' misconception
+    breaks it), so knowing just that rule must not find the answer (ML-1 re-review: 59 %)."""
+    fam = FAMILIES["fe.js.event_loop.v2"]
+    bad = total = 0
+    knows_sync = 0.0
+    for i in range(600):
+        inst = fam.generate(make_rng(b"junior", "s", fam.meta.id, i))
+        sync = [ln.split("'")[1] for ln in inst.code["text"].splitlines() if ln.startswith("console.log")]
+        ok = [o["text_md"].split(", ")[: len(sync)] == sync for o in inst.options]
+        for o, good in zip(inst.options, ok, strict=True):
+            if o["id"] != inst.key:
+                total += 1
+                bad += not good
+        keep = [o["id"] for o, good in zip(inst.options, ok, strict=True) if good]
+        knows_sync += (inst.key in keep) / len(keep)
+    assert bad / total <= 0.2
+    assert knows_sync / 600 <= 0.35
 
 
 def test_harness_refuses_too_small_samples():
