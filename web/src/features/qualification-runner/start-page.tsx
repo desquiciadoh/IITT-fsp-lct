@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { PlayCircle, RotateCcw, Timer } from 'lucide-react'
 import { useEligibility, useCreateAssessment } from '@/api/assessments'
 import { ApiError } from '@/api/client'
-import type { AssessmentMode, Grade, Spec } from '@/api/types'
+import type { AssessmentKind, AssessmentMode, Grade, Spec } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ErrorState } from '@/components/domain/states'
@@ -57,6 +57,21 @@ type StartFormValues = z.infer<typeof startFormSchema>
 
 // --- pure helpers (unit-tested in start-page.test.ts) -----------------------------
 
+/** Test rules shown on the start screen (FE2.md §FE-05: "read the rules"). */
+export const TEST_RULES: string[] = [
+  'Отвечайте на задания по порядку — у каждого задания собственный таймер.',
+  'Ответ, отправленный позже чем через 3 секунды после истечения таймера, не засчитывается.',
+  'Можно завершить тест досрочно; без ответа оставшиеся задания засчитываются как неверные.',
+  'Обновление страницы не сбрасывает прогресс — тест продолжится с текущего задания.',
+  'После засчитанной попытки следующая станет доступна через 48 часов.',
+]
+
+/** Which kind of session the start button creates (promotion test when the
+ *  candidate is eligible for one — FE2.md §FE-05 eligibility payload). */
+export function assessmentKindFor(eligibility: EligibilityLike | undefined): AssessmentKind {
+  return eligibility?.promotion_available ? 'promotion' : 'initial'
+}
+
 export type CountdownParts = { done: boolean; hours: number; minutes: number; seconds: number }
 
 /** Whole seconds remaining until `isoAt`, evaluated against `nowMs`. */
@@ -86,6 +101,7 @@ export type StartViewState = 'loading' | 'error' | 'resume' | 'cooldown' | 'form
 /** Minimal shape `resolveStartView` needs — keeps it unit-testable in node env. */
 export type EligibilityLike = {
   can_start: boolean
+  promotion_available?: boolean
   reason?: string
   active_session_id?: string | null
   next_attempt_at?: string | null
@@ -155,18 +171,21 @@ export function StartPage() {
   }, [view, cd.done, eligibility])
 
   const onStart = form.handleSubmit((values) => {
-    createAssessment.mutate(values, {
-      onSuccess: (session) => navigate(`/candidate/qualification/${session.id}`),
-      onError: (err: unknown) => {
-        if (err instanceof ApiError && err.code === 'assessment_in_progress') {
-          // Race with another tab / stale eligibility → show resume instead.
-          void eligibility.refetch()
-        }
-        toast.error(
-          err instanceof ApiError ? err.message : 'Не удалось начать тест. Попробуйте ещё раз.',
-        )
+    createAssessment.mutate(
+      { ...values, kind: assessmentKindFor(eligibility.data) },
+      {
+        onSuccess: (session) => navigate(`/candidate/qualification/${session.id}`),
+        onError: (err: unknown) => {
+          if (err instanceof ApiError && err.code === 'assessment_in_progress') {
+            // Race with another tab / stale eligibility → show resume instead.
+            void eligibility.refetch()
+          }
+          toast.error(
+            err instanceof ApiError ? err.message : 'Не удалось начать тест. Попробуйте ещё раз.',
+          )
+        },
       },
-    })
+    )
   })
 
   if (view === 'loading') return <CardSkeleton />
@@ -229,12 +248,18 @@ export function StartPage() {
   }
 
   // view === 'form'
+  const promotionAvailable = Boolean(eligibility.data?.promotion_available)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Квалификационный тест</CardTitle>
+        <CardTitle>{promotionAvailable ? 'Промо-тест на повышение' : 'Квалификационный тест'}</CardTitle>
       </CardHeader>
       <CardContent>
+        {promotionAvailable && (
+          <p className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+            Вам доступна попытка на повышение — подтвердите более высокую ступень.
+          </p>
+        )}
         <form className="space-y-6" onSubmit={onStart} aria-label="Запуск квалификационного теста">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Специализация</legend>
@@ -295,6 +320,15 @@ export function StartPage() {
                 </label>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Правила теста</legend>
+            <ul className="list-disc space-y-1 rounded-md border bg-muted/30 px-8 py-3 text-xs text-muted-foreground">
+              {TEST_RULES.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
           </fieldset>
 
           <Button type="submit" disabled={createAssessment.isPending}>

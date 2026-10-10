@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { countdownTo, formatCountdown, resolveStartView } from './start-page'
+import {
+  TEST_RULES,
+  assessmentKindFor,
+  countdownTo,
+  formatCountdown,
+  resolveStartView,
+} from './start-page'
 
 /**
  * FE-05 start screen — pure logic tests (node env, no DOM).
@@ -60,5 +66,23 @@ describe('resolveStartView', () => {
 
   it('can_start → form', () => {
     expect(resolveStartView(base, false, false)).toBe('form')
+  })
+})
+
+describe('assessmentKindFor', () => {
+  it('starts a promotion session when eligibility allows it', () => {
+    expect(assessmentKindFor({ can_start: true, promotion_available: true })).toBe('promotion')
+  })
+
+  it('defaults to an initial session otherwise', () => {
+    expect(assessmentKindFor({ can_start: true, promotion_available: false })).toBe('initial')
+    expect(assessmentKindFor(undefined)).toBe('initial')
+  })
+})
+
+describe('TEST_RULES', () => {
+  it('is shown on the start screen (FE2.md §FE-05 "read the rules")', () => {
+    expect(TEST_RULES.length).toBeGreaterThanOrEqual(3)
+    expect(TEST_RULES.every((r) => r.length > 0)).toBe(true)
   })
 })

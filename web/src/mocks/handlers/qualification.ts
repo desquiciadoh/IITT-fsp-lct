@@ -198,6 +198,10 @@ type MockSession = {
   /** index into BANK of the served item; equals max_items once done */
   cursor: number
   servedAt: string | null
+  /** ISO deadline of the currently served item, snapshotted at serve time
+   *  (null once the session is done). `currentOf` re-derives the item from
+   *  BANK + this anchor so a refresh/resume keeps the ORIGINAL deadline. */
+  deadlineAt: string | null
   answers: StoredAnswer[]
 }
 
@@ -226,6 +230,15 @@ export function resetQualificationMock(): void {
  *  truncates its 8-item bank so the runner can be exercised in both modes. */
 function maxItemsFor(s: MockSession): number {
   return s.mode === 'express' ? Math.ceil(BANK.length / 2) : BANK.length
+}
+
+/** BE.md H5: an answer may land up to 3 s past the item deadline and still
+ *  count. The stored `deadlineAt` snapshot is already grace-included. */
+const GRACE_MS = 3_000
+
+/** Grace-included grading deadline for an item served at `at`. */
+function serveDeadlineIso(tpl: BankItem, at: Date): string {
+  return new Date(at.getTime() + tpl.time_limit_s * 1000 + GRACE_MS).toISOString()
 }
 
 function serveItem(s: MockSession, at: Date): AssessmentItem {
@@ -315,13 +328,34 @@ function gradeAnswer(item: AssessmentItem, optionId?: string, value?: string): b
   return String(value ?? '').trim().length > 0 // open question
 }
 
+/** Index into BANK of the item the candidate is currently answering: while a
+ *  session is in progress `cursor` points at the served item; once the last
+ *  answer lands (`cursor === maxItems`) the session is finalized, so clamp to
+ *  the bank length defensively. */
+function currentItemIndex(s: MockSession): number {
+  return Math.min(s.cursor, BANK.length - 1)
+}
+
+/** Deadline of the currently served item, anchored at serve time. The stored
+ *  snapshot is `deadline_at` + the 3 s grace (BE.md H5) so late grading is a
+ *  single comparison; falls back to served_at + the current item's budget +
+ *  grace when no snapshot was stored. */
+function currentDeadlineMs(s: MockSession): number | null {
+  if (s.deadlineAt) return new Date(s.deadlineAt).getTime()
+  if (!s.servedAt) return null
+  return new Date(s.servedAt).getTime() + BANK[currentItemIndex(s)].time_limit_s * 1000 + GRACE_MS
+}
+
 /** Late answer past deadline + 3 s grace counts as incorrect (BE.md H5).
- *  Exported only so the QA suite can pin session timestamps and prove
- *  the lateness rule without sleeping in tests. */
+ *  Graded against the deadline snapshotted when the current item was served —
+ *  never recomputed from a bank entry the cursor may no longer point at.
+ *  Exported only so the QA suite can pin session timestamps and prove the
+ *  lateness rule without sleeping in tests. */
 export function isLate(s: MockSession, at: Date = mockNow()): boolean {
-  if (!s.servedAt) return false
-  const item = BANK[s.cursor]
-  const deadline = new Date(s.servedAt).getTime() + item.time_limit_s * 1000 + 3000
+  const deadline = currentDeadlineMs(s)
+  if (deadline === null) return false
+  // The +3 s grace is baked into `deadline` (see serveItem), so a request
+  // landing within it is still on time; strictly after → late.
   return at.getTime() > deadline
 }
 
@@ -382,6 +416,7 @@ export const qualificationHandlers = [
       specialization?: string
       claimed_grade?: string
       mode?: string
+      kind?: string
     }
     const active = activeInProgress()
     if (active) {
@@ -394,13 +429,14 @@ export const qualificationHandlers = [
       id: `mock-as-${++seqCounter}`,
       specialization: body.specialization ?? 'backend',
       claimed_grade: body.claimed_grade ?? 'middle',
-      kind: 'initial',
+      kind: body.kind === 'promotion' ? 'promotion' : 'initial',
       mode: body.mode ?? 'full',
       status: 'in_progress',
       startedAt: now.toISOString(),
       finishedAt: null,
       cursor: 0,
       servedAt: now.toISOString(),
+      deadlineAt: serveDeadlineIso(BANK[0], now),
       answers: [],
     }
     sessions.push(s)
@@ -428,7 +464,7 @@ export const qualificationHandlers = [
       value?: string
       integrity?: unknown
     }
-    const current = BANK[s.cursor]
+    const current = BANK[currentItemIndex(s)]
     if (!body.item_id || body.item_id !== current.item_id) {
       return problem(409, 'item_not_current', 'Answered item is not the current one.')
     }
@@ -440,11 +476,16 @@ export const qualificationHandlers = [
     s.cursor += 1
 
     if (s.cursor >= maxItemsFor(s)) {
+      // Done — no live item anymore; clear the serve anchors so nothing can
+      // be graded as "late" against a stale cursor position.
+      s.servedAt = null
+      s.deadlineAt = null
       const result = finalize(s, now)
       const outcome: AnswerOutcome = { done: true, result }
       return json(outcome)
     }
     s.servedAt = now.toISOString()
+    s.deadlineAt = serveDeadlineIso(BANK[s.cursor], now)
     const outcome: AnswerOutcome = { done: false, next: currentOf(s)! }
     return json(outcome)
   }),
