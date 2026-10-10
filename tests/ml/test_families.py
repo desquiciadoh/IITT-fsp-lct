@@ -202,12 +202,46 @@ class _TypedKeyInStem(_TypedGood):
         return inst.stem_md.split()[2]
 
 
+class _TypedModalAnswer(_TypedGood):
+    """A typed item whose answer is 42 a fifth of the time: c = 0 would understate guessing."""
+
+    def generate(self, rng):
+        inst = super().generate(rng)
+        if rng.random() < 0.2:
+            a = rng.randint(1, 10_000)
+            inst = Instance(stem_md=f"{a} * 0 + 42 = ?", input="number", key="42", fingerprint=fingerprint_of({"a": a}))
+        return inst
+
+    def oracle(self, inst):
+        if " * 0 + 42" in inst.stem_md:
+            return "42"
+        return super().oracle(inst)
+
+
+class _DistractorNumbersNotInItem(_Good):
+    """The answer reuses the stem's operands ("a b"), distractors are numbers that never occur in
+    it: a candidate who only checks which numbers appear in the item gets it right."""
+
+    def generate(self, rng):
+        p = self.params(rng)
+        others = [f"{rng.randint(1, 10_000)} {rng.randint(1, 10_000)}" for _ in range(3)]
+        opts, key = choice_options(rng, f"{p['a']} {p['b']}", others)
+        return Instance(stem_md=f"{p['a']} + {p['b']} = ? (запишите слагаемые)", input="choice", key=key,
+                        fingerprint=fingerprint_of(p), options=opts)
+
+    def oracle(self, inst):
+        a, b = inst.stem_md.split(" = ")[0].split(" + ")
+        return next(o["id"] for o in inst.options if o["text_md"] == f"{a} {b}")
+
+
 @pytest.mark.parametrize("cls, expected", [
     (_ConstantKey, "entropy"),
     (_WrongOracle, "oracle"),
     (_DuplicateOptions, "options: duplicate texts"),
     (_SeedInFingerprint, "same content, different fingerprint"),
-    (_FingerprintMissesParams, "same fingerprint, different content"),
+    (_FingerprintMissesParams, "same fingerprint, different answer"),
+    (_TypedModalAnswer, "modal: the answer '42.0'"),
+    (_DistractorNumbersNotInItem, "guessing: 'fewest numbers absent from the item'"),
     (_CorrectAlwaysFirst, "position"),
     (_Nondeterministic, "determinism"),
     (_TinySpace, "collisions"),
@@ -448,3 +482,84 @@ def test_js_family_keys_match_real_node(fid, tmp_path):
             assert got == harness.answer_text(inst), (inst.code["text"], got)
         else:
             assert float(got) == pytest.approx(float(inst.key)), (inst.code["text"], got)
+
+
+# ── builder: thread safety, rounding ties, semantic fingerprints, balanced distractors ──
+
+def test_run_python_is_thread_safe_and_does_not_touch_stdout(capsys):
+    """find_bug runs item code during generation; under threads the old redirect_stdout swapped
+    sys.stdout for the whole process and produced wrong keys (ML-6 review)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    fam = FAMILIES["sh.code.find_bug.v1"]
+
+    def key_of(i):
+        inst = fam.generate(make_rng(b"threads", "s", fam.meta.id, i))
+        return inst.fingerprint, inst.key, inst.view()
+
+    serial = [key_of(i) for i in range(60)]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        threaded = list(pool.map(key_of, range(60)))
+    assert threaded == serial
+    assert capsys.readouterr().out == ""
+
+
+def test_rounding_tie_accepts_both_neighbours():
+    """True value 0.3125 asked to 3 decimals: 0.312 (half to even) and 0.313 (half up) are both
+    right; the key keeps the exact value instead of a rounded one."""
+    from assessment.families.builder import TypedNumberFamily, exact_key
+
+    class Tie(TypedNumberFamily):
+        DECIMALS = 3
+
+    fam = Tie()
+    key = exact_key(0.3125, 3)
+    assert key == "0.3125"
+    for ok in ("0.312", "0.313", "0,313", "0.3125"):
+        assert fam.is_correct(key, {"value": ok}), ok
+    for bad in ("0.311", "0.314", "0.31"):
+        assert not fam.is_correct(key, {"value": bad}), bad
+
+
+def test_decimals_hint_grammar():
+    from assessment.families.builder import decimals_hint
+    assert decimals_hint(0) == "Ответ — целое число."
+    assert decimals_hint(1) == "Ответ округлите до 1 знака после запятой."
+    assert decimals_hint(2) == "Ответ округлите до 2 знаков после запятой."
+
+
+def test_semantic_fingerprint_ignores_decorative_fields():
+    from assessment.families.builder import semantic_fingerprint
+
+    class Fam:
+        SEMANTIC = ("x", "y")
+
+    base = semantic_fingerprint(Fam(), {"x": 1, "y": [2, 3], "name": "users"})
+    assert base == semantic_fingerprint(Fam(), {"x": 1, "y": [2, 3], "name": "orders"})
+    assert base != semantic_fingerprint(Fam(), {"x": 1, "y": [3, 2], "name": "users"})
+    # a classification label always counts, even when SEMANTIC omits it
+    assert (semantic_fingerprint(Fam(), {"x": 1, "y": 2, "label": "A"})
+            != semantic_fingerprint(Fam(), {"x": 1, "y": 2, "label": "B"}))
+
+
+def test_balanced_pick_makes_the_answers_similarity_rank_uniform():
+    """With distractors derived from the answer, the answer is the most similar option unless the
+    subset is chosen; balanced_pick draws a target rank uniformly and uses a subset with it."""
+    from assessment.families.builder import balanced_pick, similarity_rank
+
+    rng = random.Random(7)
+    ranks = Counter()
+    for _ in range(800):
+        vals = rng.sample(range(10, 99), 4)
+        answer = str(vals)
+        pool = [str(vals[::-1]), str(vals[1:] + vals[:1]), str(sorted(vals)), str([v + 1 for v in vals]),
+                str(rng.sample(range(10, 99), 4)), str(rng.sample(range(10, 99), 4))]
+        pool = list(dict.fromkeys(x for x in pool if x != answer))
+        picked = balanced_pick(rng, answer, pool, 3)
+        assert len(set(picked)) == 3 and set(picked) <= set(pool)
+        ranks[min(similarity_rank(answer, picked), 3)] += 1
+    total = sum(ranks.values())
+    # Neither extreme may identify the answer: "most similar" (rank 0) and "least similar" (rank 3)
+    # stay within the harness margin of chance. Unreachable middle ranks fall back to the nearest.
+    assert ranks[0] / total <= 0.30 and ranks[3] / total <= 0.30, ranks
+    assert ranks[0] / total >= 0.15, ranks     # the target rank is honoured, not just avoided

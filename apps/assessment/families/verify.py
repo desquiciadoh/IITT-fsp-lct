@@ -7,13 +7,18 @@ For every family it generates n instances from fixed HMAC seeds and checks:
   oracle      the independent oracle agrees with the key
   one-correct exactly one option is accepted by is_correct(); typed: the key is accepted, a near miss is not
   determinism the same seed renders the same instance (view, key, fingerprint)
-  fingerprint same content <-> same fingerprint (catches seeds hashed into it and parameters left out)
-  collisions  duplicate fingerprints <= 0.1 %
+  fingerprint the fingerprint hashes the semantic parameters (decorative names and ids left out):
+              same content -> same fingerprint (no seed in it), same fingerprint -> same answer
+              (no semantic parameter left out)
+  collisions  duplicate fingerprints <= 0.1 %; classification (concept) families have only a few
+              distinct questions by design and are exempt, their rate is reported
   entropy     answer-text entropy > 1 bit (no constant keys)
+  modal       typed families: no single answer is right on more than 10 % of items (c = 0 must hold)
   position    the correct option's position is not predictable (chi-square, choice families)
   guessing    no option-only strategy (longest, most similar, value rank, frequent answer for an
               option set, value correct most often before, closest to the typical answer, order
-              closest to the others) beats c by more than max(0.05, 4 standard errors)
+              closest to the others, numbers consistent with the item) beats c by more than
+              max(0.05, 4 standard errors)
   meta        id/version/specs/format/a/b/c/time limit, skills exist in content/skills.yaml
 
 Exit code 0 only when every family passes. Pure: no Django.
@@ -26,6 +31,7 @@ import dataclasses
 import difflib
 import json
 import math
+import re
 import sys
 import time
 from collections import Counter
@@ -34,6 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .base import INPUT_KINDS, ITEM_FORMATS, SPECS, Instance, ItemFamily
+from .builder import ClassificationFamily
 from .kit import norm_text
 from .registry import all_families, make_rng
 
@@ -41,6 +48,7 @@ VERIFY_SECRET = b"fsp-draft-verify-harness"
 CODE_LANGS = ("python", "javascript", "typescript", "sql", "css", "html", "http")
 MAX_COLLISION_RATE = 0.001
 MIN_ENTROPY_BITS = 1.0
+MAX_MODAL_SHARE = 0.10   # typed items have c = 0; one answer right this often would be a free guess
 MIN_N = 100            # below this the position and guessing statistics are too noisy to gate on
 CONTENT_DIR = Path(__file__).resolve().parents[3] / "content"
 
@@ -51,6 +59,8 @@ class FamilyReport:
     n: int
     errors: list[str] = field(default_factory=list)
     collision_rate: float = 0.0
+    collision_gated: bool = True
+    modal_share: float = 0.0
     entropy_bits: float = 0.0
     distinct_answers: int = 0
     seconds: float = 0.0
@@ -61,7 +71,8 @@ class FamilyReport:
 
     def to_json(self) -> dict:
         return {"family_id": self.family_id, "n": self.n, "ok": self.ok, "errors": self.errors,
-                "collision_rate": self.collision_rate, "entropy_bits": round(self.entropy_bits, 4),
+                "collision_rate": self.collision_rate, "collision_gated": self.collision_gated,
+                "modal_share": round(self.modal_share, 4), "entropy_bits": round(self.entropy_bits, 4),
                 "distinct_answers": self.distinct_answers, "seconds": round(self.seconds, 3)}
 
 
@@ -216,6 +227,7 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
     answers: list[str] = []
     by_content: dict[str, str] = {}
     by_fp: dict[str, str] = {}
+    contexts: list[str] = []
     positions: Counter[int] = Counter()
     option_counts: Counter[int] = Counter()
     choice_records: list[tuple[list[str], int]] = []
@@ -236,8 +248,9 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
             content = content_of(inst)
             if by_content.setdefault(content, inst.fingerprint) != inst.fingerprint:
                 seen_errors["fingerprint: same content, different fingerprint (seed in fingerprint?)"] += 1
-            if by_fp.setdefault(inst.fingerprint, content) != content:
-                seen_errors["fingerprint: same fingerprint, different content (parameters missing)"] += 1
+            answer = norm_text(answer_text(inst))
+            if by_fp.setdefault(inst.fingerprint, answer) != answer:
+                seen_errors["fingerprint: same fingerprint, different answer (semantic parameter missing)"] += 1
             fps.append(inst.fingerprint)
             answers.append(norm_text(answer_text(inst)))
             ids = [o["id"] for o in inst.options or []]
@@ -245,6 +258,7 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
                 option_counts[len(ids)] += 1
                 positions[ids.index(inst.key)] += 1
                 choice_records.append(([o["text_md"] for o in inst.options], ids.index(inst.key)))
+                contexts.append(f"{inst.stem_md}\n{(inst.code or {}).get('text', '')}")
             checked += 1
         except Exception as e:  # a check crashed on this instance: report it, keep the run
             seen_errors[f"check: raised {type(e).__name__}: {e}"] += 1
@@ -257,8 +271,17 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
         rep.collision_rate = duplicates / len(fps)
         # 0.1 % of the sample, but never less than one duplicate: below n = 1000 a single
         # coincidence would otherwise fail a family whose rate is fine (ARCHITECTURE §5.3 is per 1000).
-        if duplicates > max(1, int(MAX_COLLISION_RATE * len(fps))):
+        # Concept (classification) items have a handful of questions by design: the label and a
+        # template. Their rate is reported, not gated; their exposure is managed by the monitor.
+        rep.collision_gated = not isinstance(fam, ClassificationFamily)
+        if rep.collision_gated and duplicates > max(1, int(MAX_COLLISION_RATE * len(fps))):
             rep.errors.append(f"collisions: {rep.collision_rate:.2%} > {MAX_COLLISION_RATE:.1%}")
+    if answers:
+        rep.modal_share = Counter(answers).most_common(1)[0][1] / len(answers)
+        if fam.meta.c == 0 and rep.modal_share > MAX_MODAL_SHARE:
+            top = Counter(answers).most_common(1)[0][0]
+            rep.errors.append(f"modal: the answer {top!r} is right on {rep.modal_share:.0%} of items "
+                              f"> {MAX_MODAL_SHARE:.0%} (c = 0)")
     rep.entropy_bits = entropy_bits(answers)
     rep.distinct_answers = len(set(answers))
     if rep.entropy_bits <= MIN_ENTROPY_BITS:
@@ -267,7 +290,7 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
         rep.errors.append(f"options: the number of options varies {dict(option_counts)} (c is fixed per family)")
     if option_counts:
         rep.errors += _position_check(positions, max(option_counts))
-        rep.errors += guessing_checks(choice_records, fam.meta.c)
+        rep.errors += guessing_checks(choice_records, fam.meta.c, contexts)
     rep.seconds = time.perf_counter() - t0
     return rep
 
@@ -320,8 +343,18 @@ def _kendall(a: tuple[str, ...], b: tuple[str, ...]) -> int:
     return sum(1 for i in range(len(seq)) for j in range(i + 1, len(seq)) if seq[i] > seq[j])
 
 
-def guessing_strategies(records: list[tuple[list[str], int]]) -> dict[str, float]:
-    """Accuracy of each option-only strategy over the sample."""
+_NUM_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _numbers(text: str) -> set[str]:
+    return set(_NUM_TOKEN.findall(text))
+
+
+def guessing_strategies(records: list[tuple[list[str], int]],
+                        contexts: list[str] | None = None) -> dict[str, float]:
+    """Accuracy of each option-only strategy over the sample. `contexts` (stem + code per record)
+    enables the item-consistency strategies: a candidate who does not solve the item can still
+    drop options whose numbers never occur in it, or whose length differs from the others."""
     out: dict[str, float] = {}
     out["longest option"] = _pick_accuracy(records, lambda t, i: len(t[i]))
     out["shortest option"] = _pick_accuracy(records, lambda t, i: -len(t[i]))
@@ -365,12 +398,28 @@ def guessing_strategies(records: list[tuple[list[str], int]]) -> dict[str, float
 
     out.update(_per_value_strategies(records))
 
+    if contexts is not None and len(contexts) == len(records):
+        out["fewest numbers absent from the item"] = _pick_accuracy_ctx(
+            records, contexts, lambda t, i, ctx: -len(_numbers(t[i]) - _numbers(ctx)))
+        out["most numbers shared with the item"] = _pick_accuracy_ctx(
+            records, contexts, lambda t, i, ctx: len(_numbers(t[i]) & _numbers(ctx)))
+
     seqs = [r for r in records if all(_as_sequence(x) for x in r[0])]
     if len(seqs) >= MIN_GUESS_SAMPLES:
         def central(t, i):
             return -sum(_kendall(_as_sequence(t[i]), _as_sequence(t[j])) for j in range(len(t)) if j != i)
         out["order closest to the others"] = _pick_accuracy(seqs, central)
     return out
+
+
+def _pick_accuracy_ctx(records, contexts, score) -> float:
+    total = 0.0
+    for (texts, correct), ctx in zip(records, contexts, strict=True):
+        scores = [score(texts, i, ctx) for i in range(len(texts))]
+        best = max(scores)
+        winners = [i for i, s in enumerate(scores) if s == best]
+        total += (correct in winners) / len(winners)
+    return total / len(records)
 
 
 def _per_value_strategies(records) -> dict[str, float]:
@@ -408,12 +457,13 @@ def _per_value_strategies(records) -> dict[str, float]:
     return out
 
 
-def guessing_checks(records: list[tuple[list[str], int]], c: float) -> list[str]:
+def guessing_checks(records: list[tuple[list[str], int]], c: float,
+                    contexts: list[str] | None = None) -> list[str]:
     if len(records) < MIN_GUESS_SAMPLES:
         return [f"guessing: only {len(records)} choice instances, need {MIN_GUESS_SAMPLES}"]
     margin = guess_margin(c, len(records))
     errs = []
-    for name, acc in guessing_strategies(records).items():
+    for name, acc in guessing_strategies(records, contexts).items():
         if acc > c + margin:
             errs.append(f"guessing: '{name}' is right {acc:.0%} of the time without reading the item "
                         f"(c = {c:.2f}, limit {c + margin:.0%})")

@@ -21,14 +21,14 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | Сложность алгоритмов | 0.10 | 0 | 0 | 1 | 0 | 1 |
 | Структуры данных | 0.10 | 1 | 1 | 1 | 0 | 3 |
 | Конкурентность и асинхронность | 0.08 | 0 | 0 | 1 | 1 | 2 |
-| Транзакции и индексы | 0.10 | 0 | 0 | 1 | 1 | 2 |
+| Транзакции и индексы | 0.10 | 0 | 0 | 2 | 0 | 2 |
 | HTTP и REST API | 0.08 | 2 | 0 | 0 | 0 | 2 |
 | Безопасность бэкенда | 0.05 | 0 | 0 | 1 | 0 | 1 |
 | Нагрузка и масштабирование | 0.05 | 0 | 1 | 1 | 0 | 2 |
 | Python: язык | 0.12 | 0 | 1 | 2 | 1 | 4 |
 | SQL: агрегация и группировка | 0.12 | 0 | 2 | 0 | 0 | 2 |
 | SQL: соединения и подзапросы | 0.10 | 0 | 0 | 1 | 1 | 2 |
-| **Total** | 1.00 | 3 | 7 | 11 | 4 | 25 |
+| **Total** | 1.00 | 3 | 7 | 12 | 3 | 25 |
 
 ## Frontend: topic × grade band
 
@@ -41,10 +41,10 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | JavaScript: асинхронность и event loop | 0.13 | 0 | 0 | 1 | 0 | 1 |
 | Браузер, сеть и производительность | 0.10 | 0 | 0 | 1 | 0 | 1 |
 | HTML и CSS | 0.12 | 0 | 1 | 1 | 1 | 3 |
-| React | 0.13 | 0 | 1 | 1 | 0 | 2 |
+| React | 0.13 | 0 | 0 | 2 | 0 | 2 |
 | Безопасность фронтенда | 0.05 | 0 | 1 | 0 | 0 | 1 |
 | TypeScript | 0.05 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | 1.00 | 1 | 7 | 11 | 1 | 20 |
+| **Total** | 1.00 | 1 | 6 | 12 | 1 | 20 |
 
 ## ML & Data: topic × grade band
 
@@ -69,34 +69,34 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 |---|---|---|---|---|---|---|---|---|
 | `be.async.gather_time.v1` | backend | backend.concurrency | code_output | 1.3 | 0.3 | middle | 0 | 120 |
 | `be.async.semaphore_time.v1` | backend | backend.concurrency | code_output | 1.4 | 1.3 | senior | 0 | 150 |
-| `be.db.isolation_anomaly.v1` | backend | backend.databases | concept_mcq | 1.3 | 1.1 | senior | 0.25 | 150 |
+| `be.db.isolation_anomaly.v1` | backend | backend.databases | concept_mcq | 1.3 | 0.4 | middle | 0.25 | 150 |
 | `be.db.lost_update.v1` | backend | backend.databases | numeric_scenario | 1.3 | 0.5 | middle | 0 | 150 |
 | `be.http.method.v1` | backend | backend.http | concept_mcq | 0.9 | -1.6 | intern | 0.2 | 45 |
 | `be.http.status_code.v1` | backend | backend.http | concept_mcq | 1 | -1.3 | intern | 0.125 | 60 |
 | `be.sec.vuln_class.v1` | backend | backend.security | find_bug | 1.2 | 0 | middle | 0.167 | 90 |
 | `be.sql.group_having.v2` | backend, ml_data | sql.aggregation | sql_result | 1.2 | -0.3 | junior | 0.25 | 120 |
 | `be.sys.cache_latency.v1` | backend | backend.system_design | numeric_scenario | 1 | -0.4 | junior | 0 | 90 |
-| `be.sys.littles_law.v1` | backend | backend.system_design | numeric_scenario | 1.2 | 0.8 | middle | 0 | 120 |
+| `be.sys.littles_law.v1` | backend | backend.system_design | numeric_scenario | 1.2 | 0.6 | middle | 0 | 120 |
 | `bm.py.floor_mod.v1` | backend, ml_data | python.core | code_output | 1.2 | 0.1 | middle | 0 | 90 |
 | `bm.py.late_binding.v1` | backend, ml_data | python.core | code_output | 1.4 | 1 | senior | 0.25 | 90 |
-| `bm.py.mutable_default.v1` | backend, ml_data | python.core | code_output | 1.3 | 0.4 | middle | 0.25 | 90 |
+| `bm.py.mutable_default.v2` | backend, ml_data | python.core | code_output | 1.3 | 0.4 | middle | 0 | 90 |
 | `bm.py.slicing.v1` | backend, ml_data | python.core | code_output | 1.1 | -0.6 | junior | 0 | 90 |
-| `bm.sql.left_join_count.v1` | backend, ml_data | sql.joins | sql_result | 1.3 | 0.2 | middle | 0 | 150 |
-| `bm.sql.not_in_null.v1` | backend, ml_data | sql.joins | sql_result | 1.4 | 1.2 | senior | 0 | 150 |
+| `bm.sql.left_join_count.v2` | backend, ml_data | sql.joins | sql_result | 1.3 | 0.2 | middle | 0 | 150 |
+| `bm.sql.not_in_null.v2` | backend, ml_data | sql.joins | sql_result | 1.4 | 1.2 | senior | 0 | 180 |
 | `bm.sql.null_aggregates.v1` | backend, ml_data | sql.aggregation | sql_result | 1.2 | -0.2 | junior | 0 | 120 |
 | `fe.css.box_model.v1` | frontend | web.css | numeric_scenario | 1.1 | -0.6 | junior | 0 | 90 |
 | `fe.css.flex_grow.v1` | frontend | web.css | numeric_scenario | 1.3 | 1 | senior | 0 | 150 |
 | `fe.css.specificity.v1` | frontend | web.css | code_output | 1.2 | 0.4 | middle | 0.25 | 120 |
 | `fe.js.array_chain.v1` | frontend | js.core | code_output | 1 | -0.9 | junior | 0 | 90 |
 | `fe.js.closure_loop.v1` | frontend | js.core | code_output | 1.3 | 0 | middle | 0.25 | 90 |
-| `fe.js.coercion.v1` | frontend | js.core | code_output | 1.2 | 0.5 | middle | 0.25 | 90 |
+| `fe.js.coercion.v2` | frontend | js.core | code_output | 1.2 | 0.5 | middle | 0 | 90 |
 | `fe.js.event_loop.v2` | frontend | js.event_loop | code_output | 1.4 | 0.2 | middle | 0.25 | 90 |
-| `fe.react.effect_runs.v1` | frontend | web.react | code_output | 1.1 | -0.2 | junior | 0 | 90 |
+| `fe.react.effect_runs.v2` | frontend | web.react | code_output | 1.1 | 0.1 | middle | 0 | 150 |
 | `fe.react.state_batching.v1` | frontend | web.react | code_output | 1.3 | 0.6 | middle | 0 | 120 |
 | `fe.sec.xss_sink.v1` | frontend | web.security | find_bug | 1.1 | -0.2 | junior | 0.25 | 90 |
 | `fe.ts.assignability.v1` | frontend | web.typescript | find_bug | 1.2 | 0.3 | middle | 0.25 | 120 |
 | `fe.web.cache_control.v1` | frontend | web.browser | concept_mcq | 1.2 | 0.9 | middle | 0.333 | 90 |
-| `ml.data.broadcast.v1` | ml_data | ml.data_processing | code_output | 1.2 | 0.4 | middle | 0.25 | 90 |
+| `ml.data.broadcast.v2` | ml_data | ml.data_processing | code_output | 1.2 | 0.4 | middle | 0 | 120 |
 | `ml.data.groupby.v1` | ml_data | ml.data_processing | code_output | 1.1 | -0.5 | junior | 0 | 120 |
 | `ml.dl.conv_output.v1` | ml_data | ml.deep_learning | numeric_scenario | 1.2 | 0.2 | middle | 0 | 120 |
 | `ml.dl.param_count.v1` | ml_data | ml.deep_learning | numeric_scenario | 1.2 | 0.7 | middle | 0 | 150 |
@@ -108,10 +108,10 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | `ml.stats.bayes.v1` | ml_data | ml.statistics | numeric_scenario | 1.3 | 1 | senior | 0 | 150 |
 | `ml.stats.center.v1` | ml_data | ml.statistics | numeric_scenario | 1 | -1.4 | intern | 0 | 90 |
 | `sh.algo.complexity.v2` | backend, frontend, ml_data | algorithms.complexity | complexity | 0.9 | 0 | middle | 0.167 | 90 |
-| `sh.code.binary_search_steps.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.3 | middle | 0 | 150 |
+| `sh.code.binary_search_steps.v2` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.5 | middle | 0 | 180 |
 | `sh.code.find_bug.v1` | backend, frontend, ml_data | algorithms.code_reading | find_bug | 1.1 | -0.5 | junior | 0.2 | 120 |
 | `sh.code.loop_trace.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1 | -0.8 | junior | 0 | 180 |
-| `sh.code.recursion_calls.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.6 | middle | 0 | 180 |
+| `sh.code.recursion_calls.v2` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.5 | middle | 0 | 180 |
 | `sh.code.stack_queue.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.1 | -1.2 | intern | 0 | 120 |
 | `sh.ds.heap_order.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.2 | middle | 0.25 | 120 |
 | `sh.ds.op_cost.v1` | backend, frontend, ml_data | algorithms.data_structures | concept_mcq | 1 | -0.3 | junior | 0.25 | 60 |

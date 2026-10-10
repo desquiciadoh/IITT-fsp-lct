@@ -1,7 +1,7 @@
 """JavaScript language families (topic js.core).
 
 fe.js.closure_loop.v1  var vs let in a loop that schedules callbacks (choice, redraw distractors)
-fe.js.coercion.v1      type and value of a mixed-type expression (choice, redraw distractors)
+fe.js.coercion.v2      value of a mixed-type expression that prints an integer (typed)
 fe.js.array_chain.v1   map/filter/reduce chain on a literal array (typed)
 
 Each program prints its answer with console.log, so tests/ml runs a sample through real Node.js
@@ -28,10 +28,13 @@ def node_answer(stdout: str) -> str:
 
 class ClosureLoop(RedrawChoiceFamily):
     """b = 0.0 (junior/middle boundary): with `var` every callback sees the one function-scoped
-    variable after the loop ends; `let` makes a fresh binding per iteration."""
+    variable after the loop ends; `let` makes a fresh binding per iteration. Distractors are lists of
+    the same length from the same loop (per-iteration, last iteration, first value, shifted by one
+    step), so the loop count and the printed expression do not rule any of them out (ML-6 review)."""
 
     meta = FamilyMeta(id="fe.js.closure_loop.v1", version=1, specs=F, topic="js.core",
                       skills=("javascript",), format="code_output", a=1.3, b=0.0, c=0.25, time_limit_s=90)
+    SEMANTIC = ('decl', 'start', 'n', 'step', 'k', 'op')
     NODE_CHECK = True
 
     def draw(self, rng):
@@ -52,11 +55,16 @@ class ClosureLoop(RedrawChoiceFamily):
         seen = vals if p["decl"] == "let" else [final] * len(vals)
         return ", ".join(str(self._apply(v, p)) for v in seen)
 
-    def misconceptions(self, p):
+    def alternatives(self, p, rng):
         vals = self._vals(p)
-        wrong = [vals[-1]] * len(vals) if p["decl"] == "var" else [vals[-1] + p["step"]] * len(vals)
-        other = vals if p["decl"] == "var" else wrong
-        return [", ".join(str(self._apply(v, p)) for v in x) for x in (wrong, other)]
+        final = vals[-1] + p["step"]
+        n = len(vals)
+        seqs = [vals,                                   # a fresh binding per iteration (let)
+                [final] * n,                            # the shared variable after the loop (var)
+                [vals[-1]] * n,                         # "the last iteration's value"
+                vals[1:] + [final],                     # shifted by one step
+                [vals[0]] * n]                          # "captured once, at the first value"
+        return [", ".join(str(self._apply(v, p)) for v in x) for x in seqs]
 
     def render(self, p):
         v = p["var"]
@@ -88,9 +96,6 @@ class _Undef:
 
 
 UNDEF = _Undef()
-OPERANDS = ("0", "1", "2", "3", "5", "7", "9", "'0'", "'1'", "'2'", "'5'", "'7'", "''", "true", "false", "null",
-            "undefined", "[]", "[3]", "[7]")
-OPS = ("+", "-", "*", "==", "===")
 
 
 def _lit(src: str):
@@ -184,8 +189,8 @@ def _num_str(x) -> str:
     return str(int(x)) if float(x).is_integer() else str(x)
 
 
-CHAIN_OPERANDS = (*(str(n) for n in range(0, 13)), *(f"'{n}'" for n in range(0, 13)), "true", "false", "null",
-                  "[4]", "[9]", "[]")
+CHAIN_OPERANDS = (*(str(n) for n in range(0, 31)), *(f"'{n}'" for n in range(0, 31)), "true", "false", "null",
+                  "[4]", "[9]", "[17]", "[]")
 CHAIN_OPS = ("+", "-", "*")
 
 
@@ -210,55 +215,37 @@ def chain_eval(operands: list[str], ops: list[str]) -> tuple[str, str] | None:
     return first and _step(_to_literal(*first), ops[1], c)
 
 
-def _left_to_right(operands, ops):
-    """The misconception: ignoring precedence and evaluating strictly left to right."""
-    a, b, c = operands
-    first = _step(a, ops[0], b)
-    return first and _step(_to_literal(*first), ops[1], c)
-
-
-def _right_first(operands, ops):
-    """The other misconception: evaluating the right operation first regardless of precedence."""
-    a, b, c = operands
-    inner = _step(b, ops[1], c)
-    return inner and _step(a, ops[0], _to_literal(*inner))
-
-
-class Coercion(RedrawChoiceFamily):
+class Coercion(TypedNumberFamily):
     """b = 0.5 (middle): * binds before + and -, which go left to right; + concatenates as soon as
-    one side is a string (1 + 2 + '3' is '33', '1' + 2 + 3 is '123'), - and * always convert to numbers,
-    arrays become strings first, null is 0 and true is 1. The printed `typeof` shows whether
-    the candidate tracked the type."""
+    one side is a string (1 + 2 + '3' is '33', '1' + 2 + 3 is '123'), - and * always convert to
+    numbers, arrays become strings first, null is 0 and true is 1. Only expressions whose printed
+    value is a plain integer are drawn, so the answer is typed. Version 2: as a choice item with
+    "number X" / "string X" options, the type word and the few distinct misreadings let an
+    option-only strategy beat chance (ML-6 review)."""
 
-    meta = FamilyMeta(id="fe.js.coercion.v1", version=1, specs=F, topic="js.core",
-                      skills=("javascript",), format="code_output", a=1.2, b=0.5, c=0.25, time_limit_s=90)
+    meta = FamilyMeta(id="fe.js.coercion.v2", version=2, specs=F, topic="js.core",
+                      skills=("javascript",), format="code_output", a=1.2, b=0.5, c=0.0, time_limit_s=90)
     NODE_CHECK = True
+    SEMANTIC = ("operands", "ops")
 
     def draw(self, rng):
         while True:
             operands = [rng.choice(CHAIN_OPERANDS) for _ in range(3)]
             ops = [rng.choice(CHAIN_OPS) for _ in range(2)]
             got = chain_eval(operands, ops)
-            if got and got[1] != "" and len(got[1]) <= 12:
+            if got and re.fullmatch(r"-?(0|[1-9]\d{0,8})", got[1]):
                 return {"operands": operands, "ops": ops, "var": rng.choice(("x", "r", "res", "v", "out", "val"))}
 
-    def answer(self, p):
-        kind, value = chain_eval(p["operands"], p["ops"])
-        return f"{kind} {value}"
-
-    def misconceptions(self, p):
-        # (A "right value, wrong type" distractor was dropped: it differs from the key only in the
-        # first word, which made the key the option most similar to the others; verify gate.)
-        wrong = [x for x in (_left_to_right(p["operands"], p["ops"]), _right_first(p["operands"], p["ops"])) if x]
-        return [f"{k} {v}" for k, v in wrong]
+    def solve(self, p):
+        return int(chain_eval(p["operands"], p["ops"])[1])
 
     def render(self, p):
         a, b, c = p["operands"]
         v = p["var"]
-        code = f"const {v} = {a} {p['ops'][0]} {b} {p['ops'][1]} {c};\nconsole.log(typeof {v}, {v});"
+        code = f"const {v} = {a} {p['ops'][0]} {b} {p['ops'][1]} {c};\nconsole.log({v});"
         return "Что выведет код?", {"lang": "javascript", "text": code}
 
-    def oracle_answer(self, inst):
+    def oracle_value(self, inst):
         """Precedence by reduction: fold every * first (left to right), then + and - (left to right)."""
         expr = re.search(r"= (.+);\n", inst.code["text"]).group(1)
         tokens = re.findall(r"'[^']*'|\[\d*\]|[+*-]|\w+", expr)
@@ -270,8 +257,7 @@ class Coercion(RedrawChoiceFamily):
                     tokens[i - 1:i + 2] = [f"'{value}'" if kind == "string" else value]
                 else:
                     i += 2
-        kind = "string" if tokens[0].startswith("'") else "number"
-        return f"{kind} {tokens[0].strip(chr(39))}"
+        return float(tokens[0].strip(chr(39)))
 
 
 def _oracle_coerce(left: str, op: str, right: str) -> str:
@@ -351,6 +337,7 @@ class ArrayChain(TypedNumberFamily):
 
     meta = FamilyMeta(id="fe.js.array_chain.v1", version=1, specs=F, topic="js.core",
                       skills=("javascript",), format="code_output", a=1.0, b=-0.9, c=0.0, time_limit_s=90)
+    SEMANTIC = ('arr', 'mul', 'add', 'mod', 'rem', 'init')
     NODE_CHECK = True
 
     def draw(self, rng):
