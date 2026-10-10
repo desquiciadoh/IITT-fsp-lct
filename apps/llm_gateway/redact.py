@@ -22,6 +22,7 @@ from .pii_lexicon import (
     FIRST_NAMES_CYR,
     FIRST_NAMES_LAT,
     PATRONYMIC_RE,
+    PROFILE_NON_HANDLES,
     ROLE_WORDS,
     SECTION_WORDS,
     SURNAME_SUFFIXES_CYR,
@@ -32,19 +33,47 @@ from .types import Redacted
 
 # ── patterns ────────────────────────────────────────────────────────────────
 
-_EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-zА-Яа-яЁё]{2,}(?![\w-])")
+# Text is normalised first: invisible characters dropped, exotic spaces and hyphens made ASCII,
+# full-width forms and ligatures folded, so "123‑45‑67" or "ivan​@mail.ru" cannot slip through.
+_INVISIBLE_RE = re.compile("[­​-‍⁠﻿]")
+_NORMALISE = str.maketrans(
+    {" ": " ", " ": " ", " ": " ", " ": " ",
+     "‐": "-", "‑": "-", "‒": "-", "–": "-", "−": "-",
+     "ﬁ": "fi", "ﬂ": "fl"}
+    | {chr(c): chr(c - 0xFEE0) for c in range(0xFF01, 0xFF5F)}
+)
+
+_TLDS = (
+    r"ru|рф|su|com|net|org|io|dev|me|site|pro|tech|app|info|online|space|xyz|ai|co|by|kz|ua|uz|"
+    r"so|to|cc|ee|ws|in|cv|website|social|page|link|blog|cloud|codes|design|studio"
+)
+_EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-zА-Яа-яЁё]{2,}(?![A-Za-zА-Яа-яЁё])")
+# "ivan @ mail.ru", "ivan [at] gmail [dot] com", "ivan(at)gmail.com", "ivan собака mail.ru",
+# and an address wrapped across a line break by the PDF layout
+_OBF_AT = r"(?:[ \t]*@[ \t]*\n?[ \t]*|[ \t]*[\[({][ \t]*(?:at|собака)[ \t]*[\])}][ \t]*|[ \t]+собака[ \t]+)"
+_OBF_DOT = r"(?:[ \t]*[\[({][ \t]*(?:dot|точка)[ \t]*[\])}][ \t]*|[ \t]+точка[ \t]+|\.\n?)"
+_OBF_EMAIL_RE = re.compile(
+    rf"(?<![\w.+-])[\w+-][\w.+-]*(?:\.\n[\w.+-]+)?{_OBF_AT}[\w-]+(?:{_OBF_DOT}[\w-]+)*?{_OBF_DOT}(?:{_TLDS})"
+    r"(?![A-Za-zА-Яа-яЁё])",
+    re.IGNORECASE,
+)
 
 _TG_LINK_RE = re.compile(
-    r"(?<![\w.])(?:https?://)?(?:www\.)?(?:t|telegram)\.me/(?:joinchat/|\+)?([A-Za-z0-9_]{3,64})",
+    r"(?<![\w.])(?:(?:https?://)?(?:www\.)?(?:t|telegram)\.me/(?:joinchat/|\+)?|tg://resolve\?domain=)"
+    r"([A-Za-z0-9_]{3,64})",
     re.IGNORECASE,
 )
 
 _URL_CHARS = r"[^\s<>()\"'{}|\\^`\[\]]"
-_SCHEME_URL_RE = re.compile(rf"(?<![\w])(?:https?://|www\.){_URL_CHARS}+", re.IGNORECASE)
+# A link the PDF layout wrapped after "/" or "-" continues on the next line
+_SCHEME_URL_RE = re.compile(
+    rf"(?<![\w])(?:https?://|www\.){_URL_CHARS}+(?:(?<=[/\-])\n{_URL_CHARS}+)?", re.IGNORECASE
+)
+_BROKEN_SCHEME_RE = re.compile(r"(?i)\b(https?):[ \t]+//")
 _DOMAIN_RE = re.compile(
     r"(?<![\w.@/\-])"
     r"((?:[a-zа-яё0-9](?:[a-zа-яё0-9\-]*[a-zа-яё0-9])?\.)+"
-    r"(?:ru|рф|su|com|net|org|io|dev|me|site|pro|tech|app|info|online|space|xyz|ai|co|by|kz|ua|uz))"
+    rf"(?:{_TLDS}))"
     rf"(/{_URL_CHARS}*)?"
     r"(?![\w\-])",
     re.IGNORECASE,
@@ -52,65 +81,92 @@ _DOMAIN_RE = re.compile(
 _TRAILING_PUNCT = ".,;:!?»"
 
 _PROFILE_LABEL_RE = re.compile(
-    r"(?<![\w])((?i:github|gitlab|bitbucket|linkedin|habr|хабр|skype|скайп|vk|вк|vkontakte|"
-    r"вконтакте|instagram|инстаграм|facebook|twitter|kaggle|leetcode|codewars|stackoverflow|"
-    r"discord))(\s*[:\-–—]\s*@?)([A-Za-z0-9][\w.:\-]{2,39})"
+    r"(?<![\w])((?i:github|gitlab|bitbucket|linked[ \t]?in|habr(?:[ \t]+career)?|хабр|гитхаб|гитлаб|"
+    r"skype|скайп|vk|вк|vkontakte|вконтакте|instagram|инстаграм|facebook|twitter|kaggle|leetcode|"
+    r"codewars|stackoverflow|discord|mastodon)(?i:[ \t]+(?:profile|account|профиль|аккаунт))?)"
+    r"(\s*[:\-–—]\s*@?)([A-Za-z0-9/][\w.:/@\-]{2,60})"
 )
 
-_TG_LABEL = r"(?i:telegram|телеграмм?|tg|тг)"
-# "Telegram: ivan_petrov", "ТГ - @ivan", "tg @ivan", "Telegram (@ivan)"
+# "Telegram", "Телеграме", "Телега", "TG/Viber/WhatsApp", "Telegram-ник", "Telegram (личный)"
+_TG_LABEL = (
+    r"(?i:telegram|телеграм\w*|телега|tg|тг)"
+    r"(?:[ \t]*-?[ \t]*(?i:ник|nick|канал|channel|аккаунт|account)"
+    r"|[ \t]*\([^)\n@]{1,20}\)"
+    r"|[ \t]*/[ \t]*(?i:whatsapp|viber|signal|вотсап|ватсап|вайбер))*"
+)
+# "Telegram: ivan_petrov", "ТГ - @ivan", "tg @ivan", "Telegram (@ivan)", "Telegram: @ ivan"
 _TG_LABELLED_RE = re.compile(
-    rf"(?<![\w@])({_TG_LABEL})(\s*[:\-–—]\s*@?|\s+@|\s*\(\s*@?)([A-Za-z][A-Za-z0-9_]{{4,31}})(?![\w])"
+    rf"(?<![\w@])({_TG_LABEL})(\s*[:\-–—]\s*@?[ \t]*|\s+@[ \t]*|\s*\(\s*@)([A-Za-z][A-Za-z0-9_]{{4,31}})(?![\w])"
 )
 # "Телеграм ivan_petrov_dev": no separator, so the handle must contain "_" or a digit
 _TG_SPACED_RE = re.compile(
     rf"(?<![\w@])({_TG_LABEL})(\s+)([A-Za-z][A-Za-z0-9_]*[_\d][A-Za-z0-9_]*)(?![\w])"
 )
-_BARE_AT_RE = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{2,31})(?![\w])")
+# "@reduxjs/toolkit" and "@transaction.atomic" are code, never a handle
+_BARE_AT_RE = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{2,31})(?![\w])(?![./][A-Za-z])")
+_CAMEL_RE = re.compile(r"[a-z][A-Z]")
 _CONTACT_CUE_RE = re.compile(
     r"telegram|телеграм|\btg\b|\bтг\b|контакт|связ|мессенджер|contact|\[(?:EMAIL|PHONE|URL|TG)\]",
     re.IGNORECASE,
 )
 
+# "+7..." may be glued to a label ("Тел+7916...") and any number to the next word ("...45-67Москва")
 _PHONE_RE = re.compile(
-    r"(?<![\w+])(?:"
-    r"\+\s?\d{1,3}[\s\-.]*(?:\(\s?\d{1,5}\s?\)|\d{1,5})(?:[\s\-.]*\d{1,4}){2,4}"
-    r"|[78][\s\-.]*(?:\(\s?\d{3,5}\s?\)|\d{3,5})(?:[\s\-.]*\d{1,4}){2,4}"
-    r"|\(\s?\d{3,5}\s?\)(?:[\s\-.]*\d{1,4}){2,4}"
+    r"(?:(?<![\d+])\+\s?\d{1,3}[\s\-./]*(?:\(\s?\d{1,5}\s?\)|\d{1,5})(?:[\s\-./]*\d{1,4}){2,4}"
+    r"|(?<![\w+])(?:"
+    r"[78][\s\-./]*(?:\(\s?\d{3,5}\s?\)|\d{3,5})(?:[\s\-./]*\d{1,4}){2,4}"
+    r"|\(\s?\d{3,5}\s?\)(?:[\s\-./]*\d{1,4}){2,4}"
     r"|\d{3}[\s\-.]\d{3}[\s\-.]\d{2}[\s\-.]\d{2}"
     r"|9\d{2}[\s\-.]?\d{3}[\s\-.]?\d{2}[\s\-.]?\d{2}"
     r"|9\d{2}[\s\-.]?\d{7}"
-    r")(?![\w])"
+    r"))(?!\d)"
 )
 # Safety net: any long run of digits and separators on one line
-_DIGIT_RUN_RE = re.compile(r"(?<![\w+])\+?\d[\d \t\xa0\-.()]{8,30}\d(?![\w])")
+_DIGIT_RUN_RE = re.compile(r"(?:(?<![\d+])\+|(?<![\w+]))\d[\d \t\-./()]{8,30}\d(?!\d)")
 _YEAR_RE = re.compile(r"(?:19|20)\d\d")
 _MONTH_YEAR_RE = re.compile(r"(?<!\d)\d{1,2}[./](?:19|20)\d\d(?!\d)")
 _MONEY_RE = re.compile(r"\d{1,3}(?:[\s\xa0]\d{3})+(?:\s*[-–—]\s*\d{1,3}(?:[\s\xa0]\d{3})+)?")
 _IPV4_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
 
-_CYR_WORD = r"[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?"
-_CYR_CAPS = r"[А-ЯЁ]{2,}(?:-[А-ЯЁ]{2,})?"
+# Russian plus the Ukrainian, Belarusian and Kazakh letters
+_CU = "А-ЯЁЄІЇҐЎӘҒҚҢӨҰҮҺ"
+_CL = "а-яёєіїґўәғқңөұүһ"
+_CYR_WORD = rf"[{_CU}][{_CL}]+(?:-[{_CU}][{_CL}]+)?"
+_CYR_CAPS = rf"[{_CU}]{{2,}}(?:-[{_CU}]{{2,}})?"
 _LAT_WORD = r"[A-Z][a-z]+(?:-[A-Z][a-z]+)?"
 _LAT_CAPS = r"[A-Z]{2,}(?:-[A-Z]{2,})?"
 _NAME_TOKEN = rf"(?:{_CYR_WORD}|{_CYR_CAPS}|{_LAT_WORD}|{_LAT_CAPS})"
 
 # The candidate's own name, labelled at the start of a line: "ФИО: Иванов Иван", "Имя: Дмитрий"
 _OWN_LABEL_RE = re.compile(
-    r"^[ \t•*\-]*(?i:фио|имя\s+и\s+фамилия|фамилия\s+и\s+имя|имя|full\s+name|name)"
+    r"^[ \t•*\-]*(?i:ф\.?[ \t]?и\.?[ \t]?о\.?|имя\s+и\s+фамилия|фамилия\s+и\s+имя|имя|фамилия|отчество|"
+    r"full\s+name|first\s+name|last\s+name|surname|name)"
     rf"[ \t]*[:\-–—][ \t]*({_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}){{0,2}})",
     re.MULTILINE,
+)
+# "Меня зовут Тагир Алиханлы", "My name is Anna Smirnova"
+_INTRO_RE = re.compile(
+    rf"(?i:меня[ \t]+зовут|my[ \t]+name[ \t]+is)[ \t]+({_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}){{0,2}})"
 )
 # Somebody else's name: referees and contact persons, or a manager/mentor that looks like a name
 _OTHER_LABEL_RE = re.compile(
     r"(?<![\w])(?:((?i:рекомендации|рекомендатели|рекомендатель|рекомендует|контактное\s+лицо|"
-    r"references?|referees?))|(?i:руководитель|ментор|mentor|manager))"
+    r"references?|referees?|hr-менеджер\w*|hr-специалист\w*|hr|рекрутер\w*|recruiter))|(?i:руководитель|ментор|mentor|manager))"
     rf"\s*[:\-–—]?\s*({_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}){{1,2}})"
 )
 # Two or three capitalised words in the same script, anywhere in the text
 _BODY_NAME_RE = re.compile(
     rf"(?<![\w\-])({_CYR_WORD}(?:[ \t]+{_CYR_WORD}){{1,2}}|{_LAT_WORD}(?:[ \t]+{_LAT_WORD}){{1,2}})(?![\w\-])"
 )
+# "Петров А.В.", "А. В. Петров": a surname with initials, usually a referee or a manager
+_INITIALS_RE = re.compile(
+    rf"(?<![\w.])(?:({_CYR_WORD})[ \t]+[{_CU}]\.[ \t]?[{_CU}]\.|[{_CU}]\.[ \t]?[{_CU}]\.[ \t]?({_CYR_WORD}))"
+)
+# "Petrov A.", "Kuznetsov D. A.", "A. Petrov" in publications; the surname ending must look Russian
+_LAT_INITIALS_RE = re.compile(
+    r"(?<![\w.])(?:([A-Z][a-z]+)[ \t]+[A-Z]\.(?:[ \t]?[A-Z]\.)?|[A-Z]\.[ \t]?(?:[A-Z]\.[ \t]?)?([A-Z][a-z]+))"
+)
+_HEADER_PREFIX_RE = re.compile(r"^(?i:резюме|cv|resume|curriculum\s+vitae)\s*[:\-–—]\s*")
 _HEADER_SPLIT_RE = re.compile(r"\s*(?:[,|(:;•·/]|\s[-–—]\s|[–—])\s*")
 _PATRONYMIC_TOKEN_RE = re.compile(rf"[а-яё]+{PATRONYMIC_RE}")
 _PLACEHOLDER_RUN_RE = re.compile(r"\[NAME\](?:[ \t\-]+\[NAME\])+")
@@ -139,7 +195,7 @@ def _is_non_name_word(token: str) -> bool:
 
 
 def _is_cyrillic(token: str) -> bool:
-    return bool(re.match(r"[А-ЯЁа-яё]", token))
+    return bool(re.match(rf"[{_CU}{_CL}]", token))
 
 
 def _is_first_name(token: str) -> bool:
@@ -198,6 +254,18 @@ def _looks_like_phone(raw: str) -> bool:
     return 10 <= len(digits) <= 15 and not _is_number_not_phone(raw)
 
 
+def _is_profile_handle(value: str) -> bool:
+    """"Kaggle: Expert", "LeetCode — 500" and "VK — Senior" are not profile handles."""
+    return value.lower() not in PROFILE_NON_HANDLES and not re.fullmatch(r"\d+\+?", value)
+
+
+def _is_code_handle(handle: str, *, in_contacts: bool) -> bool:
+    """A code annotation; outside the contact block also "@SpringBootTest", "@BotFather"."""
+    if handle.lower() in CODE_ANNOTATIONS:
+        return True
+    return not in_contacts and bool(_CAMEL_RE.search(handle)) and not re.search(r"[_\d]", handle)
+
+
 def _split_punct(value: str) -> tuple[str, str]:
     core = value.rstrip(_TRAILING_PUNCT)
     return core, value[len(core):]
@@ -214,7 +282,7 @@ def _token_pattern(token: str) -> re.Pattern[str] | None:
         tail = "{0,4}"
     title = stem[:1].upper() + stem[1:].lower()
     caps = stem.upper()
-    letters_low, letters_up = "[а-яёa-z]", "[А-ЯЁA-Z]"
+    letters_low, letters_up = f"[{_CL}a-z]", f"[{_CU}A-Z]"
     if tail:
         body = f"{re.escape(title)}{letters_low}{tail}|{re.escape(caps)}{letters_up}{tail}"
     else:
@@ -239,14 +307,15 @@ def redact(text: str, *, header_names: bool = True) -> Redacted:
         if value and value not in found[kind]:
             found[kind].append(value)
 
-    working = text
+    working = _BROKEN_SCHEME_RE.sub(r"\1://", _INVISIBLE_RE.sub("", text).translate(_NORMALISE))
 
-    # 1. Emails
+    # 1. Emails, then the obfuscated or wrapped ones
     def _email(m: re.Match[str]) -> str:
         add("email", m.group(0))
         return "[EMAIL]"
 
     working = _EMAIL_RE.sub(_email, working)
+    working = _OBF_EMAIL_RE.sub(_email, working)
 
     # 2. Telegram links
     def _tg_link(m: re.Match[str]) -> str:
@@ -272,6 +341,8 @@ def redact(text: str, *, header_names: bool = True) -> Redacted:
 
     def _profile(m: re.Match[str]) -> str:
         core, punct = _split_punct(m.group(3))
+        if not _is_profile_handle(core):
+            return m.group(0)
         add("url", core)
         return m.group(1) + m.group(2).rstrip("@") + "[URL]" + punct
 
@@ -293,9 +364,9 @@ def redact(text: str, *, header_names: bool = True) -> Redacted:
 
     def _bare_at(m: re.Match[str]) -> str:
         handle = m.group(1)
-        if handle.lower() in CODE_ANNOTATIONS:
-            return m.group(0)
         line_no = bisect.bisect_right(line_starts, m.start()) - 1
+        if _is_code_handle(handle, in_contacts=line_no in contact_lines):
+            return m.group(0)
         if line_no in contact_lines and len(handle) >= 5:
             add("telegram", "@" + handle)
         return "[TG]"
@@ -353,10 +424,15 @@ def _find_names(text: str, *, header_names: bool) -> tuple[str | None, list[str]
     def valid(tokens: list[str]) -> bool:
         return _same_script(tokens) and not any(_is_non_name_word(t) for t in tokens)
 
-    for m in _OWN_LABEL_RE.finditer(text):
+    # "Фамилия: Петров", "Имя: Иван", "Отчество: Сергеевич": the first is the name, the rest too
+    for m in [*_OWN_LABEL_RE.finditer(text), *_INTRO_RE.finditer(text)]:
         tokens = m.group(1).split()
-        if own is None and valid(tokens) and (len(tokens) > 1 or _name_score(tokens) > 0):
+        if not valid(tokens) or not (len(tokens) > 1 or _name_score(tokens) > 0):
+            continue
+        if own is None:
             own = m.group(1)
+        elif m.group(1) != own and m.group(1) not in others:
+            others.append(m.group(1))
 
     for m in _OTHER_LABEL_RE.finditer(text):
         tokens = m.group(2).split()
@@ -375,16 +451,22 @@ def _find_names(text: str, *, header_names: bool) -> tuple[str | None, list[str]
             seen += 1
             if seen > _HEADER_LINES:
                 break
-            part = _HEADER_SPLIT_RE.split(stripped, maxsplit=1)[0].strip()
-            tokens = part.split()
-            if not 2 <= len(tokens) <= 3 or not valid(tokens):
-                continue
-            if not all(re.fullmatch(_NAME_TOKEN, t) for t in tokens):
-                continue
-            score = _name_score(tokens)
-            if not _is_cyrillic(tokens[0]) and score == 0:
-                continue  # "Spring Boot", "Google Cloud"
-            candidates.append((score, idx, part))
+            parts = _HEADER_SPLIT_RE.split(_HEADER_PREFIX_RE.sub("", stripped))
+            for pos, part in enumerate(p.strip() for p in parts):
+                tokens = part.split()
+                if not 2 <= len(tokens) <= 3 or not valid(tokens):
+                    continue
+                if not all(re.fullmatch(_NAME_TOKEN, t) for t in tokens):
+                    continue
+                score = _name_score(tokens)
+                # Later parts ("Python-разработчик — Алиев Тагир") need some evidence. A Latin
+                # pair needs a known first name ("Spring Boot", "Google Cloud") unless it opens
+                # the CV ("Anastasiia Zhukovskaia").
+                if pos > 0 and score == 0:
+                    continue
+                if not _is_cyrillic(tokens[0]) and score == 0 and seen > 1:
+                    continue
+                candidates.append((score, idx, part))
 
         # Lines with a first name or a patronymic are names. Otherwise take the single best line
         # ("Нурланов Айдар" scores on the surname, "Ли Мин" is the first two-word line).
@@ -419,6 +501,13 @@ def _find_names(text: str, *, header_names: bool) -> tuple[str | None, list[str]
         if name != own and name not in others:
             others.append(name)
 
+    for m in [*_INITIALS_RE.finditer(text), *_LAT_INITIALS_RE.finditer(text)]:
+        surname = m.group(1) or m.group(2)
+        if not _is_cyrillic(surname) and not surname.lower().endswith(SURNAME_SUFFIXES_LAT):
+            continue
+        if not _is_non_name_word(surname) and surname != own and surname not in others:
+            others.append(surname)
+
     return own, others, text
 
 
@@ -435,19 +524,28 @@ def assert_clean(redacted: Redacted) -> tuple[bool, str | None]:
 
 
 def _has_residual(text: str, found: dict[str, list[str]]) -> bool:
-    if _EMAIL_RE.search(text) or _TG_LINK_RE.search(text) or _SCHEME_URL_RE.search(text):
+    text = _INVISIBLE_RE.sub("", text).translate(_NORMALISE)
+    if (
+        _EMAIL_RE.search(text)
+        or _OBF_EMAIL_RE.search(text)
+        or _TG_LINK_RE.search(text)
+        or _SCHEME_URL_RE.search(text)
+    ):
         return True
     for m in _DOMAIN_RE.finditer(text):
         if m.group(2) or not _is_tech_domain(m.group(1)):
             return True
-    if _PROFILE_LABEL_RE.search(text):
-        return True
+    for m in _PROFILE_LABEL_RE.finditer(text):
+        if _is_profile_handle(_split_punct(m.group(3))[0]):
+            return True
     for regex in (_TG_LABELLED_RE, _TG_SPACED_RE):
         for m in regex.finditer(text):
             if m.group(3).lower() not in CODE_ANNOTATIONS:
                 return True
+    line_starts, contact_lines = _contact_lines(text)
     for m in _BARE_AT_RE.finditer(text):
-        if m.group(1).lower() not in CODE_ANNOTATIONS:
+        line_no = bisect.bisect_right(line_starts, m.start()) - 1
+        if not _is_code_handle(m.group(1), in_contacts=line_no in contact_lines):
             return True
     for m in _DIGIT_RUN_RE.finditer(text):
         raw = m.group(0)

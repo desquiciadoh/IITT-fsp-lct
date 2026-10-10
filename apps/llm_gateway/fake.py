@@ -6,6 +6,7 @@ Adheres strictly to AI.md AI-R6 requirements (scoring spec, header-only grades, 
 """
 from __future__ import annotations
 
+import datetime
 import re
 from typing import Any
 
@@ -22,6 +23,20 @@ _YEARS_RU_RE = re.compile(
     r"(?:\s*(?:и\s+)?(?P<months>\d{1,2})\s*мес)?"
 )
 _YEARS_EN_RE = re.compile(r"(\d+(?:\.\d+)?)\+?\s*years?\s+of\s+(?:commercial\s+)?experience")
+
+# Date ranges in the "Опыт работы" section (text is lower-cased): "03.2019 - 05.2023",
+# "янв 2020 — н.в.", "сентябрь 2018 – по настоящее время", "2020–2023", "mar 2021 - present"
+_MONTHS = {
+    "янв": 1, "фев": 2, "мар": 3, "апр": 4, "ма": 5, "июн": 6, "июл": 7, "авг": 8, "сен": 9,
+    "окт": 10, "ноя": 11, "дек": 12, "jan": 1, "feb": 2, "apr": 4, "may": 5, "jun": 6, "jul": 7,
+    "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12, "mar": 3,
+}
+_MONTH_WORD = r"(?:янв|фев|мар|апр|ма[йяе]|июн|июл|авг|сен|окт|ноя|дек|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-zа-яё]*\.?"
+_DATE = rf"(?:(?P<{{p}}m>0?[1-9]|1[0-2])[./]|(?P<{{p}}w>{_MONTH_WORD})\s*)?(?P<{{p}}y>(?:19|20)\d\d)"
+_NOW = r"(?P<now>(?:по\s+)?(?:н\.\s?в\.?|наст\.?\s*вр\.?|настоящее\s+время|сейчас|present|now|current))"
+_DATE_RANGE_RE = re.compile(
+    rf"(?<![\d.]){_DATE.format(p='s')}\s*(?:-|–|—|по|to|until)\s*(?:{_DATE.format(p='e')}|{_NOW})(?![\d])"
+)
 
 # Salary: amounts count only in lines with a money cue (AI-R6)
 _NET_RE = re.compile(r"(?<![.\w])net\b|на\s+руки|чистыми|после\s+(?:вычета|налогов)", re.IGNORECASE)
@@ -128,6 +143,52 @@ def _section_lines(text: str, header_re: re.Pattern[str], *, stop_at_fields: boo
     return []
 
 
+def _today() -> datetime.date:
+    """The current date for "по н.в." ranges; tests monkeypatch it."""
+    return datetime.date.today()
+
+
+def _month_number(word: str | None) -> int | None:
+    if not word:
+        return None
+    w = word.rstrip(".")
+    return next((_MONTHS[k] for k in sorted(_MONTHS, key=len, reverse=True) if w.startswith(k)), None)
+
+
+def _years_from_ranges(lines: list[str]) -> float | None:
+    """Total experience from date ranges, overlapping jobs counted once ("2020-2023" twice = 3 years).
+
+    A year without a month starts in January and ends in January ("2020-2023" is 3 years); a month
+    end is inclusive ("03.2019 - 05.2023" is 4 years 3 months).
+    """
+    today = _today()
+    now = today.year * 12 + today.month  # months since year 0, exclusive end
+    spans: list[tuple[int, int]] = []
+    for m in _DATE_RANGE_RE.finditer("\n".join(lines)):
+        s_month = int(m["sm"]) if m["sm"] else _month_number(m["sw"])
+        start = int(m["sy"]) * 12 + (s_month or 1) - 1
+        if m["now"]:
+            end = now
+        else:
+            e_month = int(m["em"]) if m["em"] else _month_number(m["ew"])
+            end = int(m["ey"]) * 12 + (e_month if e_month else 0)
+        end = min(end, now)
+        if start < end and start >= 1970 * 12:
+            spans.append((start, end))
+    if not spans:
+        return None
+    total, cur_start, cur_end = 0, *sorted(spans)[0]
+    for start, end in sorted(spans)[1:]:
+        if start <= cur_end:
+            cur_end = max(cur_end, end)
+        else:
+            total += cur_end - cur_start
+            cur_start, cur_end = start, end
+    total += cur_end - cur_start
+    years = round(total / 12, 1)
+    return years if 0 < years <= 50 else None
+
+
 class FakeLlm:
     """Rule-based LLM gateway implementation."""
 
@@ -150,6 +211,8 @@ class FakeLlm:
 
         # 3. Infer years of experience
         years_exp = self._extract_years_experience(lowered)
+        if years_exp is None:
+            years_exp = _years_from_ranges(_section_lines(lowered, _EXPERIENCE_HEADER_RE))
 
         # 4. Infer grade (header regex or derived from years)
         claimed_grade = self._infer_grade(redacted_text, years_exp)
@@ -239,13 +302,10 @@ class FakeLlm:
         )
 
     def phrase(self, facts: list[str]) -> str:
-        """Combine factual statements into Russian summary sentences."""
-        if not facts:
-            return "Кандидат соответствует ключевым требованиям позиции."
-
+        """Combine factual statements into Russian summary sentences; "" without facts."""
         clean_facts = [f.strip().rstrip(".") for f in facts if f.strip()]
         if not clean_facts:
-            return "Кандидат соответствует ключевым требованиям позиции."
+            return ""  # no facts, no claim: the UI shows the reason chips only
 
         if len(clean_facts) == 1:
             return f"Кандидат подходит на позицию: {clean_facts[0]}."

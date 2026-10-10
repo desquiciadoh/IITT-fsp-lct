@@ -109,3 +109,47 @@ def test_phrase_fallback_on_gateway_error():
 
     res = phrase(facts, gateway=mock_gw)
     assert "FastAPI" in res
+
+
+def _gateway(answer: str) -> MagicMock:
+    gw = MagicMock()
+    gw.name = "gigachat"
+    gw.config.model = "GigaChat-2"
+    gw.phrase.return_value = answer
+    return gw
+
+
+def test_phrase_without_facts_claims_nothing():
+    gw = _gateway("Отличный кандидат.")
+    assert phrase([], gateway=gw) == ""
+    assert phrase(["  ", ""], gateway=gw) == ""
+    gw.phrase.assert_not_called()
+
+
+def test_phrase_facts_with_personal_data_never_reach_the_provider(caplog):
+    gw = _gateway("Иван Петров знает Python.")
+    with caplog.at_level(logging.INFO, logger="llm_gateway"):
+        res = phrase(["Иван Петров: Python 4 года", "Связь: ivan@mail.ru"], gateway=gw)
+
+    gw.phrase.assert_not_called()
+    records = [r for r in caplog.records if getattr(r, "event", None) == "llm_call"]
+    assert (records[0].source, records[0].fallback_reason) == ("rules", "pii_residual")
+    assert "Python" in res
+
+
+def test_phrase_caches_only_accepted_sentences():
+    class DictCache(dict):
+        def set(self, key, value, ttl):
+            self[key] = value
+
+    cache = DictCache()
+    facts = ["Python: подтверждено тестом"]
+    good = _gateway("Навык Python подтверждён тестом.")
+    assert phrase(facts, gateway=good, cache=cache) == "Навык Python подтверждён тестом."
+    assert phrase(facts, gateway=good, cache=cache) == "Навык Python подтверждён тестом."
+    assert good.phrase.call_count == 1  # the second call is a cache hit
+    assert len(cache) == 1
+
+    bad = _gateway("Кандидат знает Python и Rust.")
+    phrase(["Go: подтверждено тестом"], gateway=bad, cache=cache)
+    assert len(cache) == 1  # a rejected sentence is not stored

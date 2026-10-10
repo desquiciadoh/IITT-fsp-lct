@@ -1,7 +1,9 @@
 """Unit tests for FakeLlm rule-based extraction and AI-R6 regressions."""
+import datetime
 import time
 from pathlib import Path
 
+import llm_gateway.fake as fake_module
 import pytest
 from llm_gateway import extract_text, redact
 from llm_gateway.fake import FakeLlm
@@ -205,3 +207,27 @@ def test_fake_llm_jd_fixtures(fixture, spec, grades, salary, salary_type, format
     assert draft.salary_type == salary_type
     assert draft.work_formats == formats
     assert draft.must_skills_raw
+
+
+@pytest.mark.parametrize(
+    ("experience", "years"),
+    [
+        ("Ozon\n2020 - 2023\nАвито\n2020 – 2023", 3.0),  # parallel jobs count once
+        ("Ozon, 03.2019 - 05.2023", 4.2),  # month ends are inclusive
+        ("Ozon, 2018-2020\nVK, 2019-2022", 4.0),  # overlap merged
+        ("Ozon, 2015-2017\nVK, 2020-2022", 4.0),  # a gap is not counted
+        ("Сбер, янв 2024 — н.в.", 2.8),
+        ("Сбер, сентябрь 2025 – по настоящее время", 1.2),
+        ("Tinkoff, Mar 2026 - present", 0.7),
+    ],
+)
+def test_years_from_date_ranges(monkeypatch, experience, years):
+    monkeypatch.setattr(fake_module, "_today", lambda: datetime.date(2026, 10, 10))
+    text = f"Python-разработчик\nОпыт работы\n{experience}\nОбразование\nМГУ, 2010-2015"
+    assert FakeLlm().resume(text).years_experience == years
+
+
+def test_explicit_years_win_over_ranges_and_education_is_ignored(monkeypatch):
+    monkeypatch.setattr(fake_module, "_today", lambda: datetime.date(2026, 10, 10))
+    assert FakeLlm().resume("Опыт 5 лет\nОпыт работы\nOzon, 2024-2025").years_experience == 5.0
+    assert FakeLlm().resume("Образование\nМГУ, 2010-2015").years_experience is None

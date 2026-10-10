@@ -404,3 +404,378 @@
   - Yandex
   - Московский Государственный Университет
   - Руководитель Отдела Продаж
+# Red-team pass on the reviewer's fixes: obfuscated contacts, Unicode tricks, names, false positives
+- name: rt_email_space_before_at
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Email: ivan.petrov @gmail.com'
+  forbidden:
+  - ivan.petrov
+- name: rt_email_brackets_at_dot
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Почта: ivan.petrov [at] gmail [dot] com'
+  forbidden:
+  - ivan.petrov
+  - gmail
+- name: rt_email_paren_at
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    E-mail: ivan.petrov(at)gmail.com'
+  forbidden:
+  - ivan.petrov
+- name: rt_email_sobaka
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Почта: ivan.petrov собака gmail.com'
+  forbidden:
+  - ivan.petrov
+- name: rt_email_wrapped_after_at
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    ivan.petrov.developer@
+
+    gmail.com'
+  forbidden:
+  - ivan.petrov.developer
+- name: rt_email_glued_phone
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    ivan.petrov@mail.ru8 916 123 45 67'
+  forbidden:
+  - ivan.petrov
+  - 123 45 67
+- name: rt_email_hyphen_after_tld
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Email: ivan.petrov@mail.ru-предпочтительно'
+  forbidden:
+  - ivan.petrov
+- name: rt_email_zero_width
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Email: ivan.petrov​@gmail.com'
+  forbidden:
+  - ivan.petrov
+- name: rt_phone_en_dash
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Телефон: +7 (916) 123–45–67'
+  forbidden:
+  - '123'
+  - 45–67
+- name: rt_phone_minus_sign
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Тел.: 8 916 123−45−67'
+  forbidden:
+  - 123-45-67
+  - 123−45
+- name: rt_phone_glued_label
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Тел+79161234567'
+  forbidden:
+  - '79161234567'
+- name: rt_phone_glued_word
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    +7 916 123-45-67Москва, готов к переезду'
+  forbidden:
+  - 123-45-67
+  must_preserve:
+  - Москва
+- name: rt_phone_slashes
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Тел.: 8/916/123-45-67'
+  forbidden:
+  - 916/123-45-67
+- name: rt_phone_fullwidth
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Тел: ＋７ ９１６ １２３ ４５ ６７'
+  forbidden:
+  - 916 123
+- name: rt_tg_slash_whatsapp
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Telegram/WhatsApp: ivan_petrov'
+  forbidden:
+  - ivan_petrov
+- name: rt_tg_inflected_label
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Пишите в Телеграме: ivan_petrov'
+  forbidden:
+  - ivan_petrov
+- name: rt_tg_space_after_at
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Telegram: @ ivan_petrov'
+  forbidden:
+  - ivan_petrov
+- name: rt_tg_scheme
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    tg://resolve?domain=ivan_petrov'
+  forbidden:
+  - ivan_petrov
+- name: rt_url_notion
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Портфолио: notion.so/ivanpetrov/Portfolio-8f2c1a'
+  forbidden:
+  - ivanpetrov
+- name: rt_url_taplink
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Все ссылки: taplink.cc/ivanpetrov'
+  forbidden:
+  - ivanpetrov
+- name: rt_url_wrapped
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    GitHub: https://github.com/
+
+    ivan-petrov-dev'
+  forbidden:
+  - ivan-petrov-dev
+- name: rt_url_broken_scheme
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    https: //github.com/ivanpetrov'
+  forbidden:
+  - ivanpetrov
+- name: rt_profile_label_suffix
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    GitHub аккаунт: ivanpetrov'
+  forbidden:
+  - ivanpetrov
+- name: rt_name_icao_first_line
+  raw: 'Anastasiia Zhukovskaia
+
+    Data Analyst
+
+    Moscow, Russia
+
+    SQL, Python, Tableau'
+  forbidden:
+  - Anastasiia
+  - Zhukovskaia
+  must_preserve:
+  - Data Analyst
+  - Tableau
+- name: rt_name_after_title
+  raw: 'Python-разработчик — Иван Петров
+
+    Опыт 4 года'
+  forbidden:
+  - Иван
+  - Петров
+- name: rt_name_resume_prefix
+  raw: 'Резюме: Алиханлы Тагир
+
+    Backend-разработчик
+
+    Опыт 4 года'
+  forbidden:
+  - Алиханлы
+  - Тагир
+- name: rt_name_fio_separate_lines
+  raw: 'Фамилия: Петров
+
+    Имя: Иван
+
+    Отчество: Сергеевич
+
+    Должность: Java-разработчик'
+  forbidden:
+  - Петров
+  - Иван
+  - Сергеевич
+  must_preserve:
+  - Java-разработчик
+- name: rt_name_fio_dots
+  raw: 'Ф.И.О.: Алиханлы Тагир
+
+    Должность: аналитик'
+  forbidden:
+  - Алиханлы
+  - Тагир
+- name: rt_name_intro
+  raw: Меня зовут Тагир Алиханлы, я backend-разработчик с опытом 4 года.
+  forbidden:
+  - Тагир
+  - Алиханлы
+- name: rt_name_recruiter_jd
+  raw: 'Ищем Go-разработчика.
+
+    По вопросам пишите HR-менеджеру: Аделина Ковальчук, @adelina_hr'
+  forbidden:
+  - Аделина
+  - Ковальчук
+  - adelina_hr
+- name: rt_name_initials
+  raw: 'Опыт 5 лет
+
+    Научный руководитель: д.ф.-м.н. Петров А.В.
+
+    Публикации: Kuznetsov D., Petrov A. Graph NNs'
+  forbidden:
+  - Петров
+  - Kuznetsov
+  - Petrov
+  must_preserve:
+  - Graph NNs
+- name: rt_name_caps_heading_not_name
+  raw: 'АЛИЕВ ТАГИР
+
+    Backend-разработчик (Python)
+
+    ОСНОВНЫЕ КОМПЕТЕНЦИИ
+
+    Python, Django'
+  forbidden:
+  - АЛИЕВ
+  - ТАГИР
+  must_preserve:
+  - ОСНОВНЫЕ КОМПЕТЕНЦИИ
+- name: rt_name_kazakh_letters
+  raw: 'Әсел Қасымова
+
+    Data Scientist
+
+    Алматы'
+  forbidden:
+  - Әсел
+  - Қасымова
+- name: rt_name_ligature
+  raw: 'Soﬁa Eﬁmova
+
+    Machine Learning Engineer
+
+    PyTorch, CUDA'
+  forbidden:
+  - Sofia
+  - Efimova
+- name: rt_keep_npm_scopes_and_decorators
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Опыт 3 года
+
+    О себе
+
+    Делал фронт и бэк.
+
+    Стек
+
+    React
+
+    Redux
+
+    TypeScript
+
+    Node.js
+
+    Django
+
+    Проекты: React, @reduxjs/toolkit, @tanstack/react-query; Django @transaction.atomic, Spring @SpringBootTest'
+  must_preserve:
+  - '@reduxjs/toolkit'
+  - '@tanstack/react-query'
+  - '@transaction.atomic'
+  - '@SpringBootTest'
+- name: rt_keep_profile_achievements
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Опыт работы
+
+    VK — Senior Backend Developer (2021–2024)
+
+    Kaggle: Expert'
+  must_preserve:
+  - Senior Backend Developer
+  - 'Kaggle: Expert'
+- name: rt_keep_domain_shaped_employers
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Mail.ru Group — Senior Developer
+
+    Kaspi.kz — Java Developer
+
+    Инструменты: Draw.io, Sentry.io, Fast.ai'
+  must_preserve:
+  - Mail.ru
+  - Kaspi.kz
+  - Draw.io
+  - Sentry.io
+  - Fast.ai
+- name: rt_keep_companies_near_names
+  raw: 'Иванов Иван
+
+    Python-разработчик
+
+    Опыт: Яндекс, 2020–2024. Яндекс.Метрика
+
+    Experience: Robert Bosch GmbH
+
+    Команда Алисы, СПбПУ Петра Великого'
+  must_preserve:
+  - Яндекс
+  - Яндекс.Метрика
+  - Bosch
+  - Команда

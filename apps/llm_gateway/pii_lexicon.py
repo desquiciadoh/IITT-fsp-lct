@@ -43,6 +43,10 @@ christina ksenia kseniya larisa lidia lilia lyubov lyudmila ludmila margarita ma
 mariya milana nadezhda natalia natalya natalie nina oksana olesya olga polina raisa regina
 svetlana sofia sofya sophia taisia tamara tatiana tatyana ulyana yulia julia iuliia yana
 elvira aliya gulnara leila dinara kamila zarina alsu aigul emilia vasilisa elina evelina
+anastasiia evgenii evgeniia mariia kseniia aleksandra arsenii timofei matvei vasilii valerii
+valeriia gennadii georgii grigorii anatolii vitalii lidiia sofiia taisiia dariia viktoriia
+iakov iana olesia liubov liudmila yuliya ulyana
+john james robert william richard thomas mary sarah emma emily kate jessica jennifer
 john james robert william richard thomas charles christopher matthew anthony steven andrew
 joshua kevin brian jessica sarah emily emma olivia linda susan mary jennifer elizabeth
 barbara nancy lisa kate
@@ -54,7 +58,8 @@ FIRST_NAME_ENDINGS = frozenset({
 })
 
 # A token ending like this is a patronymic, also inflected ("Ивановичем", "Сергеевной").
-PATRONYMIC_RE = r"(?:ович|евич|ьич|овн|евн|ичн)[а-яё]{0,3}"
+# "Иванович", "Ивановичем", "Ильич", "Ивановна", "Ильиничной"; not "основные", "личный"
+PATRONYMIC_RE = r"(?:(?:ович|евич|ьич)(?:а|у|ем|е)?|(?:овн|евн|ичн)(?:а|ы|е|у|ой|ою))"
 
 # Typical surname endings (scored, never decisive on their own for Latin text).
 SURNAME_SUFFIXES_CYR = (
@@ -78,6 +83,7 @@ android web веб game engineering software hardware security cloud platform
 """.split())
 
 SECTION_WORDS = frozenset("""
+основные компетенции обязанности требования условия задачи ключевые
 опыт работы работа навыки образование контакты контакт обо мне себе желаемая должность зарплата
 зарплатные ожидания город телефон почта резюме профиль портфолио гражданство пол мужчина
 женщина возраст языки английский русский курсы сертификаты проекты достижения хобби интересы
@@ -100,6 +106,9 @@ COMPANY_WORDS = frozenset("""
 institute академия academy колледж college школа school факультет faculty кафедра
 государственный технический федеральный национальный исследовательский state technical
 national federal
+яндекс yandex сбер сбербанк sber тинькофф tinkoff т-банк озон ozon авито avito вк vk bosch
+siemens samsung huawei microsoft google amazon apple oracle ibm intel nvidia
+команда команды команде команду система системы системный системная великого великий
 """.split())
 
 # Decorators and annotations that look like "@handle" but are code (AI-R1 item 2).
@@ -126,4 +135,13 @@ interface emits props click submit
 TECH_DOMAIN_TOKENS = frozenset({
     "asp.net", "ado.net", "vb.net", "ml.net", "socket.io", "node.js", "vue.js", "next.js",
     "nuxt.js", "react.js", "express.js", "nest.js", "three.js", "chart.js", "d3.js",
+    # tools and employers written as domains
+    "draw.io", "fast.ai", "h2o.ai", "neptune.ai", "sentry.io", "akka.net", "quartz.net",
+    "mail.ru", "auto.ru", "kaspi.kz", "booking.com", "cloud.ru", "ozon.ru", "avito.ru", "hh.ru",
+    "sber.ru", "vk.com", "ivi.ru", "kinopoisk.ru", "lamoda.ru", "wildberries.ru", "2gis.ru",
 })
+
+# Values after a profile label that are achievements, not handles ("Kaggle: Expert", "VK — Senior")
+PROFILE_NON_HANDLES = frozenset("""
+expert master grandmaster contributor novice senior middle junior lead team developer engineer
+""".split())
