@@ -1,6 +1,6 @@
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import type { Spec } from '@/api/types'
+import type { Position, Spec } from '@/api/types'
 import { usePool, useShortlistTray, useToggleShortlist } from '@/api/scouting'
 import {
   applyClientFilters,
@@ -15,6 +15,7 @@ import { LeagueShelves } from '@/features/scouting/league-shelves'
 import { FilterPanel } from '@/features/scouting/filter-panel'
 import { ShortlistTray } from '@/features/scouting/shortlist-tray'
 import { TalentDrawer } from '@/features/scouting/talent-drawer'
+import { SendOfferModal } from '@/features/employer/send-offer-modal'
 import { TalentRow } from '@/components/domain/talent-row'
 import { ScoreBar } from '@/components/domain/score-bar'
 import { Button } from '@/components/ui/button'
@@ -30,11 +31,14 @@ import { ApiError } from '@/api/client'
  * relaxation hints. The shortlist tray (G16) lives in the sidebar and
  * survives filter changes; the candidate drawer opens via `?c=<public_id>`,
  * so a reload restores filters + drawer from the URL alone.
+ *
+ * FE-11 · "Send offer" opens SendOfferModal through `?offer=<public_id>` —
+ * URL-synced like the drawer, so a reload reopens the modal for the same
+ * candidate.
  */
-export function PoolTab({ positionId, specialization }: { positionId: string; specialization?: Spec }) {
+export function PoolTab({ positionId, specialization, position }: { positionId: string; specialization?: Spec; position?: Position }) {
   const [filters, setFilters] = useScoutingFilters()
-  const navigate = useNavigate()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const pool = usePool(positionId, filters)
   const toggle = useToggleShortlist(positionId)
@@ -52,7 +56,25 @@ export function PoolTab({ positionId, specialization }: { positionId: string; sp
   // Keep the tray cache in sync with every rendered batch (G16).
   useAbsorbShortlist(pool.data?.items, absorb, reconcile)
 
-  const openCandidate = (publicId: string) => navigate(`?c=${encodeURIComponent(publicId)}`)
+  const openCandidate = (publicId: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('c', publicId)
+    setSearchParams(next, { replace: true })
+  }
+
+  // FE-11 · offer modal state lives in `?offer=<public_id>` (URL-synced).
+  const offerPublicId = searchParams.get('offer')
+  const setOfferParam = (publicId: string | null) => {
+    const next = new URLSearchParams(window.location.search)
+    if (publicId) next.set('offer', publicId)
+    else next.delete('offer')
+    setSearchParams(next, { replace: true })
+  }
+  const poolCandidate = pool.data?.items.find((i) => i.talent.public_id === offerPublicId)?.talent
+  const trayCandidate = tray.data?.find((t) => t.public_id === offerPublicId)
+  // G10: identity may be unknown (e.g. deep link after reload) — the modal
+  // still works with just the public id.
+  const offerCandidate = poolCandidate ?? trayCandidate ?? (offerPublicId ? { public_id: offerPublicId } : null)
   const onToggle = (publicId: string) => {
     const entry = items.find((i) => i.talent.public_id === publicId)
     toggle.mutate({ publicId, add: !entry?.shortlisted })
@@ -178,7 +200,16 @@ export function PoolTab({ positionId, specialization }: { positionId: string; sp
         />
       </div>
 
-      <TalentDrawer positionId={positionId} />
+      <TalentDrawer positionId={positionId} onOpenOffer={(publicId) => setOfferParam(publicId)} />
+
+      {/* FE-11 · Send Offer modal (?offer=<public_id>) */}
+      <SendOfferModal
+        positionId={positionId}
+        position={position}
+        candidate={offerCandidate}
+        open={Boolean(offerPublicId)}
+        onClose={() => setOfferParam(null)}
+      />
     </div>
   )
 }

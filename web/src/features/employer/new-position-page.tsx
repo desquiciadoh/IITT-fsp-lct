@@ -6,7 +6,7 @@ import { useParseJd } from '@/api/employer'
 import { ApiError } from '@/api/client'
 import type { JdParseResult } from '@/api/types'
 import { PositionForm, draftToForm } from '@/features/employer/position-form'
-import type { PositionFormInput } from '@/features/employer/schemas'
+import type { PositionFormState } from '@/features/employer/schemas'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -35,7 +35,7 @@ export function NewPositionPage() {
   }
 
   if (parsed) {
-    const defaults: PositionFormInput = draftToForm(parsed.draft)
+    const defaults: PositionFormState = draftToForm(parsed.draft)
     return (
       <div className="mx-auto flex max-w-2xl flex-col gap-4">
         <div className="flex items-center justify-between gap-2">

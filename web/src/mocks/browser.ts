@@ -42,7 +42,15 @@ export async function startMocks(): Promise<void> {
           ...employerHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers, ...scoutingHandlers, ...employerHandlers]
+      : [
+          ...gapHandlers,
+          ...demoGapHandlers,
+          // FE-11 offer mock BEFORE scouting/employer: its POST /api/offers
+          // and */withdraw routes must win over any static fixtures there.
+          ...offerHandlers,
+          ...scoutingHandlers,
+          ...employerHandlers,
+        ]
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',

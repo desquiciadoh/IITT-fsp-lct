@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Link2, Mail, Phone, Send, Star, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -25,9 +25,8 @@ import { cn } from '@/lib/utils'
  * they are hidden while absent. Contacts are null until the company gets a
  * grant (accepted offer) — then {full_name, email, phone, telegram}.
  */
-export function TalentDrawer({ positionId }: { positionId: string }) {
+export function TalentDrawer({ positionId, onOpenOffer }: { positionId: string; onOpenOffer?: (publicId: string) => void }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const publicId = searchParams.get('c')
   const { data, isLoading, isError, error, refetch } = useTalent(publicId)
 
@@ -82,7 +81,7 @@ export function TalentDrawer({ positionId }: { positionId: string }) {
             <ErrorState onRetry={() => void refetch()} />
           )
         ) : (
-          <DrawerBody positionId={positionId} talent={data} onOpenOffer={() => navigate(`/employer/positions/${positionId}/offer?c=${encodeURIComponent(publicId)}`)} />
+          <DrawerBody positionId={positionId} talent={data} onOpenOffer={() => onOpenOffer?.(publicId)} />
         )}
       </aside>
     </>

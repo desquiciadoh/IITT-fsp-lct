@@ -50,7 +50,7 @@ export function PositionDetailPage() {
       </div>
       <PositionTabs current={tab} />
       {tab === 'pool' ? (
-        <PoolTab positionId={position.id} specialization={position.specialization} />
+        <PoolTab positionId={position.id} specialization={position.specialization} position={position} />
       ) : (
         <Card className="mx-auto w-full max-w-2xl">
           <CardHeader>
