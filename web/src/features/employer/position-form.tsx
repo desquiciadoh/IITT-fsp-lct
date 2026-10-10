@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { useCreatePosition, useUpdatePosition } from '@/api/employer'
-import type { JdParseResult, Position, PositionInput } from '@/api/types'
+import type { Grade, JdParseResult, Position, PositionInput, WorkFormat } from '@/api/types'
 import { useTaxonomy } from '@/api/profile'
 import {
   positionFormSchema,
@@ -199,12 +199,14 @@ export function PositionForm({
   // back to the static constants so the form keeps working without taxonomy.
   const specs: readonly string[] =
     taxonomy?.specs && taxonomy.specs.length > 0 ? taxonomy.specs : SPECS
-  const gradeOptions: readonly string[] =
+  const gradeOptions: readonly string[] = (
     taxonomy?.grades && taxonomy.grades.length > 0 ? taxonomy.grades : GRADES
-  const formatOptions: readonly string[] =
+  ) as readonly string[]
+  const formatOptions: readonly string[] = (
     taxonomy?.work_formats && taxonomy.work_formats.length > 0
       ? taxonomy.work_formats
       : FORMATS
+  ) as readonly string[]
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -214,7 +216,7 @@ export function PositionForm({
         </p>
       )}
       {blueprint.length > 0 && (
-        <Card size="sm">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm">Профиль компетенций</CardTitle>
           </CardHeader>
@@ -251,11 +253,11 @@ export function PositionForm({
             <label key={g} className="flex items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
-                checked={grades.includes(g)}
+                checked={(grades as string[]).includes(g)}
                 onChange={(e) =>
                   setValue(
                     'grades',
-                    e.target.checked ? [...grades, g] : grades.filter((x) => x !== g),
+                    (e.target.checked ? [...grades, g] : grades.filter((x) => x !== g)) as Grade[],
                     { shouldDirty: true },
                   )
                 }
@@ -299,11 +301,11 @@ export function PositionForm({
             <label key={f} className="flex items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
-                checked={formats.includes(f)}
+                checked={(formats as string[]).includes(f)}
                 onChange={(e) =>
                   setValue(
                     'work_formats',
-                    e.target.checked ? [...formats, f] : formats.filter((x) => x !== f),
+                    (e.target.checked ? [...formats, f] : formats.filter((x) => x !== f)) as WorkFormat[],
                     { shouldDirty: true },
                   )
                 }

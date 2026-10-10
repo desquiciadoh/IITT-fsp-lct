@@ -28,7 +28,7 @@ export function PositionDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">{position.title}</h1>
         <span className="flex items-center gap-2">
-          <StatusChip status={position.status ?? 'draft'} />
+          <StatusChip status={position.status ?? 'open'} />
           <SalaryTag min={position.salary_min} max={position.salary_max} type={position.salary_type} emphasize />
         </span>
       </div>

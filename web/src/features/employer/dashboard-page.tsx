@@ -40,7 +40,7 @@ export function EmployerDashboardPage() {
             <RowSkeleton count={3} />
           ) : isError ? (
             <ErrorState code={error instanceof ApiError ? error.code : undefined} onRetry={() => void refetch()} />
-          ) : positions.length === 0 ? (
+          ) : (positions ?? []).length === 0 ? (
             <EmptyState
               title="Пока нет вакансий"
               description="Создайте первую — можно вставить текст описания, форма заполнится автоматически."
@@ -52,7 +52,7 @@ export function EmployerDashboardPage() {
             />
           ) : (
             <ul className="divide-y divide-border">
-              {positions.map((p) => (
+              {(positions ?? []).map((p) => (
                 <PositionRow key={p.id} position={p} />
               ))}
             </ul>
@@ -79,7 +79,7 @@ function PositionRow({ position: p }: { position: Position }) {
           </span>
         </span>
         <span className="flex items-center gap-2">
-          <StatusChip status={p.status ?? 'draft'} />
+          <StatusChip status={p.status ?? 'open'} />
           <SalaryTag min={p.salary_min} max={p.salary_max} type={p.salary_type} />
         </span>
       </Link>
