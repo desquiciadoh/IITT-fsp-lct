@@ -1,6 +1,6 @@
 """Shared data-structure and debugging families.
 
-sh.ds.heap_order.v1     order of values popped from a heapq min-heap (choice, redraw distractors)
+sh.ds.heap_order.v2     values popped from a heapq min-heap, as a position-weighted sum (typed)
 sh.ds.op_cost.v1        cost of one operation on a Python structure (classification, 4 classes)
 sh.code.find_bug.v1     which line breaks a 5-line function (find_bug, 5 fixed line options)
 """
@@ -9,24 +9,25 @@ from __future__ import annotations
 import re
 
 from ..base import FamilyMeta, Instance
-from ..builder import ClassificationFamily, RedrawChoiceFamily, run_python
+from ..builder import ClassificationFamily, TypedNumberFamily, run_python
 
 ALL_SPECS = ("backend", "frontend", "ml_data")
 
 
-class HeapOrder(RedrawChoiceFamily):
-    """b = 0.2 (lower middle): heapq is a min-heap and pops the smallest present value, not the
-    oldest or the last pushed; interleaved pushes and pops make that visible. Distractors are
-    built from the same pushed values (stack, queue, max-heap, globally sorted), so checking which
-    numbers appear in the code does not eliminate any of them (ML-6 review)."""
+class HeapOrder(TypedNumberFamily):
+    """b = 0.3 (lower middle): heapq is a min-heap and pops the smallest present value, not the
+    oldest or the last pushed; interleaved pushes and pops make that visible. The program prints a
+    position-weighted sum of the popped values, so both which values and their order count.
+    Version 2 is typed: with derived list options the min-heap answer always had the smallest sum
+    (ML-6 re-review)."""
 
-    meta = FamilyMeta(id="sh.ds.heap_order.v1", version=1, specs=ALL_SPECS,
+    meta = FamilyMeta(id="sh.ds.heap_order.v2", version=2, specs=ALL_SPECS,
                       topic="algorithms.data_structures", skills=("data_structures", "python"),
-                      format="code_output", a=1.2, b=0.2, c=0.25, time_limit_s=120)
+                      format="code_output", a=1.2, b=0.3, c=0.0, time_limit_s=150)
     SEMANTIC = ("ops",)
 
     def draw(self, rng):
-        values = rng.sample(range(10, 100), 8)        # two digits: option length says nothing
+        values = rng.sample(range(10, 100), 8)
         ops, size, pops, vi = [], 0, 0, 0
         while pops < 4:
             if size and (vi >= len(values) or rng.random() < 0.4):
@@ -39,8 +40,7 @@ class HeapOrder(RedrawChoiceFamily):
                 size += 1
         return {"ops": ops, "name": rng.choice(("heap", "pq", "h", "queue", "tasks"))}
 
-    @staticmethod
-    def _popped(p):
+    def solve(self, p):
         import heapq
 
         heap, out = [], []
@@ -49,32 +49,7 @@ class HeapOrder(RedrawChoiceFamily):
                 heapq.heappush(heap, op[1])
             else:
                 out.append(heapq.heappop(heap))
-        return out
-
-    def answer(self, p):
-        return str(self._popped(p))
-
-    def alternatives(self, p, rng):
-        stack, queue, present = [], [], []
-        out_s, out_q, out_max = [], [], []
-        for op in p["ops"]:
-            if op[0] == "push":
-                stack.append(op[1])
-                queue.append(op[1])
-                present.append(op[1])
-            else:
-                out_s.append(stack.pop())                              # treated as a stack
-                out_q.append(queue.pop(0))                             # treated as a FIFO queue
-                out_max.append(present.pop(present.index(max(present))))   # treated as a max-heap
-        pushed = [op[1] for op in p["ops"] if op[0] == "push"]
-        k = len(out_s)
-        right = self._popped(p)
-        return [str(out_s), str(out_q), str(out_max),
-                str(sorted(pushed)[:k]),                 # the k smallest pushed values, ignoring timing
-                str(sorted(right, reverse=True)),        # the right values in the wrong order
-                str(right[1:] + right[:1]),              # the right values, rotated
-                str(pushed[:k]),                         # the first k pushed
-                str(sorted(pushed)[-k:])]                # the k largest pushed
+        return sum(i * v for i, v in enumerate(out, start=1))
 
     def render(self, p):
         name = p["name"]
@@ -84,11 +59,11 @@ class HeapOrder(RedrawChoiceFamily):
                 lines.append(f"heapq.heappush({name}, {op[1]})")
             else:
                 lines.append(f"out.append(heapq.heappop({name}))")
-        lines.append("print(out)")
+        lines.append("print(sum(i * v for i, v in enumerate(out, start=1)))")
         return "Что напечатает программа?", {"lang": "python", "text": "\n".join(lines)}
 
-    def oracle_answer(self, inst):
-        return run_python(inst.code["text"])
+    def oracle_value(self, inst):
+        return float(run_python(inst.code["text"]))
 
 
 # ── operation cost (classification) ────────────────────────────────────────

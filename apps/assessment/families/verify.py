@@ -10,15 +10,21 @@ For every family it generates n instances from fixed HMAC seeds and checks:
   fingerprint the fingerprint hashes the semantic parameters (decorative names and ids left out):
               same content -> same fingerprint (no seed in it), same fingerprint -> same answer
               (no semantic parameter left out)
-  collisions  duplicate fingerprints <= 0.1 %; classification (concept) families have only a few
-              distinct questions by design and are exempt, their rate is reported
+  semantic    typed builder families: an answer never changes when the non-SEMANTIC (decorative)
+              fields are taken from another draw
+  collisions  duplicate fingerprints <= 0.1 %; the concept families in CONCEPT_FAMILIES have a few
+              questions by design (label x template), are exempt, and need >= 2 distinct questions
+              per label; their rate is reported
   entropy     answer-text entropy > 1 bit (no constant keys)
-  modal       typed families: no single answer is right on more than 10 % of items (c = 0 must hold)
+  modal       typed families: no single typed answer (tolerance-aware) is right on more than 10 % of
+              items, by a one-sided 95 % upper bound (c = 0 must hold)
+  item numbers typed families: typing the first / last / largest / smallest / most frequent number of
+              the stem and code is right on at most 10 % of items
   position    the correct option's position is not predictable (chi-square, choice families)
   guessing    no option-only strategy (longest, most similar, value rank, frequent answer for an
               option set, value correct most often before, closest to the typical answer, order
-              closest to the others, numbers consistent with the item) beats c by more than
-              max(0.05, 4 standard errors)
+              closest to the others, numbers absent from / shared with the item, as many numbers
+              as most options) beats c by more than max(0.05, 4 standard errors)
   meta        id/version/specs/format/a/b/c/time limit, skills exist in content/skills.yaml
 
 Exit code 0 only when every family passes. Pure: no Django.
@@ -40,7 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .base import INPUT_KINDS, ITEM_FORMATS, SPECS, Instance, ItemFamily
-from .builder import ClassificationFamily
+from .builder import TypedNumberFamily
 from .kit import norm_text
 from .registry import all_families, make_rng
 
@@ -49,6 +55,24 @@ CODE_LANGS = ("python", "javascript", "typescript", "sql", "css", "html", "http"
 MAX_COLLISION_RATE = 0.001
 MIN_ENTROPY_BITS = 1.0
 MAX_MODAL_SHARE = 0.10   # typed items have c = 0; one answer right this often would be a free guess
+TYPED_EXACT = 1e-6       # a typed oracle must reproduce the exact key, not just a tolerated rounding
+SWAP_CHECKS = 50
+
+# Concept families: the question is a label and a scenario template, so a handful of questions repeat
+# by design. They are exempt from the collision gate (their rate is reported) and must show at least
+# two distinct questions per label. Anything else, including new classification families, is gated.
+CONCEPT_FAMILIES = {
+    "be.db.isolation_anomaly.v1": "anomaly x order of the two transactions",
+    "be.http.status_code.v1": "status code x scenario template",
+    "be.http.method.v1": "method x scenario template",
+    "be.sec.vuln_class.v1": "vulnerability x handler template",
+    "sh.ds.op_cost.v1": "complexity class x operation",
+    "ml.models.fit_diagnosis.v1": "fit class x the two scores",
+    "sh.code.find_bug.v1": "task x constant x buggy line",
+    "fe.sec.xss_sink.v1": "unsafe line x three safe lines",
+    "fe.ts.assignability.v1": "failing line x property set",
+    "fe.web.cache_control.v1": "directive x age x validator",
+}
 MIN_N = 100            # below this the position and guessing statistics are too noisy to gate on
 CONTENT_DIR = Path(__file__).resolve().parents[3] / "content"
 
@@ -60,6 +84,7 @@ class FamilyReport:
     errors: list[str] = field(default_factory=list)
     collision_rate: float = 0.0
     collision_gated: bool = True
+    distinct_questions: int = 0
     modal_share: float = 0.0
     entropy_bits: float = 0.0
     distinct_answers: int = 0
@@ -72,6 +97,7 @@ class FamilyReport:
     def to_json(self) -> dict:
         return {"family_id": self.family_id, "n": self.n, "ok": self.ok, "errors": self.errors,
                 "collision_rate": self.collision_rate, "collision_gated": self.collision_gated,
+                "distinct_questions": self.distinct_questions,
                 "modal_share": round(self.modal_share, 4), "entropy_bits": round(self.entropy_bits, 4),
                 "distinct_answers": self.distinct_answers, "seconds": round(self.seconds, 3)}
 
@@ -162,6 +188,13 @@ def _check_instance(fam: ItemFamily, inst: Instance) -> list[str]:
         answer = {"option_id": oracle_key} if inst.input == "choice" else {"value": oracle_key}
         if oracle_key is None:
             errs.append("oracle: no unique option matches the oracle's answer")
+        elif inst.input == "number":
+            try:
+                gap = abs(float(str(oracle_key).replace(",", ".")) - float(str(inst.key).replace(",", ".")))
+            except ValueError:
+                gap = math.inf
+            if gap > TYPED_EXACT:
+                errs.append("oracle: disagrees with the key")
         elif not (oracle_key == inst.key or (inst.input != "choice" and isinstance(oracle_key, str)
                                              and fam.is_correct(inst.key, answer))):
             errs.append("oracle: disagrees with the key")
@@ -201,6 +234,63 @@ def _check_instance(fam: ItemFamily, inst: Instance) -> list[str]:
     return errs
 
 
+def _upper_bound(p: float, n: int) -> float:
+    """One-sided 95 % upper bound of a share (normal approximation)."""
+    return p + 1.645 * math.sqrt(max(p * (1 - p), 1e-12) / n)
+
+
+def _best_single_answer(fam: ItemFamily, typed) -> tuple[str, float]:
+    """The single typed answer accepted on most items, tolerance-aware (a rounded value also covers
+    its neighbours), over the 30 most frequent keys as candidates."""
+    candidates = [k for k, _ in Counter(str(k) for k, _ in typed).most_common(30)]
+    best, share = "", 0.0
+    for cand in candidates:
+        hits = sum(1 for key, _ in typed if fam.is_correct(key, {"value": cand}))
+        if hits / len(typed) > share:
+            best, share = cand, hits / len(typed)
+    return best, share
+
+
+def _typed_guess_checks(fam: ItemFamily, typed) -> list[str]:
+    """c = 0 must hold: no fixed answer and no number read off the item is right too often."""
+    errs, n = [], len(typed)
+    best, share = _best_single_answer(fam, typed)
+    if _upper_bound(share, n) > MAX_MODAL_SHARE:
+        errs.append(f"modal: the answer {best!r} is right on {share:.1%} of items "
+                    f"(95 % bound {_upper_bound(share, n):.1%} > {MAX_MODAL_SHARE:.0%}, c = 0)")
+    strategies = {
+        "first number in the item": lambda xs: xs[0] if xs else None,
+        "last number in the item": lambda xs: xs[-1] if xs else None,
+        "largest number in the item": lambda xs: max(xs, key=float) if xs else None,
+        "smallest number in the item": lambda xs: min(xs, key=float) if xs else None,
+        "most frequent number in the item": lambda xs: Counter(xs).most_common(1)[0][0] if xs else None,
+    }
+    for name, pick in strategies.items():
+        hits = sum(1 for key, xs in typed if (g := pick(xs)) is not None and fam.is_correct(key, {"value": g}))
+        if hits / n > MAX_MODAL_SHARE:
+            errs.append(f"guessing: '{name}' is right on {hits / n:.0%} of typed items > {MAX_MODAL_SHARE:.0%}")
+    return errs
+
+
+def _semantic_swap_check(fam: ItemFamily) -> list[str]:
+    """A typed builder family's answer must not depend on fields left out of SEMANTIC: take the
+    decorative fields from another draw and the answer must stay the same."""
+    if not isinstance(fam, TypedNumberFamily) or fam.SEMANTIC is None:
+        return []
+    keep = set(fam.SEMANTIC)
+    for i in range(SWAP_CHECKS):
+        a = fam.draw(make_rng(VERIFY_SECRET, "swap-a", fam.meta.id, i))
+        b = fam.draw(make_rng(VERIFY_SECRET, "swap-b", fam.meta.id, i))
+        mixed = {k: (a[k] if k in keep else b.get(k, a[k])) for k in a}
+        try:
+            same = abs(fam.solve(mixed) - fam.solve(a)) <= TYPED_EXACT
+        except Exception as e:  # solve needed a decorative field: that field is semantic
+            return [f"semantic: solve() fails when decorative fields change ({type(e).__name__}: {e})"]
+        if not same:
+            return ["semantic: the answer changes with a field left out of SEMANTIC"]
+    return []
+
+
 def near_miss(key) -> str:
     """A wrong answer close to the key: the number moved by max(1, 5 %), or the text plus a char."""
     try:
@@ -228,6 +318,7 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
     by_content: dict[str, str] = {}
     by_fp: dict[str, str] = {}
     contexts: list[str] = []
+    typed: list[tuple[object, list[str]]] = []          # (key, numbers in stem and code)
     positions: Counter[int] = Counter()
     option_counts: Counter[int] = Counter()
     choice_records: list[tuple[list[str], int]] = []
@@ -259,6 +350,8 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
                 positions[ids.index(inst.key)] += 1
                 choice_records.append(([o["text_md"] for o in inst.options], ids.index(inst.key)))
                 contexts.append(f"{inst.stem_md}\n{(inst.code or {}).get('text', '')}")
+            elif inst.input == "number":
+                typed.append((inst.key, _NUM_TOKEN.findall(f"{inst.stem_md}\n{(inst.code or {}).get('text', '')}")))
             checked += 1
         except Exception as e:  # a check crashed on this instance: report it, keep the run
             seen_errors[f"check: raised {type(e).__name__}: {e}"] += 1
@@ -271,17 +364,18 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
         rep.collision_rate = duplicates / len(fps)
         # 0.1 % of the sample, but never less than one duplicate: below n = 1000 a single
         # coincidence would otherwise fail a family whose rate is fine (ARCHITECTURE §5.3 is per 1000).
-        # Concept (classification) items have a handful of questions by design: the label and a
-        # template. Their rate is reported, not gated; their exposure is managed by the monitor.
-        rep.collision_gated = not isinstance(fam, ClassificationFamily)
+        rep.distinct_questions = len(set(fps))
+        rep.collision_gated = fid not in CONCEPT_FAMILIES
         if rep.collision_gated and duplicates > max(1, int(MAX_COLLISION_RATE * len(fps))):
             rep.errors.append(f"collisions: {rep.collision_rate:.2%} > {MAX_COLLISION_RATE:.1%}")
-    if answers:
-        rep.modal_share = Counter(answers).most_common(1)[0][1] / len(answers)
-        if fam.meta.c == 0 and rep.modal_share > MAX_MODAL_SHARE:
-            top = Counter(answers).most_common(1)[0][0]
-            rep.errors.append(f"modal: the answer {top!r} is right on {rep.modal_share:.0%} of items "
-                              f"> {MAX_MODAL_SHARE:.0%} (c = 0)")
+        labels = len(getattr(fam, "LABELS", ())) or 1
+        if not rep.collision_gated and rep.distinct_questions < 2 * labels:
+            rep.errors.append(f"concept: only {rep.distinct_questions} distinct questions for {labels} labels "
+                              f"(need >= {2 * labels})")
+    if typed:
+        rep.errors += _typed_guess_checks(fam, typed)
+        rep.modal_share = _best_single_answer(fam, typed)[1]
+    rep.errors += _semantic_swap_check(fam)
     rep.entropy_bits = entropy_bits(answers)
     rep.distinct_answers = len(set(answers))
     if rep.entropy_bits <= MIN_ENTROPY_BITS:
@@ -403,6 +497,11 @@ def guessing_strategies(records: list[tuple[list[str], int]],
             records, contexts, lambda t, i, ctx: -len(_numbers(t[i]) - _numbers(ctx)))
         out["most numbers shared with the item"] = _pick_accuracy_ctx(
             records, contexts, lambda t, i, ctx: len(_numbers(t[i]) & _numbers(ctx)))
+
+    def same_count(t, i):
+        size = len(_NUM_TOKEN.findall(t[i]))
+        return sum(1 for j in range(len(t)) if j != i and len(_NUM_TOKEN.findall(t[j])) == size)
+    out["as many numbers as most options"] = _pick_accuracy(records, same_count)
 
     seqs = [r for r in records if all(_as_sequence(x) for x in r[0])]
     if len(seqs) >= MIN_GUESS_SAMPLES:

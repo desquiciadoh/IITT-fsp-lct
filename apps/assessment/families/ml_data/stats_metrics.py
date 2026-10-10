@@ -103,7 +103,7 @@ class PrecisionRecall(TypedNumberFamily):
 
     def draw(self, rng):
         while True:
-            n = rng.randint(12, 20)
+            n = rng.randint(20, 60)
             y_true = [int(rng.random() < 0.45) for _ in range(n)]
             y_pred = [t if rng.random() < 0.7 else 1 - t for t in y_true]
             tp = sum(1 for t, q in zip(y_true, y_pred, strict=True) if t == q == 1)

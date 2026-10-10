@@ -200,8 +200,11 @@ class RecursionCalls(_ExecOracle):
                     nodes[parent][1].append(nodes[child])
             limit = rng.randint(10, 35)
             p = {"tree": nodes[0], "limit": limit, "fn": fn, "acc": acc}
-            pruned = [n for n in nodes if n[0] > limit and n[1]]
-            if pruned and len(self._visited(p["tree"], limit)) < len(values):
+            # the root is walked (else the answer is the first number in the code), at least three
+            # nodes are visited, and some node below the root is pruned with children under it
+            pruned_below = [n for n in nodes[1:] if n[0] > limit and n[1]]
+            visited = self._visited(p["tree"], limit)
+            if nodes[0][0] <= limit and pruned_below and len(visited) >= 3 and len(visited) < len(values):
                 return p
 
     @staticmethod

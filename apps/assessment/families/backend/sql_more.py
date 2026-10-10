@@ -37,8 +37,8 @@ def _sql_literal(v) -> str:
 class LeftJoinCount(TypedNumberFamily):
     """b = 0.2 (lower middle): LEFT JOIN keeps customers without orders; a filter on the right
     table in WHERE silently turns it into an inner join, while the same filter in ON keeps them.
-    COUNT(o.id) counts matches, not rows. Version 2 asks for the sum of `c.id` over the result,
-    with ids drawn from 1-99, so the answer says exactly which customers survive. Version 1 asked
+    The question is which customers the result keeps. Version 2 asks for the sum of `c.id` over
+    the result, with ids drawn from 1-99, so the answer says exactly which customers survive. Version 1 asked
     for a row count (or the rows with n_orders = 0), and "0" or "4" was right on 20-25 % of items
     (ML-6 review)."""
 
@@ -55,8 +55,10 @@ class LeftJoinCount(TypedNumberFamily):
             orders.append([oid, rng.choice(ids), rng.randrange(5, 100, 5) * 100])
         amounts = sorted({o[2] for o in orders})
         threshold = amounts[rng.randrange(len(amounts))]
-        return {"customers": customers, "orders": orders, "threshold": threshold,
-                "where": rng.random() < 0.5}
+        p = {"customers": customers, "orders": orders, "threshold": threshold, "where": rng.random() < 0.75}
+        if self.solve(p) in (0, sum(ids)):            # "nobody" or "everyone" would be a free guess
+            return self.draw(rng)
+        return p
 
     def solve(self, p):
         kept = []
@@ -136,23 +138,35 @@ class NotInNull(TypedNumberFamily):
     when the subquery returns a NULL; NOT EXISTS ignores the NULL. Version 2 ORs the predicate
     with an age condition, so the answer needs three-valued logic (UNKNOWN OR TRUE is TRUE,
     UNKNOWN OR FALSE drops the row) instead of the memorised "it returns 0": in version 1 the
-    answer "0" was right on 25 % of items (ML-6 review). The query returns SUM(u.id) over ids drawn
+    answer "0" was right on 25 % of items (ML-6 review). 75 % of items use NOT IN and 80 % have a
+    NULL in the subquery, and every item has a young non-banned user whose row the NULL decides, so
+    the naive two-valued reading gives a different answer on most items (ML-6 re-review: it
+    matched 75 % of the first v2 draws). The query returns SUM(u.id) over ids drawn
     from 1-99, so the answer identifies the surviving rows rather than counting them."""
 
     meta = FamilyMeta(id="bm.sql.not_in_null.v2", version=2, specs=BM, topic="sql.joins",
                       skills=("sql",), format="sql_result", a=1.4, b=1.2, c=0.0, time_limit_s=180)
-    SEMANTIC = ("ages", "banned", "form", "min_age")
+    SEMANTIC = ("users", "ages", "banned", "form", "min_age")
 
     def draw(self, rng):
-        n = rng.randint(6, 12)
-        users = sorted(rng.sample(range(1, 100), n))
-        banned = rng.sample(users, rng.randint(1, 3))
-        if rng.random() < 0.6:
-            banned = [*banned, None]
-        rng.shuffle(banned)
-        ages = [rng.randint(18, 60) for _ in users]
-        return {"users": users, "names": [rng.choice(PEOPLE) for _ in users], "ages": ages, "banned": banned,
-                "form": rng.choice(("not_in", "not_exists")), "min_age": rng.choice(sorted(set(ages)))}
+        names = None
+        while True:
+            n = rng.randint(6, 12)
+            users = sorted(rng.sample(range(1, 100), n))
+            banned = rng.sample(users, rng.randint(1, 3))
+            if rng.random() < 0.8:                       # the NULL trap is the point of the item
+                banned = [*banned, None]
+            rng.shuffle(banned)
+            ages = [rng.randint(18, 60) for _ in users]
+            p = {"users": users, "names": names or [rng.choice(PEOPLE) for _ in users], "ages": ages,
+                 "banned": banned, "form": "not_in" if rng.random() < 0.75 else "not_exists",
+                 "min_age": rng.choice(sorted(set(ages)))}
+            ids = {b for b in banned if b is not None}
+            # someone young and not banned exists, so NOT IN vs NOT EXISTS (and the NULL) changes
+            # the answer; and "everyone" is never the answer
+            if (any(a < p["min_age"] and u not in ids for u, a in zip(users, ages, strict=True))
+                    and self.solve(p) != sum(users)):
+                return p
 
     def solve(self, p):
         ids = [b for b in p["banned"] if b is not None]

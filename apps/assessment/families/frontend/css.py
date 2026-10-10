@@ -1,7 +1,7 @@
 """CSS families (topic web.css).
 
 fe.css.specificity.v1  which of four rules sets the text colour (specificity, order, !important)
-fe.css.box_model.v1    rendered width of a box (content-box vs border-box, padding shorthands)
+fe.css.box_model.v2    content, offset or outer width of a box (content-box vs border-box, shorthands)
 fe.css.flex_grow.v1    width of one flex item after free space is shared by flex-grow
 
 Oracles parse the rendered HTML/CSS and recompute with their own rules (a selector specificity
@@ -95,51 +95,68 @@ def _matches(sel: str, p_id: str, p_cls: set[str], wrap: str) -> bool:
 
 
 class BoxModel(TypedNumberFamily):
-    """b = -0.6 (junior): content-box adds horizontal padding and borders to `width`,
-    border-box does not; margin never counts, and the padding shorthand has 1, 2 or 4 values."""
+    """b = -0.4 (upper junior): content-box adds horizontal padding and borders to `width`,
+    border-box puts them inside it; margin is outside the box, and the padding shorthand has 1, 2
+    or 4 values. Version 2 asks for the measure that differs from the declared width: the content
+    width of a border-box element, the offsetWidth of a content-box one, or the outer width with
+    margins. Version 1 asked offsetWidth for both, so on border-box items the answer was the first
+    number in the CSS (49 % of items; ML-6 re-review)."""
 
-    meta = FamilyMeta(id="fe.css.box_model.v1", version=1, specs=F, topic="web.css",
-                      skills=("css",), format="numeric_scenario", a=1.1, b=-0.6, c=0.0, time_limit_s=90)
-    SEMANTIC = ('width', 'form', 'pads', 'border', 'margin', 'sizing')
+    meta = FamilyMeta(id="fe.css.box_model.v2", version=2, specs=F, topic="web.css",
+                      skills=("css",), format="numeric_scenario", a=1.1, b=-0.4, c=0.0, time_limit_s=120)
+    SEMANTIC = ("width", "form", "pads", "border", "margin", "sizing", "ask")
+    STEMS = {"inner": "Какой будет ширина области контента элемента (без padding и border) в пикселях?",
+             "offset": "Какой будет ширина элемента на странице (offsetWidth) в пикселях?",
+             "outer": "Сколько пикселей по горизонтали занимает элемент вместе с внешними отступами (margin)?"}
 
     def draw(self, rng):
-        form = rng.choice((1, 2, 4))
-        pads = [rng.randint(0, 12) * 2 for _ in range(4)]
-        return {"width": rng.randint(10, 60) * 10, "form": form, "pads": pads, "border": rng.randint(0, 6),
-                "margin": rng.randint(0, 20) * 2, "sizing": rng.choice(("content-box", "border-box")),
-                "cls": rng.choice(CLASSES)}
+        cls = rng.choice(CLASSES)
+        while True:
+            form = rng.choice((1, 2, 4))
+            pads = [rng.randint(0, 12) * 2 for _ in range(4)]
+            if form == 1:
+                pads = [pads[0]] * 4                       # unused values would only look different
+            elif form == 2:
+                pads = [pads[0], pads[1], pads[0], pads[1]]
+            p = {"width": rng.randint(10, 60) * 10, "form": form, "pads": pads, "border": rng.randint(0, 6),
+                 "margin": rng.randint(1, 20) * 2, "sizing": rng.choice(("content-box", "border-box")), "cls": cls}
+            p["ask"] = rng.choice(("outer", "inner" if p["sizing"] == "border-box" else "offset"))
+            if self._horizontal(p) + 2 * p["border"] > 0 and self.solve(p) > 0:
+                return p
+
+    @staticmethod
+    def _horizontal(p):
+        return p["pads"][1] + p["pads"][3]
 
     def _padding(self, p):
         t, r, b, left = p["pads"]
-        if p["form"] == 1:
-            return f"{t}px", 2 * t
-        if p["form"] == 2:
-            return f"{t}px {r}px", 2 * r
-        return f"{t}px {r}px {b}px {left}px", r + left
+        return {1: f"{t}px", 2: f"{t}px {r}px", 4: f"{t}px {r}px {b}px {left}px"}[p["form"]]
 
     def solve(self, p):
-        _, horizontal = self._padding(p)
-        if p["sizing"] == "border-box":
-            return p["width"]
-        return p["width"] + horizontal + 2 * p["border"]
+        extra = self._horizontal(p) + 2 * p["border"]
+        box = p["width"] if p["sizing"] == "border-box" else p["width"] + extra
+        if p["ask"] == "outer":
+            return box + 2 * p["margin"]
+        return box - extra if p["ask"] == "inner" else box
 
     def render(self, p):
-        padding, _ = self._padding(p)
-        css = (f".{p['cls']} {{\n  box-sizing: {p['sizing']};\n  width: {p['width']}px;\n  padding: {padding};\n"
+        css = (f".{p['cls']} {{\n  box-sizing: {p['sizing']};\n  width: {p['width']}px;\n  padding: {self._padding(p)};\n"
                f"  border: {p['border']}px solid black;\n  margin: {p['margin']}px;\n}}")
-        return ("Какой будет ширина элемента на странице (offsetWidth) в пикселях?",
-                {"lang": "css", "text": css})
+        return self.STEMS[p["ask"]], {"lang": "css", "text": css}
 
     def oracle_value(self, inst):
         css = inst.code["text"]
         decl = dict(re.findall(r"^\s+([\w-]+): (.+?);$", css, re.M))
         width = int(decl["width"].removesuffix("px"))
         pads = [int(x.removesuffix("px")) for x in decl["padding"].split()]
-        top_right_bottom_left = {1: pads * 4, 2: pads * 2, 4: pads}[len(pads)][:4]
+        trbl = {1: pads * 4, 2: pads * 2, 4: pads}[len(pads)][:4]
         border = int(decl["border"].split()[0].removesuffix("px"))
-        if decl["box-sizing"] == "border-box":
-            return float(width)
-        return float(width + top_right_bottom_left[1] + top_right_bottom_left[3] + 2 * border)
+        margin = int(decl["margin"].removesuffix("px"))
+        content = width - trbl[1] - trbl[3] - 2 * border if decl["box-sizing"] == "border-box" else width
+        offset = content + trbl[1] + trbl[3] + 2 * border
+        if "вместе с внешними отступами" in inst.stem_md:
+            return float(offset + 2 * margin)
+        return float(content if "области контента" in inst.stem_md else offset)
 
 
 class FlexGrow(TypedNumberFamily):
@@ -160,7 +177,7 @@ class FlexGrow(TypedNumberFamily):
             width = rng.randint(30, 120) * 10
             if sum(grows) and width - sum(bases) - gap * (n - 1) > 0:
                 return {"bases": bases, "grows": grows, "gap": gap, "width": width,
-                        "ask": rng.randrange(n), "cls": rng.choice(CLASSES)}
+                        "ask": rng.choice([i for i in range(n) if grows[i]]), "cls": rng.choice(CLASSES)}
 
     def solve(self, p):
         free = p["width"] - sum(p["bases"]) - p["gap"] * (len(p["bases"]) - 1)
