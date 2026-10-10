@@ -25,6 +25,7 @@ import {
 const BASE = 'http://localhost'
 const server = setupServer(...qualificationHandlers)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper: JSON bodies are loosely typed on purpose
 async function req<T = any>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -66,6 +67,7 @@ describe('qualification mock — FE-05 e2e QA', () => {
     expect(cur.item_id).toBe('q-py-1')
 
     const seen: string[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loose assertion target for the final outcome body
     let outcome: { status: number; body: any } | null = null
     for (let i = 0; i < 8; i++) {
       seen.push(cur.item_id)
@@ -131,11 +133,19 @@ describe('qualification mock — FE-05 e2e QA', () => {
   })
 
   it('3) auto-submit arriving past deadline+3s grace is graded incorrect (BE.md H5)', async () => {
+    // Freeze the clock BEFORE start so servedAt is deterministic: a closure
+    // over the captured session would return the same instant forever and
+    // `now > deadline` could never hold (61_000 === 60_000 + 1_000 < 3_000 grace).
+    let offsetMs = 0
+    let baseServedAt = 0
+    setMockNow(() => new Date(baseServedAt + offsetMs))
     const id = await startSession()
     const s = __getMockSession(id)!
-    // Jump the mock clock 61 s ahead of q-py-1's 60 s window (+3 s grace).
-    setMockNow(() => new Date(Date.parse(s.servedAt!) + 61_000))
-    expect(isLate(s as never, new Date())).toBe(true)
+    baseServedAt = Date.parse(s.servedAt!)
+    // Jump the mock clock 64 s ahead of q-py-1's 60 s window (+3 s grace → late).
+    offsetMs = 64_000
+    // The handler grades with mockNow(); assert through the same seam.
+    expect(isLate(s as never, new Date(baseServedAt + offsetMs))).toBe(true)
 
     // The candidate's tab was frozen; the expired draft (empty choice) lands late.
     const r = await post(`/api/assessments/${id}/answers`, {
@@ -147,6 +157,8 @@ describe('qualification mock — FE-05 e2e QA', () => {
     expect(r.body.done).toBe(false)
     const stored = __getMockSession(id)!
     expect(stored.answers[0]).toEqual({ itemId: 'q-py-1', correct: false })
+    // Restore the real clock so later tests are unaffected.
+    setMockNow(null)
     expect(stored.cursor).toBe(1)
   })
 

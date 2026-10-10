@@ -278,3 +278,96 @@ export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
   next?: AssessmentItem
   result?: AssessmentResult
 }
+
+// --- FE-10 · Scouting --------------------------------------------------------
+
+/** GET /api/positions/{id} — the schema is accurate here; alias for imports. */
+export type { Position } from '@/api/generated/models/position'
+
+/**
+ * gap G7 — `GET /api/leagues?specialization=` returns the candidate's own
+ * league today; the scouting screen needs per-grade shelf counts, which the
+ * backend does not expose yet. Hand-written until G7 ships; mocked in
+ * `mocks/handlers/gaps.ts`. Shape follows FE2.md §FE-10:
+ * `[{specialization, grade, confirmed, unconfirmed, median_expectation?}]`.
+ */
+export type LeagueShelf = {
+  specialization: Spec
+  grade: Grade
+  confirmed: number
+  unconfirmed: number
+  median_expectation?: number | null
+}
+
+/** Pool item as served today: `components` is a flat dict (gap G8). */
+export type PoolComponentsInput = ScoreComponent[] | ScoreComponentsDict
+
+/**
+ * One row of `GET /api/positions/{id}/pool`. Wraps the generated `PoolItem`
+ * and widens it to what the server actually sends: normalized components
+ * (dict today, list tomorrow — always via `normalizeComponents()`), plus
+ * optional `gaps` once BE adds them (target of G8).
+ */
+export type PoolItemView = {
+  talent: TalentShort
+  score: number
+  components: PoolComponentsInput
+  reasons: Reason[]
+  shortlisted: boolean
+  /** gap G8 target — derived from `kind === 'minus'` reasons until served */
+  gaps?: string[]
+}
+
+/**
+ * Response of `GET /api/positions/{id}/pool`. The backend ignores filters and
+ * omits `facets`/pagination metadata today (gap G8). When `facets` is absent
+ * we detect the missing capability and apply filters client-side.
+ */
+export type ScoutingPoolResponse = {
+  items: PoolItemView[]
+  total: number
+  page: number
+  /** server-computed facet counts — absent until G8 ships */
+  facets?: Record<string, Record<string, number>>
+  /** server-side filtering applied — absent until G8 ships */
+  filters_applied?: boolean
+}
+
+/** Tri-state FSP filter (FE2.md §FE-10). */
+export type FspFilter = 'any' | 'linked' | 'prize'
+
+/** All URL-synced scouting state (see features/scouting/url-state.ts). */
+export type ScoutingFilters = {
+  grades: Grade[]
+  skills: string[]
+  fsp: FspFilter
+  formats: WorkFormat[]
+  salary_max?: number
+  confirmed_only: boolean
+  preset?: string
+  page: number
+  /** drawer: `?c=<public_id>` */
+  candidate?: string
+}
+
+/**
+ * gap G9 — `GET /api/talent/{public_id}`: pool fields plus `about`,
+ * `experience_text` and gated `contacts` (null until the company has a
+ * grant). Sections for topics/assessments/integrity come later — hidden when
+ * absent. Hand-written wrapper over the loose generated schema.
+ */
+export type TalentDetail = TalentShort & {
+  display_name?: string
+  about?: string | null
+  experience_text?: string | null
+  contacts?: {
+    full_name?: string
+    email?: string
+    phone?: string
+    telegram?: string
+  } | null
+  /** gap G9 — future sections, hidden while undefined */
+  topics?: unknown[] | null
+  assessments?: unknown[] | null
+  integrity_flags?: unknown[] | null
+}

@@ -6,6 +6,7 @@ import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
+import { scoutingHandlers } from '@/mocks/handlers/scouting'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
@@ -20,6 +21,10 @@ export async function startMocks(): Promise<void> {
   const handlers =
     mode === 'all'
       ? [
+          // FE-10 scouting store FIRST: its `/api/positions/:id` wildcard must
+          // win over the static G7 leagues stub below, and the pool/shortlist
+          // routes need the stateful set (MSW is first-match-wins).
+          ...scoutingHandlers,
           ...gapHandlers,
           ...demoGapHandlers,
           ...demoHandlers,
@@ -35,7 +40,7 @@ export async function startMocks(): Promise<void> {
           ...fspHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers]
+      : [...gapHandlers, ...demoGapHandlers, ...scoutingHandlers]
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',

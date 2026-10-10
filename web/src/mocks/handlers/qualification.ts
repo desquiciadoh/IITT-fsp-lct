@@ -456,15 +456,17 @@ export const qualificationHandlers = [
     if (s.answers.length < s.cursor) {
       s.answers.push({ itemId: BANK[s.answers.length].item_id, correct: false })
     }
-    // Unanswered tail counts as incorrect (BE.md R9: <50% answered → abandoned)
-    while (s.answers.length < MAX_ITEMS) {
-      s.answers.push({ itemId: BANK[s.answers.length].item_id, correct: false })
-    }
+    // Real submissions only (<50% → abandoned, BE.md R9). The current item
+    // counts as "attempted" but not answered; pad the tail after the check.
     const answered = s.answers.length
     if (answered * 2 < MAX_ITEMS) {
       s.status = 'abandoned'
       s.finishedAt = new Date().toISOString()
       return problem(409, 'not_enough_answers', 'Less than half of the items were answered.')
+    }
+    // Unanswered tail counts as incorrect (BE.md R9).
+    while (s.answers.length < MAX_ITEMS) {
+      s.answers.push({ itemId: BANK[s.answers.length].item_id, correct: false })
     }
     const result = finalize(s)
     return json(result)
