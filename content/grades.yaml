@@ -1,0 +1,55 @@
+# Grade scale (ML-2, owner: ML). Read by assessment.engine.content; served by GET /api/taxonomy.
+#
+# θ is the IRT ability on the N(0, 1) population scale; rating = round(1000 + 200·θ).
+# The three cuts between intern|junior|middle|senior are −1 / 0 / +1 (ARCHITECTURE §2.5).
+# The old code used −1.0 / −0.2 / 0.6 / 1.5 (ML-F2). We keep the documented −1/0/+1 because
+#   - they are symmetric on the population scale (16 % / 34 % / 34 % / 16 % of N(0,1) per band),
+#   - item priors b were set against these bands (bookmark method, PD-07: an item's b is the
+#     ability at which a borderline candidate of that grade answers it with p ≈ (1 + c)/2),
+#   - nothing was calibrated against the old numbers (they had no data behind them).
+# `theta_cut` of intern (−2.0) is a competence floor, not a band boundary: an intern claim is
+# confirmed iff θ̂ ≥ −2 (rating 600). Without it an intern claim could never fail, and the
+# fallback rule "highest lower grade with P(θ ≥ cut) ≥ 0.8" would always offer intern with no
+# evidence. Bands for item levels and result grades use only the three separating cuts.
+# `start_theta` is where the first item is targeted (ARCHITECTURE: the claimed grade's cut);
+# for intern it is the middle of the intern band, not the floor.
+# Decision D7 in ML.md §8. Validation (ML-8) reports how well these cuts are recovered; they
+# are never tuned on the evaluation set.
+
+scale:
+  rating_base: 1000
+  rating_per_theta: 200
+
+grades:
+  - id: intern
+    name_ru: Стажёр
+    theta_cut: -2.0
+    rating_cut: 600
+    start_theta: -1.5
+    descriptor_ru: >-
+      Знает синтаксис основного языка и базовые конструкции, решает учебные задачи
+      по образцу. Нужен наставник на каждом шаге.
+  - id: junior
+    name_ru: Junior
+    theta_cut: -1.0
+    rating_cut: 800
+    start_theta: -1.0
+    descriptor_ru: >-
+      Самостоятельно решает типовые задачи в знакомой кодовой базе: пишет запросы,
+      функции и компоненты, читает чужой код. Сложные решения согласует с командой.
+  - id: middle
+    name_ru: Middle
+    theta_cut: 0.0
+    rating_cut: 1000
+    start_theta: 0.0
+    descriptor_ru: >-
+      Самостоятельно ведёт фичу от задачи до продакшена, понимает асинхронность,
+      транзакции и сложность алгоритмов, находит причины ошибок без подсказок.
+  - id: senior
+    name_ru: Senior
+    theta_cut: 1.0
+    rating_cut: 1200
+    start_theta: 1.0
+    descriptor_ru: >-
+      Проектирует решения с учётом нагрузки, надёжности и стоимости, разбирает
+      нетривиальные сбои и отвечает за качество кода команды.

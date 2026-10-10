@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 from ..families.base import GRADES, FamilyMeta, Grade, Spec
+from .content import load_content
 
 Mode = Literal["full", "express"]
 Kind = Literal["initial", "fallback", "promotion", "screening"]
@@ -18,8 +19,6 @@ TopicLevel = Literal["strong", "moderate", "limited"]
 MODES: tuple[str, ...] = ("full", "express")
 KINDS: tuple[str, ...] = ("initial", "fallback", "promotion", "screening")
 
-# θ cuts between intern|junior|middle|senior (ARCHITECTURE §2.5). ML-2 moves them to content/grades.yaml.
-BAND_CUTS: tuple[float, float, float] = (-1.0, 0.0, 1.0)
 
 STATE_VERSION = 1   # bump only with a from_json migration; new fields are optional and read with .get
 
@@ -104,8 +103,9 @@ class CatEngine(Protocol):
     def result(self, state: CatState) -> CatResult: ...
 
 
-def band_of(theta: float, cuts: tuple[float, float, float] = BAND_CUTS) -> Grade:
-    """Grade band of a point on the θ scale."""
+def band_of(theta: float, cuts: tuple[float, float, float] | None = None) -> Grade:
+    """Grade band of a point on the θ scale; cuts between intern|junior|middle|senior from grades.yaml."""
+    cuts = cuts if cuts is not None else load_content().band_cuts
     return GRADES[sum(theta >= x for x in cuts)]  # type: ignore[return-value]
 
 
@@ -161,8 +161,7 @@ class StubCatEngine:
         state.theta = (sum(1 for x in state.administered if x["correct"]) - 4) / 2
         theta, se = state.theta, state.se
         grade = band_of(theta)
-        cut = {"intern": float("-inf"), "junior": BAND_CUTS[0],
-               "middle": BAND_CUTS[1], "senior": BAND_CUTS[2]}[state.claimed]
+        cut = load_content().grade(state.claimed).theta_cut
         answered = [x for x in state.administered if x["correct"] is not None]
         return CatResult(
             theta=theta, se=se, rating=round(1000 + 200 * theta), rating_ci=round(1.96 * 200 * se),

@@ -1,0 +1,47 @@
+# Category blueprints (ML-2, owner: ML): target share of items per topic in the
+# grade-determining test. Weights per specialization sum to 1. The CAT keeps every topic
+# within one item of its proportional share (see assessment.engine.cat). Every topic of a
+# specialization appears here; tests/ml checks that every topic has an active family once
+# ML-6 lands (before that, the CAT skips topics with no family).
+#
+# Rationale: about 25 % shared algorithms/CS (comparable across specializations), the rest
+# spread over the topics employers ask about most in JDs for that specialization (SQL and
+# Python for backend, the JS language and React for frontend, statistics and metrics for
+# ML & Data). Small topics (security, deep learning) get 5 %: about one item in a 20-item test.
+
+blueprints:
+  backend:
+    algorithms.complexity: 0.10
+    algorithms.data_structures: 0.10
+    algorithms.code_reading: 0.10
+    sql.aggregation: 0.12
+    sql.joins: 0.10
+    python.core: 0.12
+    backend.http: 0.08
+    backend.databases: 0.10
+    backend.concurrency: 0.08
+    backend.system_design: 0.05
+    backend.security: 0.05
+  frontend:
+    algorithms.complexity: 0.08
+    algorithms.data_structures: 0.08
+    algorithms.code_reading: 0.09
+    js.event_loop: 0.13
+    js.core: 0.17
+    web.css: 0.12
+    web.react: 0.13
+    web.browser: 0.10
+    web.typescript: 0.05
+    web.security: 0.05
+  ml_data:
+    algorithms.complexity: 0.07
+    algorithms.data_structures: 0.06
+    algorithms.code_reading: 0.07
+    python.core: 0.10
+    sql.aggregation: 0.10
+    sql.joins: 0.05
+    ml.statistics: 0.15
+    ml.metrics: 0.14
+    ml.models: 0.12
+    ml.data_processing: 0.09
+    ml.deep_learning: 0.05
