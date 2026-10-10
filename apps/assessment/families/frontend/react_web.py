@@ -1,7 +1,7 @@
 """Frontend families on React, the browser, TypeScript and web security.
 
 fe.react.state_batching.v1  value after one click with batched setState calls (typed)
-fe.react.effect_runs.v1     how many times a useEffect runs over a sequence of renders (typed)
+fe.react.effect_runs.v2     how many times several useEffects run over a sequence of renders (typed)
 fe.web.cache_control.v1     what the browser does with a cached response (classification, 3 classes)
 fe.ts.assignability.v1      which of four lines fails to type-check (find_bug, 4 line options)
 fe.sec.xss_sink.v1          which of four lines inserts user input unsafely (find_bug, 4 line options)
@@ -24,6 +24,7 @@ class StateBatching(TypedNumberFamily):
 
     meta = FamilyMeta(id="fe.react.state_batching.v1", version=1, specs=F, topic="web.react",
                       skills=("react",), format="code_output", a=1.3, b=0.6, c=0.0, time_limit_s=120)
+    SEMANTIC = ("init", "calls")
 
     def draw(self, rng):
         calls = []
@@ -83,57 +84,78 @@ class StateBatching(TypedNumberFamily):
 
 
 class EffectRuns(TypedNumberFamily):
-    """b = -0.2 (upper junior): no dependency array runs after every render, `[]` once after
-    mount, `[x]` on mount and whenever x changed since the previous render."""
+    """b = 0.1 (middle boundary): no dependency array runs after every render, `[]` once after
+    mount, `[x]` on mount and whenever x changed since the previous render, `[x, y]` when either
+    changed. Version 2 has two or three effects with different arrays over renders of two props
+    and asks for the total: version 1 had one effect, and "1" was right on 26 % of items (ML-6
+    review). b rose from -0.2 because several arrays have to be tracked at once."""
 
-    meta = FamilyMeta(id="fe.react.effect_runs.v1", version=1, specs=F, topic="web.react",
-                      skills=("react",), format="code_output", a=1.1, b=-0.2, c=0.0, time_limit_s=90)
+    meta = FamilyMeta(id="fe.react.effect_runs.v2", version=2, specs=F, topic="web.react",
+                      skills=("react",), format="code_output", a=1.1, b=0.1, c=0.0, time_limit_s=150)
+    SEMANTIC = ("deps", "values")
+    DEPS = ("none", "empty", "a", "b", "ab")
 
     def draw(self, rng):
-        n = rng.randint(4, 8)
-        values = [rng.randint(1, 4) for _ in range(n)]
-        return {"deps": rng.choice(("none", "empty", "dep", "dep")), "values": values,
-                "prop": rng.choice(("userId", "page", "query", "theme", "filter", "tab", "lang", "sort")),
+        n = rng.randint(4, 9)
+        a, b = rng.sample(("userId", "page", "query", "theme", "filter", "tab", "lang", "sort"), 2)
+        return {"deps": [rng.choice(self.DEPS) for _ in range(rng.randint(2, 4))],
+                "values": [[rng.randint(1, 3), rng.randint(1, 3)] for _ in range(n)],
+                "props": [a, b],
                 "comp": rng.choice(("Profile", "List", "Search", "Feed", "Chart", "Table", "Cart", "Inbox"))}
 
     def solve(self, p):
         v = p["values"]
-        if p["deps"] == "none":
-            return len(v)
-        if p["deps"] == "empty":
-            return 1
-        return 1 + sum(1 for a, b in zip(v, v[1:], strict=False) if a != b)
+        total = 0
+        for deps in p["deps"]:
+            if deps == "none":
+                total += len(v)
+            elif deps == "empty":
+                total += 1
+            else:
+                watched = [i for i, name in enumerate("ab") if name in deps]
+                total += 1 + sum(1 for prev, cur in zip(v, v[1:], strict=False)
+                                 if any(prev[i] != cur[i] for i in watched))
+        return total
 
     def render(self, p):
-        deps = {"none": "", "empty": ", []", "dep": f", [{p['prop']}]"}[p["deps"]]
-        code = (f"function {p['comp']}({{ {p['prop']} }}) {{\n"
-                f"  useEffect(() => {{\n    console.log('effect');\n  }}{deps});\n"
-                f"  return <div>{{{p['prop']}}}</div>;\n}}")
-        renders = ", ".join(str(x) for x in p["values"])
-        return (f"Компонент отрендерился {len(p['values'])} раз подряд (без размонтирования, без StrictMode) "
-                f"со значениями `{p['prop']}`: {renders}. Сколько раз выполнится эффект (выведется 'effect')?",
-                {"lang": "javascript", "text": code})
+        a, b = p["props"]
+        arrays = {"none": "", "empty": ", []", "a": f", [{a}]", "b": f", [{b}]", "ab": f", [{a}, {b}]"}
+        effects = "".join(f"  useEffect(() => {{\n    console.log('effect {i}');\n  }}{arrays[d]});\n"
+                          for i, d in enumerate(p["deps"], start=1))
+        code = (f"function {p['comp']}({{ {a}, {b} }}) {{\n{effects}"
+                f"  return <div>{{{a}}} {{{b}}}</div>;\n}}")
+        renders = ", ".join(f"({x}, {y})" for x, y in p["values"])
+        return (f"Компонент отрендерился {len(p['values'])} раз подряд (без размонтирования, без StrictMode). "
+                f"Значения пропсов (`{a}`, `{b}`) на каждом рендере: {renders}. Сколько всего строк выведут "
+                "эффекты в консоль?", {"lang": "javascript", "text": code})
 
     def oracle_value(self, inst):
-        values = [int(x) for x in re.search(r"`: ([\d, ]+)\.", inst.stem_md).group(1).split(",")]
-        deps = re.search(r"\}(, \[[^\]]*\])?\);", inst.code["text"]).group(1)
-        runs, previous = 0, None
-        for i, v in enumerate(values):             # replay the renders
-            if deps is None or (deps == ", []" and i == 0) or (deps not in (None, ", []") and (i == 0 or v != previous)):
-                runs += 1
-            previous = v
+        """Replay the renders against each effect's dependency array, read from the code."""
+        names = re.search(r"\(`(\w+)`, `(\w+)`\)", inst.stem_md).groups()
+        renders = [dict(zip(names, (int(x), int(y)), strict=True))
+                   for x, y in re.findall(r"\((\d+), (\d+)\)", inst.stem_md.split("рендере:")[1])]
+        runs = 0
+        for deps in re.findall(r"\}(, \[[^\]]*\])?\);", inst.code["text"]):
+            watched = re.findall(r"\w+", deps)
+            previous = None
+            for props in renders:
+                if not deps or previous is None or any(props[w] != previous[w] for w in watched):
+                    runs += 1
+                previous = props
         return float(runs)
 
 
 class CacheControl(ClassificationFamily):
     """b = 0.9 (upper middle): max-age decides freshness; a stale response with a validator is
-    revalidated (304), `no-cache` always revalidates, `no-store` is never reused."""
+    revalidated (304), `no-cache` always revalidates, `no-store` is never reused. The stem no longer
+    says the browser "stored it in the cache", which no-store forbids (ML-6 review)."""
 
     meta = FamilyMeta(id="fe.web.cache_control.v1", version=1, specs=F, topic="web.browser",
                       skills=("javascript", "rest_api"), format="concept_mcq", a=1.2, b=0.9, c=1 / 3,
                       time_limit_s=90)
     LABELS = ("Берёт ответ из кэша без запроса к серверу", "Отправляет условный запрос (If-None-Match)",
               "Загружает ресурс заново полностью")
+    SEMANTIC = ("cc", "age")
 
     def draw(self, rng, label):
         etag = f'"{rng.getrandbits(32):08x}"'
@@ -161,7 +183,7 @@ class CacheControl(ClassificationFamily):
         headers = [f"Cache-Control: {p['cc']}"] + ([f"ETag: {p['etag']}"] if p["etag"] else [])
         code = "HTTP/1.1 200 OK\nContent-Type: application/json\n" + "\n".join(headers)
         return (f"Браузер получил ответ на `GET {p['path']}` с заголовками ниже (других заголовков кэширования "
-                f"нет) и сохранил его в кэше. Через {p['age']} с страница снова запрашивает тот же URL. Что "
+                f"нет). Через {p['age']} с страница снова запрашивает тот же URL. Что "
                 "сделает браузер?", {"lang": "http", "text": code})
 
     def classify(self, inst: Instance):
@@ -194,6 +216,7 @@ class Assignability(ClassificationFamily):
 
     meta = FamilyMeta(id="fe.ts.assignability.v1", version=1, specs=F, topic="web.typescript",
                       skills=("typescript",), format="find_bug", a=1.2, b=0.3, c=0.25, time_limit_s=120)
+    SEMANTIC = ('props', 'optional', 'kinds', 'extra')
     LABELS = ("Строка A", "Строка B", "Строка C", "Строка D")
     # (kind, is_error): literal_ok, literal_excess*, literal_missing*, literal_wrongtype*, var_extra (ok),
     # missing_optional (ok), var_missing*
@@ -278,6 +301,7 @@ class XssSink(ClassificationFamily):
     meta = FamilyMeta(id="fe.sec.xss_sink.v1", version=1, specs=F, topic="web.security",
                       skills=("security", "javascript"), format="find_bug", a=1.1, b=-0.2, c=0.25,
                       time_limit_s=90)
+    SEMANTIC = ('lines',)
     LABELS = ("Строка 1", "Строка 2", "Строка 3", "Строка 4")
 
     def draw(self, rng, label):

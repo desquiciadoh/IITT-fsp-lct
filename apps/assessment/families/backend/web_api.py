@@ -18,20 +18,25 @@ from ..builder import ClassificationFamily
 RESOURCES = ("orders", "users", "invoices", "tickets", "projects", "comments", "payments", "files",
              "teams", "reports", "devices", "vacancies")
 ROLES = ("viewer", "guest", "analyst", "support", "intern", "auditor")
-CONTEXTS = ("сервисе интернет-магазина", "API банковского приложения", "внутреннем сервисе склада",
-            "CRM для отдела продаж", "сервисе бронирования", "API платформы курсов", "сервисе доставки",
-            "API трекера задач", "сервисе учёта рабочего времени", "API медицинской системы",
-            "сервисе аренды самокатов", "API маркетплейса")
+# Each context carries its own preposition ("во внутреннем", not "в внутреннем").
+CONTEXTS = ("В сервисе интернет-магазина", "В API банковского приложения", "Во внутреннем сервисе склада",
+            "В CRM для отдела продаж", "В сервисе бронирования", "В API платформы курсов", "В сервисе доставки",
+            "В API трекера задач", "В сервисе учёта рабочего времени", "В API медицинской системы",
+            "В сервисе аренды самокатов", "В API маркетплейса")
 
 
 class StatusCode(ClassificationFamily):
     """b = -1.3 (intern/junior): 401 vs 403, 404, 409 vs 422 and 201/204 are what every backend
-    developer meets on day one; the 401/403 and 409/422 pairs are the usual confusions."""
+    developer meets on day one; the 401/403 and 409/422 pairs are the usual confusions. The
+    "unique code already taken" scenario was removed in the ML-6 review: frameworks answer it
+    with 400, 409 or 422, so its key was contestable. Concept item: the question is the label and
+    the template; ids, resources and contexts are decoration (verify.CONCEPT_FAMILIES)."""
 
     meta = FamilyMeta(id="be.http.status_code.v1", version=1, specs=("backend",), topic="backend.http",
                       skills=("rest_api",), format="concept_mcq", a=1.0, b=-1.3, c=1 / 8, time_limit_s=60)
     LABELS = ("201 Created", "204 No Content", "401 Unauthorized", "403 Forbidden", "404 Not Found",
               "409 Conflict", "422 Unprocessable Content", "429 Too Many Requests")
+    SEMANTIC = ("tpl",)
     SCENARIOS = {
         "201 Created": ["Запрос `POST /api/{res}` успешно создал новую запись с id {id}; в ответе нужно "
                         "вернуть её и заголовок Location."],
@@ -45,9 +50,7 @@ class StatusCode(ClassificationFamily):
                           "`{res}`; он отправил `PATCH /api/{res}/{id}`."],
         "404 Not Found": ["Запрос `GET /api/{res}/{id}`: записи с таким id в базе не существует."],
         "409 Conflict": ["Запрос `PUT /api/{res}/{id}` пришёл с version={v}, а в базе уже version={v2}: "
-                         "запись успели изменить (оптимистичная блокировка).",
-                         "Запрос `POST /api/{res}` пытается создать запись с уникальным кодом `{code}`, "
-                         "который уже занят другой записью."],
+                         "запись успели изменить (оптимистичная блокировка)."],
         "422 Unprocessable Content": ["Тело запроса `POST /api/{res}` — корректный JSON, но поле `amount` "
                                       "= {neg}, а по правилам валидации оно должно быть больше нуля."],
         "429 Too Many Requests": ["Клиент отправил {burst} запросов за минуту к `/api/{res}` при лимите "
@@ -57,7 +60,7 @@ class StatusCode(ClassificationFamily):
         "201 Created": "создал новую запись", "204 No Content": "тело ответа не требуется",
         "401 Unauthorized": ("без заголовка Authorization", "срок действия которого истёк"),
         "403 Forbidden": "этой роли запрещено", "404 Not Found": "записи с таким id в базе не существует",
-        "409 Conflict": ("оптимистичная блокировка", "уже занят"), "422 Unprocessable Content": "правилам валидации",
+        "409 Conflict": "оптимистичная блокировка", "422 Unprocessable Content": "правилам валидации",
         "429 Too Many Requests": "при лимите",
     }
 
@@ -66,12 +69,12 @@ class StatusCode(ClassificationFamily):
         v = rng.randint(1, 40)
         return {"tpl": rng.randrange(len(self.SCENARIOS[label])), "res": rng.choice(RESOURCES),
                 "id": rng.randint(1, 99999), "role": rng.choice(ROLES), "n": n, "burst": n + rng.randint(1, 300),
-                "v": v, "v2": v + rng.randint(1, 5), "code": f"{rng.choice('ABCDEFGH')}{rng.randint(100, 999)}",
+                "v": v, "v2": v + rng.randint(1, 5),
                 "neg": -rng.randint(1, 5000), "ctx": rng.randrange(len(CONTEXTS)), "rid": rng.randint(1000, 99999)}
 
     def render(self, p):
         text = self.SCENARIOS[p["label"]][p["tpl"]].format(**p)
-        return f"В {CONTEXTS[p['ctx']]} (запрос #{p['rid']}): {text} Какой код ответа должен вернуть сервер?", None
+        return f"{CONTEXTS[p['ctx']]} (запрос #{p['rid']}): {text} Какой код ответа должен вернуть сервер?", None
 
     def classify(self, inst: Instance):
         hits = [label for label, m in self.MARKERS.items()
@@ -81,11 +84,12 @@ class StatusCode(ClassificationFamily):
 
 class Method(ClassificationFamily):
     """b = -1.6 (intern): the five methods and their meaning (GET reads, POST creates, PUT replaces
-    the whole resource, PATCH changes part of it, DELETE removes it)."""
+    the whole resource, PATCH changes part of it, DELETE removes it). Concept item (see StatusCode)."""
 
     meta = FamilyMeta(id="be.http.method.v1", version=1, specs=("backend",), topic="backend.http",
                       skills=("rest_api",), format="concept_mcq", a=0.9, b=-1.6, c=0.2, time_limit_s=45)
     LABELS = ("GET", "POST", "PUT", "PATCH", "DELETE")
+    SEMANTIC = ("tpl",)
     SCENARIOS = {
         "GET": ["Получить список `{res}` с фильтром `status={st}` и пагинацией (страница {n}).",
                 "Прочитать одну запись `{res}` с id {id}, ничего не меняя."],
@@ -112,7 +116,7 @@ class Method(ClassificationFamily):
 
     def render(self, p):
         text = self.SCENARIOS[p["label"]][p["tpl"]].format(**p)
-        return (f"В {CONTEXTS[p['ctx']]} (задача #{p['rid']}): {text} Какой HTTP-метод соответствует этой "
+        return (f"{CONTEXTS[p['ctx']]} (задача #{p['rid']}): {text} Какой HTTP-метод соответствует этой "
                 "операции в REST API?", None)
 
     def classify(self, inst: Instance):
@@ -123,11 +127,13 @@ class Method(ClassificationFamily):
 
 class VulnClass(ClassificationFamily):
     """b = 0.0 (junior/middle boundary): each handler has exactly one textbook vulnerability;
-    naming it requires recognising where user input reaches a dangerous sink."""
+    naming it requires recognising where user input reaches a dangerous sink. Concept item: one
+    template per class, so the question is the label; names and preambles are decoration."""
 
     meta = FamilyMeta(id="be.sec.vuln_class.v1", version=1, specs=("backend",), topic="backend.security",
                       skills=("security",), format="find_bug", a=1.2, b=0.0, c=1 / 6, time_limit_s=90)
     LABELS = ("SQL-инъекция", "XSS", "Path traversal", "Command injection", "SSRF", "IDOR")
+    SEMANTIC: tuple[str, ...] = ()
     TEMPLATES = {
         "SQL-инъекция": ["def {fn}(request):\n    {v} = request.GET['{param}']\n    rows = db.execute(\n"
                          "        f\"SELECT * FROM {table} WHERE {col} = '{{{v}}}'\"\n    ).fetchall()\n"

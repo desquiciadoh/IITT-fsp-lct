@@ -13,7 +13,6 @@ Oracles re-read the rendered schedule, program or numbers and recompute by a dif
 from __future__ import annotations
 
 import heapq
-import math
 import re
 from fractions import Fraction
 
@@ -27,13 +26,17 @@ TABLES = ("accounts", "wallets", "stock", "seats", "balances", "limits", "quotas
 # ── isolation anomalies ────────────────────────────────────────────────────
 
 class IsolationAnomaly(ClassificationFamily):
-    """b = 1.1 (senior boundary): telling a dirty read from a non-repeatable read, a phantom and a
-    lost update from a concrete schedule is what separates people who read about isolation levels
-    from people who debugged them."""
+    """b = 0.4 (middle): telling a dirty read from a non-repeatable read, a phantom and a lost
+    update from a concrete schedule. Was 1.1; the ML-6 review lowered it, because one surface
+    marker (ROLLBACK, INSERT, two UPDATEs) decides the class and the read values are annotated,
+    so it is easier than lost_update (b = 0.5). Uniqueness is only the label and the order of the
+    two transactions (8 questions): ids and amounts are decoration, so it is exempt from the
+    collision gate as a concept item (verify.CONCEPT_FAMILIES)."""
 
     meta = FamilyMeta(id="be.db.isolation_anomaly.v1", version=1, specs=B, topic="backend.databases",
-                      skills=("postgresql", "sql"), format="concept_mcq", a=1.3, b=1.1, c=0.25, time_limit_s=150)
+                      skills=("postgresql", "sql"), format="concept_mcq", a=1.3, b=0.4, c=0.25, time_limit_s=150)
     LABELS = ("Грязное чтение", "Неповторяющееся чтение", "Фантомное чтение", "Потерянное обновление")
+    SEMANTIC = ("first",)
 
     def draw(self, rng, label):
         return {"table": rng.choice(TABLES), "id": rng.randint(1, 999), "x": rng.randint(5, 90) * 10,
@@ -88,6 +91,7 @@ class LostUpdate(TypedNumberFamily):
     meta = FamilyMeta(id="be.db.lost_update.v1", version=1, specs=B, topic="backend.databases",
                       skills=("postgresql", "sql"), format="numeric_scenario", a=1.3, b=0.5, c=0.0,
                       time_limit_s=150)
+    SEMANTIC = ("start", "deltas", "events")
 
     def draw(self, rng):
         n_tx = rng.randint(2, 3)
@@ -146,6 +150,7 @@ class GatherTime(TypedNumberFamily):
 
     meta = FamilyMeta(id="be.async.gather_time.v1", version=1, specs=B, topic="backend.concurrency",
                       skills=("asyncio", "python"), format="code_output", a=1.3, b=0.3, c=0.0, time_limit_s=120)
+    SEMANTIC = ("stmts",)
 
     def draw(self, rng):
         stmts, tasks = [], 0
@@ -218,9 +223,10 @@ class SemaphoreTime(TypedNumberFamily):
 
     meta = FamilyMeta(id="be.async.semaphore_time.v1", version=1, specs=B, topic="backend.concurrency",
                       skills=("asyncio", "python"), format="code_output", a=1.4, b=1.3, c=0.0, time_limit_s=150)
+    SEMANTIC = ("k", "durations")
 
     def draw(self, rng):
-        return {"k": rng.randint(2, 3), "durations": [rng.randint(1, 9) for _ in range(rng.randint(4, 7))],
+        return {"k": rng.randint(2, 3), "durations": [rng.randint(1, 12) for _ in range(rng.randint(5, 8))],
                 "fn": rng.choice(("download", "process", "upload", "resize", "query", "render", "scan", "sync",
                                   "export", "notify"))}
 
@@ -261,39 +267,31 @@ class SemaphoreTime(TypedNumberFamily):
 # ── capacity ───────────────────────────────────────────────────────────────
 
 class LittlesLaw(TypedNumberFamily):
-    """b = 0.8 (upper middle): Little's law L = λ·W (with ms -> s) and, for the worker variant,
-    dividing by the target utilisation and rounding up; unit slips are the usual error."""
+    """b = 0.6 (middle): Little's law L = λ·W with ms -> s; the unit conversion is the usual slip.
+    The worker variant (divide by utilisation, round up) was dropped in the ML-6 review: its
+    "whole number of workers" contradicted the one-decimal hint. b moved from 0.8 with it."""
 
     meta = FamilyMeta(id="be.sys.littles_law.v1", version=1, specs=B, topic="backend.system_design",
-                      skills=("microservices",), format="numeric_scenario", a=1.2, b=0.8, c=0.0, time_limit_s=120)
+                      skills=("microservices",), format="numeric_scenario", a=1.2, b=0.6, c=0.0, time_limit_s=120)
     DECIMALS = 1
+    SEMANTIC = ("rps", "ms")
 
     def draw(self, rng):
-        return {"rps": rng.randint(20, 600) * 5, "ms": rng.randint(5, 400),
-                "ask": rng.choice(("inflight", "workers")), "util": rng.choice((50, 60, 70, 75, 80)),
+        return {"rps": rng.randint(20, 2000) * 5, "ms": rng.randint(5, 900),
                 "svc": rng.choice(("API заказов", "сервис поиска", "платёжный шлюз", "сервис рекомендаций",
                                    "сервис авторизации", "API каталога"))}
 
     def solve(self, p):
-        inflight = p["rps"] * p["ms"] / 1000
-        return inflight if p["ask"] == "inflight" else math.ceil(inflight / (p["util"] / 100) - 1e-9)
+        return p["rps"] * p["ms"] / 1000
 
     def render(self, p):
         head = (f"{p['svc'][0].upper()}{p['svc'][1:]} получает в среднем {p['rps']} запросов в секунду, "
                 f"среднее время обработки одного запроса — {p['ms']} мс.")
-        if p["ask"] == "inflight":
-            return f"{head} Сколько запросов в среднем обрабатывается одновременно?", None
-        return (f"{head} Один воркер обрабатывает один запрос за раз. Сколько воркеров нужно, чтобы их "
-                f"средняя загрузка была не выше {p['util']} %? (Целое число воркеров.)", None)
+        return f"{head} Сколько запросов в среднем обрабатывается одновременно?", None
 
     def oracle_value(self, inst):
         rps, ms = (int(x) for x in re.findall(r"(\d+) запросов в секунду.*?(\d+) мс", inst.stem_md)[0])
-        inflight = Fraction(rps) * Fraction(ms, 1000)
-        if "воркер" not in inst.stem_md:
-            return float(inflight)
-        util = Fraction(int(re.findall(r"не выше (\d+) %", inst.stem_md)[0]), 100)
-        need = inflight / util
-        return float(-(-need.numerator // need.denominator))
+        return float(Fraction(rps) * Fraction(ms, 1000))
 
 
 def _ru(x: float) -> str:
@@ -312,9 +310,10 @@ class CacheLatency(TypedNumberFamily):
     meta = FamilyMeta(id="be.sys.cache_latency.v1", version=1, specs=B, topic="backend.system_design",
                       skills=("redis",), format="numeric_scenario", a=1.0, b=-0.4, c=0.0, time_limit_s=90)
     DECIMALS = 2
+    SEMANTIC = ("hit", "cache_ms", "db_ms")
 
     def draw(self, rng):
-        return {"hit": rng.randint(100, 199) / 2, "cache_ms": rng.randint(2, 18) / 2, "db_ms": rng.randint(8, 80) * 5,
+        return {"hit": rng.randint(500, 990) / 10, "cache_ms": rng.randint(2, 40) / 2, "db_ms": rng.randint(8, 160) * 5,
                 "store": rng.choice(("Redis", "Memcached", "локальный кэш")),
                 "db": rng.randrange(len(DBS))}
 
