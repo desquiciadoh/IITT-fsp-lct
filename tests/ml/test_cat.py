@@ -398,7 +398,8 @@ def test_real_registry_runs_a_session_end_to_end():
     st = eng.start("backend", "junior", "express", "initial", pool, set())
     while (m := eng.next_family(st, pool, make_rng(b"k", "e2e", "select", len(st.administered) + 1))) is not None:
         inst = fams[m.id].generate(make_rng(b"k", "e2e", m.id, len(st.administered)))
-        eng.record(st, m.id, fams[m.id].is_correct(inst.key, {"option_id": inst.key}))
+        answer = {"option_id": inst.key} if inst.input == "choice" else {"value": str(inst.key)}
+        eng.record(st, m.id, fams[m.id].is_correct(inst.key, answer))
     res = eng.result(st)
     assert res.evidence and all(e[2] for e in res.evidence)
 
