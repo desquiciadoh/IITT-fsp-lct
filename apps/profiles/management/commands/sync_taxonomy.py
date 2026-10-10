@@ -2,9 +2,9 @@
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from taxonomy.loader import load_skills
 
 from profiles.models import Skill
-from taxonomy.loader import load_skills
 
 
 def sync_taxonomy_to_db() -> int:

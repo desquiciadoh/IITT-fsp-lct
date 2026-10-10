@@ -504,7 +504,7 @@ class TaxonomyView(views.APIView):
             existing_topics = set(spec_data.get("topics", []))
             registry_topics = spec_topics.get(sid, set())
             merged = existing_topics | registry_topics
-            spec_data["topics"] = sorted(list(merged))
+            spec_data["topics"] = sorted(merged)
 
         # 2. Grades
         grades_file = content_dir / "grades.yaml"

@@ -7,6 +7,7 @@ from core.errors import FSPAPIError, FSPIdAlreadyLinked
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.core import signing
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.utils import timezone
@@ -154,6 +155,21 @@ class RegisterView(views.APIView):
         if settings.DEMO_MODE:
             token = signing.dumps({"user_id": str(user.id)}, salt="email-verify")
             resp_data["verify_link"] = f"/verify-email?token={token}"
+        else:
+            token = signing.dumps({"user_id": str(user.id)}, salt="email-verify")
+            verify_url = f"{settings.PUBLIC_BASE_URL}/verify-email?token={token}"
+            send_mail(
+                subject="Подтверждение email на платформе FSP Draft",
+                message=(
+                    f"Здравствуйте!\n\n"
+                    f"Для подтверждения адреса электронной почты перейдите по ссылке:\n"
+                    f"{verify_url}\n\n"
+                    f"Если вы не регистрировались на платформе FSP Draft, проигнорируйте это письмо.\n"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
         return Response(resp_data, status=status.HTTP_201_CREATED)
 
 

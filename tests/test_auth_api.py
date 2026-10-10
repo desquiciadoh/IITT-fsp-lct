@@ -203,7 +203,8 @@ class TestDemoResetAndTimeTravel:
         # Tamper with Anna's data as if user played around in demo
         profile = CandidateProfile.objects.get(user=anna)
         profile.full_name = "Modified Name"
-        profile.salary_min = 999999
+        profile.salary_min = 400000
+        profile.salary_max = 500000
         profile.open_to_offers = False
         profile.save()
 

@@ -127,6 +127,32 @@ class CandidateProfile(models.Model):
 
     class Meta:
         db_table = "candidate_profiles"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(salary_min__isnull=True) | models.Q(salary_min__gt=0),
+                name="chk_candidate_salary_min_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(salary_min__isnull=True)
+                | models.Q(salary_max__isnull=True)
+                | models.Q(salary_max__gte=models.F("salary_min")),
+                name="chk_candidate_salary_max_gte_min",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(salary_type="") | models.Q(salary_type__in=["gross", "net"]),
+                name="chk_candidate_salary_type_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(salary_floor__isnull=True) | models.Q(salary_floor__gt=0),
+                name="chk_candidate_salary_floor_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(salary_floor__isnull=True)
+                | models.Q(salary_min__isnull=True)
+                | models.Q(salary_floor__lte=models.F("salary_min")),
+                name="chk_candidate_salary_floor_lte_min",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.public_id:

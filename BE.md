@@ -255,7 +255,7 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - `manage.py sync_taxonomy` from `content/skills.yaml`.
   - Profile skills go through `normalize_skill()`. Return `unknown_skills` instead of creating rows, inside `atomic`.
   - `GET /api/taxonomy` reads `content/*.yaml`; topics come from the family registry.
-- [ ] **N6. Identity.**
+- [x] **N6. Identity.**
   - Send the verify-email link by SMTP outside DEMO_MODE (MailHog in compose).
   - Profile validation: the salary range, and every `blocked_company_ids` entry exists.
 - [ ] **N7. pgvector** once ML starts embeddings (AI-11): a migration with `CREATE EXTENSION vector`, nullable `VectorField(1024)` on profiles and positions, and an HNSW index.

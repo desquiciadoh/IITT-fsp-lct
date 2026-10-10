@@ -215,11 +215,12 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             except (ValueError, AttributeError):
                 raise serializers.ValidationError(f"Invalid company UUID: {item}")
 
-        existing = set(Company.objects.filter(id__in=valid_uuids).values_list("id", flat=True))
-        missing = [str(vid) for vid in valid_uuids if vid not in existing]
+        unique_uuids = list(dict.fromkeys(valid_uuids))
+        existing = set(Company.objects.filter(id__in=unique_uuids).values_list("id", flat=True))
+        missing = [str(vid) for vid in unique_uuids if vid not in existing]
         if missing:
             raise serializers.ValidationError(f"Companies not found: {', '.join(missing)}")
-        return [str(vid) for vid in valid_uuids]
+        return [str(vid) for vid in unique_uuids]
 
     def validate(self, attrs):
         s_min = (
@@ -233,6 +234,20 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             else getattr(self.instance, "salary_max", None)
         )
 
+        if s_min is not None and s_min <= 0:
+            raise serializers.ValidationError(
+                {
+                    "salary_min": "salary_min must be greater than 0",
+                }
+            )
+
+        if s_max is not None and s_max <= 0:
+            raise serializers.ValidationError(
+                {
+                    "salary_max": "salary_max must be greater than 0",
+                }
+            )
+
         if s_min is not None and s_max is not None and s_min > s_max:
             raise serializers.ValidationError(
                 {
@@ -245,6 +260,12 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             if "salary_floor" in attrs
             else getattr(self.instance, "salary_floor", None)
         )
+        if s_floor is not None and s_floor <= 0:
+            raise serializers.ValidationError(
+                {
+                    "salary_floor": "salary_floor must be greater than 0",
+                }
+            )
         if s_floor is not None and s_min is not None and s_floor > s_min:
             raise serializers.ValidationError(
                 {
