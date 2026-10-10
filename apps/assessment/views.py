@@ -355,11 +355,24 @@ class LabReportView(views.APIView):
         report_file = Path(settings.BASE_DIR) / "validation" / "out" / "report.json"
         fixture_file = Path(settings.BASE_DIR) / "validation" / "out" / "report.fixture.json"
 
+        from validation.schema import validate_report
+
         if report_file.is_file():
             try:
                 with open(report_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                errors = validate_report(data)
+                if errors:
+                    logger.error("Invalid validation report at %s: %s", report_file, errors)
+                    raise FSPAPIError(
+                        "report_unreadable",
+                        "Report unreadable",
+                        f"Validation report failed schema validation: {', '.join(errors)}",
+                        status_code=500,
+                    )
                 return Response(data)
+            except FSPAPIError:
+                raise
             except Exception as e:
                 logger.exception("Corrupt report.json: %s", e)
                 raise FSPAPIError(
@@ -373,7 +386,18 @@ class LabReportView(views.APIView):
             try:
                 with open(fixture_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                errors = validate_report(data)
+                if errors:
+                    logger.error("Invalid validation report fixture at %s: %s", fixture_file, errors)
+                    raise FSPAPIError(
+                        "report_unreadable",
+                        "Report unreadable",
+                        f"Validation report fixture failed schema validation: {', '.join(errors)}",
+                        status_code=500,
+                    )
                 return Response(data)
+            except FSPAPIError:
+                raise
             except Exception as e:
                 logger.exception("Corrupt report.fixture.json: %s", e)
                 raise FSPAPIError(
