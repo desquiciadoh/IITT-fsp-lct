@@ -7,11 +7,16 @@ gave the answer away (ML-1 review). The generator counts in Python; the oracle r
 table in an in-memory sqlite3 database from the SQL the candidate sees and runs the query.
 
 Difficulty prior b = -0.3 (upper junior): one query on ~12 visible rows, but the candidate
-must apply WHERE before grouping and use >= in HAVING. Ignoring WHERE, applying HAVING to
-the unfiltered counts, `>` for `>=`, ignoring HAVING and counting result rows instead of
-summing cnt are the classic junior mistakes, and each one is a distractor (below or above the true count, whichever side the drawn rank
-needs; random counts within 8 of the answer fill the rest). Answers below 4 are redrawn:
-near zero every option would have to sit above the answer, and the option set would give it away.
+must apply WHERE before grouping and use >= in HAVING.
+
+Distractors. Ignoring WHERE, applying HAVING to the unfiltered counts, `>` for `>=`, ignoring
+HAVING and counting result rows instead of summing cnt are the classic junior mistakes. On 15 %
+of the items one of them (on a side drawn at random) is an option; every other distractor is
+the answer of an independent redraw of the generator, so it has the answer's own
+distribution. Two earlier designs leaked through the option values alone: a window around the
+answer (58 %), and a misconception on every item, which pushed the answer to a middle rank
+(33 % at every item, 30 % at a third of them). Every value- and rank-based strategy now
+measures at chance + 0.02 at most.
 """
 from __future__ import annotations
 
@@ -25,8 +30,8 @@ META = FamilyMeta(id="be.sql.group_having.v2", version=2, specs=("backend", "ml_
                   topic="sql.aggregation", skills=("sql",), format="sql_result",
                   a=1.2, b=-0.3, c=0.25, time_limit_s=120)
 
-MIN_ANSWER = 4   # room for three distinct counts below the answer
-WINDOW = 8       # fillers are drawn from answer ± WINDOW
+MISCONCEPTION_SHARE = 0.15  # items that show one misconception value; at 1.0 the answer's
+                            # rank leaks (0.33 vs a 0.305 gate), at 0.3 it sits at the gate (0.30)
 
 SCHEMAS = (
     ("employees", "department", ("Sales", "Support", "Finance", "Legal", "Research", "Design", "Ops")),
@@ -39,16 +44,23 @@ class SqlGroupHaving:
     meta = META
 
     def generate(self, rng: random.Random) -> Instance:
-        # The correct count's rank among the four option values is drawn first and uniformly,
-        # then tables are redrawn until that rank is possible, so "pick the 2nd smallest" and
-        # similar value-only strategies stay at chance (verify: guessing checks).
-        rank = rng.randrange(4)
-        while True:
-            params, correct, below, above = self._draw(rng)
-            if correct >= MIN_ANSWER and len(below) >= rank and len(above) >= 3 - rank:
-                break
-        distractors = [str(x) for x in below[:rank] + above[:3 - rank]]
-        options, key = choice_options(rng, str(correct), distractors)
+        params, correct, mistakes = self._draw(rng)
+        values = [correct]
+        # One misconception value (when it differs from the answer) on MISCONCEPTION_SHARE of the
+        # items; every other option is the answer of an independent redraw of the same generator.
+        # Redraw answers have the answer's own distribution, so no single value, rank or
+        # "typical size" points at the key (ML-1 review: windows around the answer leaked 58 %).
+        # The side (above or below the answer) is drawn first: each misconception errs in a fixed
+        # direction, so picking among all of them would push the answer's rank (verify gate).
+        above = rng.random() < 0.5
+        wrong = sorted({m for m in mistakes if (m > correct if above else m < correct)})
+        if wrong and rng.random() < MISCONCEPTION_SHARE:
+            values.append(wrong[rng.randrange(len(wrong))])
+        while len(values) < 4:
+            v = self._draw(rng)[1]
+            if v not in values:
+                values.append(v)
+        options, key = choice_options(rng, str(correct), [str(v) for v in values[1:]])
         return Instance(
             stem_md=f"Дан SQL-скрипт с таблицей `{params['table']}`. Чему равна сумма значений "
                     "`cnt` по всем строкам, которые вернёт SELECT-запрос в конце скрипта? "
@@ -77,15 +89,7 @@ class SqlGroupHaving:
             sum(after_where.values()),                                             # ignores HAVING
             sum(1 for c in after_where.values() if c >= having),                   # counts result rows
         ]
-        # Misconceptions first; the rest are random counts within WINDOW of the answer on the needed
-        # side (not the nearest ones: contiguous fillers made the set reveal the answer).
-        near_below = list(range(max(0, correct - WINDOW), correct))
-        near_above = list(range(correct + 1, correct + WINDOW + 1))
-        rng.shuffle(near_below)
-        rng.shuffle(near_above)
-        below = _unique([m for m in mistakes if 0 <= m < correct] + near_below)
-        above = _unique([m for m in mistakes if m > correct] + near_above)
-        return params, correct, below, above
+        return params, correct, mistakes
 
     def is_correct(self, key, answer: dict) -> bool:
         return is_choice_correct(key, answer)
