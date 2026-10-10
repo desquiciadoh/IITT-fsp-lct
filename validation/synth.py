@@ -112,6 +112,9 @@ class World:
 
 # ── heroes (README §8 personas + Ivan), injected with fixed latent truth ─────
 
+# Personas are demo scripts with a fixed latent truth; their CAT sessions are honest draws like
+# everyone else's, so an unlucky seed can contradict a script (tests/ml/test_synth.py checks that
+# each story holds on >= 85 % of sessions instead of re-drawing the seed until it does).
 HEROES = [
     {"key": "anna", "name": "Анна Соколова", "email": "anna.fsp@example.com", "spec": "backend", "theta": 2.0,
      "claim": "senior", "fsp": {"rank": "kms", "results": [("prize_winner", "algorithmic", 2), ("winner", "product", 1)]},

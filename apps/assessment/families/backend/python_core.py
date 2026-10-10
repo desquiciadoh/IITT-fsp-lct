@@ -3,7 +3,7 @@
 bm.py.mutable_default.v2  a default list argument shared between calls (typed: sum of one result)
 bm.py.slicing.v1          sum of a slice with negative indices and steps (typed)
 bm.py.floor_mod.v1        // and % with negative operands (typed)
-bm.py.late_binding.v1     closures created in a loop, with and without default-argument capture (choice)
+bm.py.late_binding.v2     closures created in a loop, with and without default-argument capture (typed)
 
 Generators evaluate the semantics by hand-written rules; oracles execute the code the candidate
 sees (builder.run_python).
@@ -11,7 +11,7 @@ sees (builder.run_python).
 from __future__ import annotations
 
 from ..base import FamilyMeta
-from ..builder import RedrawChoiceFamily, TypedNumberFamily, run_python
+from ..builder import TypedNumberFamily, run_python
 
 BM = ("backend", "ml_data")
 FN = ("add", "push", "collect", "remember", "track", "log_item", "keep", "store")
@@ -30,11 +30,15 @@ class MutableDefault(TypedNumberFamily):
     SEMANTIC = ("calls", "show")
 
     def draw(self, rng):
-        calls = []
-        for _ in range(rng.randint(3, 5)):
-            calls.append([rng.randint(1, 99), rng.random() < 0.3])     # (value, pass an explicit [])
-        return {"calls": calls, "fn": rng.choice(FN), "arg": rng.choice(("items", "acc", "bucket", "seen")),
-                "show": rng.randrange(len(calls))}
+        """The shown result is always one that relies on the default list, and at least two calls
+        share it, so "a new list every call" gives a different answer (ML-6 re-review: on a third
+        of the first v2 items the answer was the shown call's own value)."""
+        fn, arg = rng.choice(FN), rng.choice(("items", "acc", "bucket", "seen"))
+        while True:
+            calls = [[rng.randint(1, 99), rng.random() < 0.3] for _ in range(rng.randint(3, 5))]
+            shared = [i for i, c in enumerate(calls) if not c[1]]
+            if len(shared) >= 2:
+                return {"calls": calls, "fn": fn, "arg": arg, "show": rng.choice(shared)}
 
     def solve(self, p):
         v, explicit = p["calls"][p["show"]]
@@ -150,18 +154,19 @@ class FloorMod(TypedNumberFamily):
         return float(run_python(inst.code["text"]))
 
 
-class LateBinding(RedrawChoiceFamily):
+class LateBinding(TypedNumberFamily):
     """b = 1.0 (senior boundary): closures look the loop variable up when called, so every lambda
-    sees its last value, unless the value is bound as a default argument. Distractors are lists of
-    the same length built from the same loop (early, late, the loop's end value, shifted by one)."""
+    sees its last value, unless the value is bound as a default argument. The program prints the
+    sum of the calls. Version 2 is typed: derived list options were guessable by their sums
+    (ML-6 re-review)."""
 
-    meta = FamilyMeta(id="bm.py.late_binding.v1", version=1, specs=BM, topic="python.core",
-                      skills=("python",), format="code_output", a=1.4, b=1.0, c=0.25, time_limit_s=90)
+    meta = FamilyMeta(id="bm.py.late_binding.v2", version=2, specs=BM, topic="python.core",
+                      skills=("python",), format="code_output", a=1.4, b=1.0, c=0.0, time_limit_s=90)
     SEMANTIC = ("n", "start", "k", "op", "c", "bind")
 
     def draw(self, rng):
         return {"n": rng.randint(3, 6), "start": rng.randint(0, 30), "k": rng.randint(2, 50),
-                "op": rng.choice(("*", "+", "-")), "c": rng.randint(0, 20), "bind": rng.random() < 0.4,
+                "op": rng.choice(("*", "+", "-")), "c": rng.randint(0, 20), "bind": rng.random() < 0.5,
                 "var": rng.choice(("i", "j", "x", "step", "n", "idx")),
                 "fs": rng.choice(("fs", "funcs", "handlers", "ops", "jobs", "calls"))}
 
@@ -169,30 +174,20 @@ class LateBinding(RedrawChoiceFamily):
         base = {"*": i * p["k"], "+": i + p["k"], "-": i - p["k"]}[p["op"]]
         return base + p["c"]
 
-    def answer(self, p):
-        rng_vals = range(p["start"], p["start"] + p["n"])
-        last = rng_vals[-1]
-        return str([self._value(i if p["bind"] else last, p) for i in rng_vals])
-
-    def alternatives(self, p, rng):
-        vals = list(range(p["start"], p["start"] + p["n"]))
-        end = vals[-1] + 1
-        return [str([self._value(i, p) for i in vals]),                # "each lambda keeps its own i"
-                str([self._value(vals[-1], p) for _ in vals]),         # "even the default is late-bound"
-                str([self._value(end, p) for _ in vals]),              # "the variable ends at range's stop"
-                str([self._value(i + 1, p) for i in vals]),            # off by one
-                str([self._value(vals[0], p) for _ in vals])]          # "bound once, at the first value"
+    def solve(self, p):
+        vals = range(p["start"], p["start"] + p["n"])
+        return sum(self._value(i if p["bind"] else vals[-1], p) for i in vals)
 
     def render(self, p):
         v, fs = p["var"], p["fs"]
         body = f"{v} {p['op']} {p['k']}" + (f" + {p['c']}" if p["c"] else "")
         lam = f"lambda {v}={v}: {body}" if p["bind"] else f"lambda: {body}"
         lines = [f"{fs} = []", f"for {v} in range({p['start']}, {p['start'] + p['n']}):",
-                 f"    {fs}.append({lam})", f"print([f() for f in {fs}])"]
+                 f"    {fs}.append({lam})", f"print(sum(f() for f in {fs}))"]
         return "Что напечатает программа?", {"lang": "python", "text": "\n".join(lines)}
 
-    def oracle_answer(self, inst):
-        return run_python(inst.code["text"])
+    def oracle_value(self, inst):
+        return float(run_python(inst.code["text"]))
 
 
 FAMILIES = [MutableDefault(), Slicing(), FloorMod(), LateBinding()]

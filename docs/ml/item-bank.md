@@ -78,17 +78,17 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | `be.sys.cache_latency.v1` | backend | backend.system_design | numeric_scenario | 1 | -0.4 | junior | 0 | 90 |
 | `be.sys.littles_law.v1` | backend | backend.system_design | numeric_scenario | 1.2 | 0.6 | middle | 0 | 120 |
 | `bm.py.floor_mod.v1` | backend, ml_data | python.core | code_output | 1.2 | 0.1 | middle | 0 | 90 |
-| `bm.py.late_binding.v1` | backend, ml_data | python.core | code_output | 1.4 | 1 | senior | 0.25 | 90 |
+| `bm.py.late_binding.v2` | backend, ml_data | python.core | code_output | 1.4 | 1 | senior | 0 | 90 |
 | `bm.py.mutable_default.v2` | backend, ml_data | python.core | code_output | 1.3 | 0.4 | middle | 0 | 90 |
 | `bm.py.slicing.v1` | backend, ml_data | python.core | code_output | 1.1 | -0.6 | junior | 0 | 90 |
 | `bm.sql.left_join_count.v2` | backend, ml_data | sql.joins | sql_result | 1.3 | 0.2 | middle | 0 | 150 |
 | `bm.sql.not_in_null.v2` | backend, ml_data | sql.joins | sql_result | 1.4 | 1.2 | senior | 0 | 180 |
 | `bm.sql.null_aggregates.v1` | backend, ml_data | sql.aggregation | sql_result | 1.2 | -0.2 | junior | 0 | 120 |
-| `fe.css.box_model.v1` | frontend | web.css | numeric_scenario | 1.1 | -0.6 | junior | 0 | 90 |
+| `fe.css.box_model.v2` | frontend | web.css | numeric_scenario | 1.1 | -0.4 | junior | 0 | 120 |
 | `fe.css.flex_grow.v1` | frontend | web.css | numeric_scenario | 1.3 | 1 | senior | 0 | 150 |
 | `fe.css.specificity.v1` | frontend | web.css | code_output | 1.2 | 0.4 | middle | 0.25 | 120 |
 | `fe.js.array_chain.v1` | frontend | js.core | code_output | 1 | -0.9 | junior | 0 | 90 |
-| `fe.js.closure_loop.v1` | frontend | js.core | code_output | 1.3 | 0 | middle | 0.25 | 90 |
+| `fe.js.closure_loop.v2` | frontend | js.core | code_output | 1.3 | 0 | middle | 0 | 90 |
 | `fe.js.coercion.v2` | frontend | js.core | code_output | 1.2 | 0.5 | middle | 0 | 90 |
 | `fe.js.event_loop.v2` | frontend | js.event_loop | code_output | 1.4 | 0.2 | middle | 0.25 | 90 |
 | `fe.react.effect_runs.v2` | frontend | web.react | code_output | 1.1 | 0.1 | middle | 0 | 150 |
@@ -113,5 +113,5 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | `sh.code.loop_trace.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1 | -0.8 | junior | 0 | 180 |
 | `sh.code.recursion_calls.v2` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.5 | middle | 0 | 180 |
 | `sh.code.stack_queue.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.1 | -1.2 | intern | 0 | 120 |
-| `sh.ds.heap_order.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.2 | middle | 0.25 | 120 |
+| `sh.ds.heap_order.v2` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.3 | middle | 0 | 150 |
 | `sh.ds.op_cost.v1` | backend, frontend, ml_data | algorithms.data_structures | concept_mcq | 1 | -0.3 | junior | 0.25 | 60 |

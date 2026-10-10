@@ -1,6 +1,6 @@
 """JavaScript language families (topic js.core).
 
-fe.js.closure_loop.v1  var vs let in a loop that schedules callbacks (choice, redraw distractors)
+fe.js.closure_loop.v2  var vs let in a loop that schedules callbacks (typed: the printed total)
 fe.js.coercion.v2      value of a mixed-type expression that prints an integer (typed)
 fe.js.array_chain.v1   map/filter/reduce chain on a literal array (typed)
 
@@ -14,7 +14,7 @@ import math
 import re
 
 from ..base import FamilyMeta
-from ..builder import RedrawChoiceFamily, TypedNumberFamily
+from ..builder import TypedNumberFamily
 
 F = ("frontend",)
 
@@ -26,66 +26,57 @@ def node_answer(stdout: str) -> str:
 
 # ── closures in loops ──────────────────────────────────────────────────────
 
-class ClosureLoop(RedrawChoiceFamily):
+class ClosureLoop(TypedNumberFamily):
     """b = 0.0 (junior/middle boundary): with `var` every callback sees the one function-scoped
-    variable after the loop ends; `let` makes a fresh binding per iteration. Distractors are lists of
-    the same length from the same loop (per-iteration, last iteration, first value, shifted by one
-    step), so the loop count and the printed expression do not rule any of them out (ML-6 review)."""
+    variable after the loop ends; `let` makes a fresh binding per iteration. The callbacks add to a
+    total that is printed once, after all of them ran. Version 2 is typed: as a choice item the
+    `var` answer (the final value repeated) always had the largest sum among the derived options,
+    which a candidate could pick without reading the code (ML-6 re-review)."""
 
-    meta = FamilyMeta(id="fe.js.closure_loop.v1", version=1, specs=F, topic="js.core",
-                      skills=("javascript",), format="code_output", a=1.3, b=0.0, c=0.25, time_limit_s=90)
-    SEMANTIC = ('decl', 'start', 'n', 'step', 'k', 'op')
+    meta = FamilyMeta(id="fe.js.closure_loop.v2", version=2, specs=F, topic="js.core",
+                      skills=("javascript",), format="code_output", a=1.3, b=0.0, c=0.0, time_limit_s=90)
     NODE_CHECK = True
+    SEMANTIC = ("decl", "start", "n", "step", "k", "op")
 
     def draw(self, rng):
-        return {"decl": rng.choice(("var", "let")), "start": rng.randint(0, 99), "n": rng.randint(2, 5),
-                "step": rng.randint(1, 4), "k": rng.randint(2, 500), "op": rng.choice(("*", "+")),
-                "var": rng.choice(("i", "j", "n", "idx", "step", "k", "t", "pos", "counter", "val", "num", "ptr", "offset", "item")),
+        return {"decl": rng.choice(("var", "let")), "start": rng.randint(0, 199), "n": rng.randint(2, 5),
+                "step": rng.randint(1, 4), "k": rng.randint(2, 99), "op": rng.choice(("*", "+")),
+                "var": rng.choice(("i", "j", "n", "idx", "step", "k", "t", "pos", "counter", "val", "num", "ptr",
+                                   "offset", "item")),
+                "acc": rng.choice(("total", "sum", "acc", "result", "s")),
                 "delay": rng.randint(10, 500) * 10}
-
-    def _vals(self, p):
-        return [p["start"] + p["step"] * t for t in range(p["n"])]
 
     def _apply(self, v, p):
         return v * p["k"] if p["op"] == "*" else v + p["k"]
 
-    def answer(self, p):
-        vals = self._vals(p)
+    def solve(self, p):
+        vals = [p["start"] + p["step"] * t for t in range(p["n"])]
         final = vals[-1] + p["step"]                    # the value that ends the loop
         seen = vals if p["decl"] == "let" else [final] * len(vals)
-        return ", ".join(str(self._apply(v, p)) for v in seen)
-
-    def alternatives(self, p, rng):
-        vals = self._vals(p)
-        final = vals[-1] + p["step"]
-        n = len(vals)
-        seqs = [vals,                                   # a fresh binding per iteration (let)
-                [final] * n,                            # the shared variable after the loop (var)
-                [vals[-1]] * n,                         # "the last iteration's value"
-                vals[1:] + [final],                     # shifted by one step
-                [vals[0]] * n]                          # "captured once, at the first value"
-        return [", ".join(str(self._apply(v, p)) for v in x) for x in seqs]
+        return sum(self._apply(v, p) for v in seen)
 
     def render(self, p):
-        v = p["var"]
+        v, acc = p["var"], p["acc"]
         end = p["start"] + p["step"] * p["n"]
         inc = f"{v}++" if p["step"] == 1 else f"{v} += {p['step']}"
-        code = (f"for ({p['decl']} {v} = {p['start']}; {v} < {end}; {inc}) {{\n"
-                f"  setTimeout(() => console.log({v} {p['op']} {p['k']}), {p['delay']});\n"
-                "}")
-        return ("Что выведет скрипт? Значения перечислены через запятую в порядке вывода.",
-                {"lang": "javascript", "text": code})
+        code = (f"let {acc} = 0;\n"
+                f"for ({p['decl']} {v} = {p['start']}; {v} < {end}; {inc}) {{\n"
+                f"  setTimeout(() => {{ {acc} += {v} {p['op']} {p['k']}; }}, {p['delay']});\n"
+                "}\n"
+                f"setTimeout(() => console.log({acc}), {p['delay'] + 1000});")
+        return "Что выведет скрипт?", {"lang": "javascript", "text": code}
 
-    def oracle_answer(self, inst):
-        m = re.search(r"for \((var|let) (\w+) = (\d+); \w+ < (\d+); \w+(?:\+\+| \+= (\d+))\)", inst.code["text"])
-        decl, _, start, end, step = m.group(1), m.group(2), int(m.group(3)), int(m.group(4)), int(m.group(5) or 1)
-        op, k = re.search(r"console\.log\(\w+ ([*+]) (\d+)\)", inst.code["text"]).groups()
+    def oracle_value(self, inst):
+        text = inst.code["text"]
+        m = re.search(r"for \((var|let) (\w+) = (\d+); \w+ < (\d+); \w+(?:\+\+| \+= (\d+))\)", text)
+        decl, start, end, step = m.group(1), int(m.group(3)), int(m.group(4)), int(m.group(5) or 1)
+        op, k = re.search(r"\+= \w+ ([*+]) (\d+); \}", text).groups()
         bindings, x = [], start
         while x < end:                                   # run the loop
             bindings.append(x)
             x += step
         seen = bindings if decl == "let" else [x] * len(bindings)   # var: the shared final value
-        return ", ".join(str(v * int(k) if op == "*" else v + int(k)) for v in seen)
+        return float(sum(v * int(k) if op == "*" else v + int(k) for v in seen))
 
 
 # ── coercion ───────────────────────────────────────────────────────────────
@@ -341,10 +332,14 @@ class ArrayChain(TypedNumberFamily):
     NODE_CHECK = True
 
     def draw(self, rng):
-        mod = rng.randint(2, 4)
-        return {"arr": [rng.randint(1, 20) for _ in range(rng.randint(4, 7))], "mul": rng.randint(2, 5),
-                "add": rng.randint(0, 9), "mod": mod, "rem": rng.randrange(mod), "init": rng.randint(0, 20),
-                "name": rng.choice(("nums", "data", "xs", "values", "items", "list"))}
+        name = rng.choice(("nums", "data", "xs", "values", "items", "list"))
+        while True:
+            mod = rng.randint(2, 4)
+            p = {"arr": [rng.randint(1, 20) for _ in range(rng.randint(4, 7))], "mul": rng.randint(2, 5),
+                 "add": rng.randint(0, 9), "mod": mod, "rem": rng.randrange(mod), "init": rng.randint(0, 20),
+                 "name": name}
+            if self.solve(p) != p["init"]:   # an empty filter would make the answer the initial value
+                return p
 
     def solve(self, p):
         mapped = [x * p["mul"] + p["add"] for x in p["arr"]]

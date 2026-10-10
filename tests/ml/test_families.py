@@ -218,6 +218,48 @@ class _TypedModalAnswer(_TypedGood):
         return super().oracle(inst)
 
 
+class _TypedAnswerIsFirstNumber(_TypedGood):
+    """Half of the items ask for a number that is printed in the stem."""
+
+    def generate(self, rng):
+        inst = super().generate(rng)
+        if rng.random() < 0.5:
+            a, b = (int(x) for x in inst.stem_md.split(" = ")[0].split(" * "))
+            inst = Instance(stem_md=f"{a} * {b} = ? (ответ: первое число, {a})", input="number", key=str(a),
+                            fingerprint=fingerprint_of({"a": a, "b": b, "first": True}))
+        return inst
+
+    def oracle(self, inst):
+        if "первое число" in inst.stem_md:
+            return inst.stem_md.split()[0]
+        return super().oracle(inst)
+
+
+class _TypedDecorationChangesAnswer:
+    """A builder family whose answer reads a field it left out of SEMANTIC."""
+    from assessment.families.builder import TypedNumberFamily as _Base
+
+    class Fam(_Base):
+        meta = dataclasses.replace(_Good.meta, id="t.test.decor.v1", version=1, c=0.0, format="numeric_scenario")
+        SEMANTIC = ("a",)
+
+        def draw(self, rng):
+            return {"a": rng.randint(10, 10_000), "name_len": rng.randint(1, 9)}
+
+        def solve(self, p):
+            return p["a"] + p["name_len"]                  # "decoration" leaks into the answer
+
+        def render(self, p):
+            return f"{p['a']} + {p['name_len']} = ?", None
+
+        def oracle_value(self, inst):
+            a, b = (int(x) for x in inst.stem_md.split(" = ")[0].split(" + "))
+            return float(a + b)
+
+    def __new__(cls):
+        return cls.Fam()
+
+
 class _DistractorNumbersNotInItem(_Good):
     """The answer reuses the stem's operands ("a b"), distractors are numbers that never occur in
     it: a candidate who only checks which numbers appear in the item gets it right."""
@@ -240,8 +282,10 @@ class _DistractorNumbersNotInItem(_Good):
     (_DuplicateOptions, "options: duplicate texts"),
     (_SeedInFingerprint, "same content, different fingerprint"),
     (_FingerprintMissesParams, "same fingerprint, different answer"),
-    (_TypedModalAnswer, "modal: the answer '42.0'"),
+    (_TypedModalAnswer, "modal: the answer '42'"),
     (_DistractorNumbersNotInItem, "guessing: 'fewest numbers absent from the item'"),
+    (_TypedAnswerIsFirstNumber, "guessing: 'first number in the item'"),
+    (_TypedDecorationChangesAnswer, "semantic: the answer changes"),
     (_CorrectAlwaysFirst, "position"),
     (_Nondeterministic, "determinism"),
     (_TinySpace, "collisions"),
@@ -484,7 +528,7 @@ def test_js_family_keys_match_real_node(fid, tmp_path):
             assert float(got) == pytest.approx(float(inst.key)), (inst.code["text"], got)
 
 
-# ── builder: thread safety, rounding ties, semantic fingerprints, balanced distractors ──
+# ── builder: thread safety, rounding ties, semantic fingerprints ──
 
 def test_run_python_is_thread_safe_and_does_not_touch_stdout(capsys):
     """find_bug runs item code during generation; under threads the old redirect_stdout swapped
@@ -540,26 +584,3 @@ def test_semantic_fingerprint_ignores_decorative_fields():
     # a classification label always counts, even when SEMANTIC omits it
     assert (semantic_fingerprint(Fam(), {"x": 1, "y": 2, "label": "A"})
             != semantic_fingerprint(Fam(), {"x": 1, "y": 2, "label": "B"}))
-
-
-def test_balanced_pick_makes_the_answers_similarity_rank_uniform():
-    """With distractors derived from the answer, the answer is the most similar option unless the
-    subset is chosen; balanced_pick draws a target rank uniformly and uses a subset with it."""
-    from assessment.families.builder import balanced_pick, similarity_rank
-
-    rng = random.Random(7)
-    ranks = Counter()
-    for _ in range(800):
-        vals = rng.sample(range(10, 99), 4)
-        answer = str(vals)
-        pool = [str(vals[::-1]), str(vals[1:] + vals[:1]), str(sorted(vals)), str([v + 1 for v in vals]),
-                str(rng.sample(range(10, 99), 4)), str(rng.sample(range(10, 99), 4))]
-        pool = list(dict.fromkeys(x for x in pool if x != answer))
-        picked = balanced_pick(rng, answer, pool, 3)
-        assert len(set(picked)) == 3 and set(picked) <= set(pool)
-        ranks[min(similarity_rank(answer, picked), 3)] += 1
-    total = sum(ranks.values())
-    # Neither extreme may identify the answer: "most similar" (rank 0) and "least similar" (rank 3)
-    # stay within the harness margin of chance. Unreachable middle ranks fall back to the nearest.
-    assert ranks[0] / total <= 0.30 and ranks[3] / total <= 0.30, ranks
-    assert ranks[0] / total >= 0.15, ranks     # the target rank is honoured, not just avoided

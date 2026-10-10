@@ -1,4 +1,4 @@
-"""Base classes for the three family shapes used in ML-6. Pure; subclasses supply content.
+"""Base classes for the two family shapes used in ML-6. Pure; subclasses supply content.
 
 TypedNumberFamily      the candidate types a number (input "number", c = 0). The generator
                        solves the drawn parameters one way; `oracle_value` recomputes from what
@@ -8,11 +8,9 @@ TypedNumberFamily      the candidate types a number (input "number", c = 0). The
 ClassificationFamily   a fixed set of option labels on every item and an answer class drawn
                        uniformly, then a scenario of that class. Nothing in the options points
                        at the answer; `classify` is a rule-based oracle over the rendered text.
-RedrawChoiceFamily     choice items whose distractors are plausible *for this item*: wrong
-                       answers built from the item's own parameters (`alternatives`), e.g. the
-                       same values in another order, the same length with other bindings. The
-                       first version drew answers of unrelated items, which a candidate could
-                       eliminate by checking which numbers appear in the code (ML-6 review).
+(Choice items with distractors derived from the item's parameters were tried and dropped in the
+ML-6 reviews: every derived set left an option-only shortcut, first similarity, then the sums of
+the options. Code-reading items that ask "what does it print" are typed instead.)
 
 Fingerprints hash the semantic parameters: `SEMANTIC` names the drawn fields that change the
 question; decorative fields (names, request ids, contexts) are left out, so the collision rate
@@ -20,28 +18,13 @@ counts real repeats (ML.md §3: "sha256 of the drawn parameters").
 """
 from __future__ import annotations
 
-import difflib
 import functools
 import io
-import itertools
 import math
 import random
 
 from .base import FamilyMeta, Instance, fingerprint_of
-from .kit import (
-    choice_options,
-    is_choice_correct,
-    is_number_correct,
-    norm_text,
-    option_key_for_text,
-)
-
-
-def fmt_number(value: float, decimals: int) -> str:
-    """An integer, or exactly `decimals` digits after the point."""
-    if decimals == 0:
-        return str(int(round(value)))
-    return f"{value:.{decimals}f}"
+from .kit import choice_options, is_choice_correct, is_number_correct, option_key_for_text
 
 
 def exact_key(value: float, decimals: int) -> str:
@@ -137,90 +120,6 @@ class ClassificationFamily:
     def oracle(self, inst: Instance):
         label = self.classify(inst)
         return option_key_for_text(inst.options, label) if label is not None else None
-
-
-class RedrawChoiceFamily:
-    meta: FamilyMeta
-    K = 4
-    SEMANTIC: tuple[str, ...] | None = None
-
-    def draw(self, rng: random.Random) -> dict:
-        raise NotImplementedError
-
-    def answer(self, p: dict) -> str:
-        raise NotImplementedError
-
-    def alternatives(self, p: dict, rng: random.Random) -> list[str]:
-        """Wrong answers consistent with this item (its values, length, shape). Must give at
-        least K − 1 distinct texts different from the answer."""
-        raise NotImplementedError
-
-    def render(self, p: dict) -> tuple[str, dict[str, str] | None]:
-        raise NotImplementedError
-
-    def oracle_answer(self, inst: Instance) -> str | None:
-        raise NotImplementedError
-
-    MAX_REDRAWS = 50
-
-    def generate(self, rng: random.Random) -> Instance:
-        # Parameters whose plausible wrong answers coincide (e.g. a stack and a heap pop the same
-        # values) cannot make a K-option item; they are redrawn from the same stream.
-        for _ in range(self.MAX_REDRAWS):
-            p = self.draw(rng)
-            correct = self.answer(p)
-            pool, seen = [], {norm_text(correct)}
-            for alt in self.alternatives(p, rng):
-                if norm_text(alt) not in seen:
-                    seen.add(norm_text(alt))
-                    pool.append(alt)
-            if len(pool) >= self.K - 1:
-                break
-        else:
-            raise ValueError(f"{self.meta.id}: only {len(pool)} distinct alternatives after "
-                             f"{self.MAX_REDRAWS} draws")
-        picked = balanced_pick(rng, correct, pool, self.K - 1)
-        stem, code = self.render(p)
-        options, key = choice_options(rng, correct, picked, k=self.K)
-        return Instance(stem_md=stem, input="choice", key=key, fingerprint=semantic_fingerprint(self, p),
-                        code=code, options=options)
-
-    def is_correct(self, key, answer: dict) -> bool:
-        return is_choice_correct(key, answer)
-
-    def oracle(self, inst: Instance):
-        text = self.oracle_answer(inst)
-        return option_key_for_text(inst.options, text) if text is not None else None
-
-
-def similarity_rank(correct: str, others: list[str]) -> int:
-    """How many options are strictly more similar to the rest than the answer is (0 = the answer
-    is the most similar). Similarity is the summed difflib ratio, as in the verify harness."""
-    texts = [correct, *others]
-
-    def score(i):
-        return sum(difflib.SequenceMatcher(None, texts[i], texts[j]).ratio() for j in range(len(texts)) if j != i)
-    mine = score(0)
-    return sum(1 for i in range(1, len(texts)) if score(i) > mine)
-
-
-def balanced_pick(rng: random.Random, correct: str, pool: list[str], k: int) -> list[str]:
-    """Choose k distractors so that the answer's similarity rank among the options is uniform.
-
-    Distractors derived from the answer (same values in another order, the same shape) make the
-    answer the "centre" of the options, and picking the option most similar to the others then
-    beats chance (ML-6 review: 41-72 %). A target rank is drawn uniformly and a subset of the pool
-    with that rank is used; if no subset has it, one with the nearest rank."""
-    if len(pool) == k:
-        return list(pool)
-    subsets = list(itertools.combinations(pool, k))
-    if len(subsets) > 120:                       # keep generation cheap; still a fair sample
-        subsets = rng.sample(subsets, 120)
-    target = rng.randrange(k + 1)
-    ranked = [(abs(similarity_rank(correct, list(s)) - target), i) for i, s in enumerate(subsets)]
-    best = min(d for d, _ in ranked)
-    choices = [subsets[i] for d, i in ranked if d == best]
-    return list(choices[rng.randrange(len(choices))])
 
 
 # ── oracle helpers ─────────────────────────────────────────────────────────
