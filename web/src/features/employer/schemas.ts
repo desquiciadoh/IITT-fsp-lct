@@ -141,7 +141,8 @@ export const offerFormSchema = z
       .min(1, 'Укажите зарплату'),
     salary_type: salaryTypeSchema,
     contact_channel: z.enum(['email', 'phone', 'telegram', 'platform']),
-    contact_value: z.string().trim().max(255, 'Максимум 255 символов').default(''),
+    // No .default(''): contact_value is a plain controlled input, always present.
+    contact_value: z.string().trim().max(255, 'Максимум 255 символов'),
     expires_in_days: z.coerce
       .number({ message: 'Целое число дней' })
       .int('Целое число')
@@ -162,13 +163,27 @@ export const offerFormSchema = z
     }
   })
 
-export type OfferFormValues = z.output<typeof offerFormSchema>
-export type OfferFormInput = Omit<z.input<typeof offerFormSchema>, 'expires_in_days'> & {
-  expires_in_days?: number | string
+/**
+ * Form values as they live inside react-hook-form BEFORE zod coercion runs:
+ * number fields arrive from <input> as strings, so the form type stays `string`
+ * and the schema (`z.coerce.number()`) produces the numeric output.
+ */
+export type OfferFormInput = {
+  title: string
+  description: string
+  salary_min: string
+  salary_max: string
+  salary_type: 'gross' | 'net'
+  contact_channel: (typeof CONTACT_CHANNELS)[number]
+  contact_value: string
+  expires_in_days?: string
 }
 
-/** Raw form input → contract body for useSendOffer (numbers coerced, expiry optional). */
-export function toSendOfferInput(values: OfferFormInput): {
+/** Schema output after coercion (numbers) — the third useForm generic. */
+export type OfferFormValues = z.output<typeof offerFormSchema>
+
+/** Raw (coerced) form values → contract body for useSendOffer (expiry optional). */
+export function toSendOfferInput(values: OfferFormValues): {
   title: string
   description: string
   salary_min: number

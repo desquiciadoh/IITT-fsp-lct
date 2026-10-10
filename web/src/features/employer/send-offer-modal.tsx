@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { useSendOffer, type SendOfferInput } from '@/api/offers'
-import type { Offer, Position, SalaryType, TalentShort } from '@/api/types'
+import type { Offer, Position, TalentShort } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,7 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { CONTACT_CHANNELS, offerFormSchema, toSendOfferInput, type OfferFormInput } from '@/features/employer/schemas'
+import {
+  CONTACT_CHANNELS,
+  offerFormSchema,
+  toSendOfferInput,
+  type OfferFormInput,
+  type OfferFormValues,
+} from '@/features/employer/schemas'
 import { errorMessage } from '@/i18n/errors'
 import { CONTACT_CHANNEL_LABEL, SALARY_TYPE_LABEL } from '@/lib/labels'
 
@@ -77,8 +83,11 @@ export function SendOfferModal({
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<OfferFormInput>({
-    resolver: zodResolver(offerFormSchema),
+    // Explicit generics: with z.coerce the inferred input/output types differ;
+    // the form stores raw strings and zodResolver coerces them on submit.
+  } = useForm<OfferFormInput, unknown, OfferFormValues>({
+    // Cast: @hookform/resolvers infers `unknown` for z.coerce.number() inputs.
+    resolver: zodResolver(offerFormSchema) as never,
     defaultValues: sendOfferDefaults(position),
   })
 
@@ -234,7 +243,7 @@ export function SendOfferModal({
                 </div>
               )}
             />
-            <ChannelValueField register={register} errors={errors} />
+            <ChannelValueField control={control} register={register} errors={errors} />
           </fieldset>
 
           {/* expiry (optional, BE default 14 days) */}
@@ -269,13 +278,16 @@ export function SendOfferModal({
 
 /** contact_value is not needed for the in-platform chat — render it only for external channels. */
 function ChannelValueField({
+  control,
   register,
   errors,
 }: {
-  register: ReturnType<typeof useForm<OfferFormInput>>['register']
-  errors: Partial<Record<keyof OfferFormInput, { message?: string } | undefined>>
+  /** Control typed with the same three generics as the parent useForm call. */
+  control: Control<OfferFormInput, unknown, OfferFormValues>
+  register: UseFormRegister<OfferFormInput>
+  errors: FieldErrors<OfferFormInput>
 }) {
-  const channel = useWatchChannel()
+  const channel = useWatch({ control, name: 'contact_channel' })
   if (channel === 'platform') return null
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -291,23 +303,6 @@ function placeholderFor(channel?: string): string {
   if (channel === 'phone') return '+7 900 000-00-00'
   if (channel === 'telegram') return '@username'
   return ''
-}
-
-/** Small hook so ChannelValueField can react to the channel radio without prop drilling. */
-function useWatchChannel(): string | undefined {
-  // The parent controls the form; we read the live value through the form
-  // context created by useForm above (Controller re-renders keep it fresh).
-  const ctx = useFormContextSafe()
-  return ctx ? String(ctx.watch('contact_channel') ?? '') : undefined
-}
-
-import { useFormContext } from 'react-hook-form'
-function useFormContextSafe() {
-  try {
-    return useFormContext<OfferFormInput>()
-  } catch {
-    return null
-  }
 }
 
 // Re-export mapping used by tests / callers that assert which field failed.
