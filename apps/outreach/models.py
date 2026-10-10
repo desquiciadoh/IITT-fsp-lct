@@ -110,6 +110,12 @@ class Offer(models.Model):
         help_text="Frozen match score components at offer creation time",
     )
 
+    # Anti-fraud and candidate controls
+    below_floor = models.BooleanField(
+        default=False,
+        help_text="True if the offer salary_max is below the candidate's private floor",
+    )
+
     # Optimistic locking
     version = models.IntegerField(
         default=1,

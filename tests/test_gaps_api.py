@@ -150,10 +150,10 @@ def test_g3_taxonomy_endpoint():
     assert Specialization.ML_DATA in spec_ids
 
     grade_cuts = {g["id"]: g["rating_cut"] for g in data["grades"]}
-    assert grade_cuts[Grade.INTERN] == 800
-    assert grade_cuts[Grade.JUNIOR] == 960
-    assert grade_cuts[Grade.MIDDLE] == 1120
-    assert grade_cuts[Grade.SENIOR] == 1300
+    assert grade_cuts[Grade.INTERN] == 600
+    assert grade_cuts[Grade.JUNIOR] == 800
+    assert grade_cuts[Grade.MIDDLE] == 1000
+    assert grade_cuts[Grade.SENIOR] == 1200
 
     decline_codes = [dr["id"] for dr in data["decline_reasons"]]
     assert DeclineReason.SALARY in decline_codes

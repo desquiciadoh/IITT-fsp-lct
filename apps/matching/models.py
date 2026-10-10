@@ -2,9 +2,19 @@
 
 import uuid
 
-from core.enums import Grade, PositionStatus, SalaryType, Specialization, TrustLevel, WorkFormat
+from core.enums import (
+    ApplicationStatus,
+    Grade,
+    MicroTaskFormat,
+    PositionStatus,
+    SalaryType,
+    Specialization,
+    TrustLevel,
+    WorkFormat,
+)
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from pgvector.django import HnswIndex, VectorField
 
@@ -208,3 +218,180 @@ class Shortlist(models.Model):
 
     def __str__(self) -> str:
         return f"Shortlist: {self.candidate_id} for {self.position_id}"
+
+
+class Application(models.Model):
+    """Candidate direct application to a position (Task BE-17)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    position = models.ForeignKey(
+        Position,
+        on_delete=models.CASCADE,
+        related_name="applications",
+    )
+    candidate = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="applications",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ApplicationStatus.choices,
+        default=ApplicationStatus.APPLIED,
+    )
+    note = models.TextField(blank=True, default="", help_text="Cover letter or candidate note")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "applications"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["position", "candidate"],
+                name="uq_position_candidate_application",
+            ),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Application {self.id}: {self.candidate_id} for {self.position_id} ({self.status})"
+
+
+class ApplicationEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise PermissionDenied("ApplicationEvent entries are immutable and cannot be updated.")
+
+    def delete(self):
+        raise PermissionDenied("ApplicationEvent entries are immutable and cannot be deleted.")
+
+
+class ApplicationEvent(models.Model):
+    """Audit log of status changes for an application (Task BE-17)."""
+
+    id = models.BigAutoField(primary_key=True)
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="events",
+    )
+    from_status = models.CharField(max_length=20, blank=True, default="")
+    to_status = models.CharField(max_length=20, choices=ApplicationStatus.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ApplicationEventQuerySet.as_manager()
+
+    class Meta:
+        db_table = "application_events"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.application_id}: {self.from_status} → {self.to_status}"
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            raise PermissionDenied("ApplicationEvent entries are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionDenied("ApplicationEvent entries are immutable and cannot be deleted.")
+
+
+class MicroTask(models.Model):
+    """Practical take-home or auto-graded micro-task created by an employer (Task BE-18)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="micro_tasks",
+    )
+    title = models.CharField(max_length=255)
+    specialization = models.CharField(
+        max_length=20,
+        choices=Specialization.choices,
+    )
+    grades = ArrayField(
+        models.CharField(max_length=20, choices=Grade.choices),
+        default=list,
+    )
+    format = models.CharField(
+        max_length=10,
+        choices=MicroTaskFormat.choices,
+        default=MicroTaskFormat.AUTO,
+    )
+    family_id = models.CharField(max_length=100, blank=True, null=True)
+    prompt_md = models.TextField()
+    key = models.JSONField(blank=True, null=True, help_text="Server-side secret grading key")
+    deadline = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "micro_tasks"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.company.name})"
+
+
+class MicroTaskDrop(models.Model):
+    """Candidate assignment drop and submission for a micro-task (Task BE-18)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task = models.ForeignKey(
+        MicroTask,
+        on_delete=models.CASCADE,
+        related_name="drops",
+    )
+    candidate = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="micro_task_drops",
+    )
+    dropped_at = models.DateTimeField(auto_now_add=True)
+    answer = models.JSONField(blank=True, null=True)
+    score = models.FloatField(null=True, blank=True)
+    employer_rating = models.SmallIntegerField(
+        null=True, blank=True, help_text="1 to 5 rating by employer"
+    )
+    shared = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "micro_task_drops"
+        ordering = ["-dropped_at"]
+
+    def __str__(self) -> str:
+        return f"Drop {self.id}: task={self.task_id}, candidate={self.candidate_id}"
+
+
+class PositionCredit(models.Model):
+    """Weekly credits for position outreach (anti-fraud: 5 credits/week, Task BE-19)."""
+
+    position = models.ForeignKey(
+        Position,
+        on_delete=models.CASCADE,
+        related_name="credits",
+    )
+    week = models.DateField(help_text="Monday date of the credit week")
+    used = models.IntegerField(default=0)
+    refunded = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "credits"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["position", "week"],
+                name="pk_position_week_credit",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Credits for {self.position_id} on {self.week}: used={self.used}, refunded={self.refunded}"
+

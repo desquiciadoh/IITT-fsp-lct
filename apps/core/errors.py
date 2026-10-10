@@ -74,6 +74,11 @@ class SalaryInvalid(FSPAPIError):
         super().__init__("salary_invalid", "Invalid salary range", detail, 422)
 
 
+class NoCredits(FSPAPIError):
+    def __init__(self, detail: str = "Weekly outreach credit limit reached for this position (5 credits/week)."):
+        super().__init__("no_credits", "No credits available", detail, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
 class CooldownActive(FSPAPIError):
     def __init__(self, next_attempt_at: str | datetime = ""):
         if hasattr(next_attempt_at, "isoformat"):

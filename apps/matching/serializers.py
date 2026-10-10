@@ -1,11 +1,19 @@
 """Matching app serializers."""
 
+from core.enums import ApplicationStatus
 from core.pagination import PaginationQuerySerializer
 from drf_spectacular.utils import extend_schema_field
 from profiles.models import CandidateProfile
 from rest_framework import serializers
 
-from matching.models import Company, Position
+from matching.antifraud import compute_company_trust_level, validate_inn
+from matching.models import (
+    Application,
+    Company,
+    MicroTask,
+    MicroTaskDrop,
+    Position,
+)
 
 
 class CompanySearchQuerySerializer(PaginationQuerySerializer):
@@ -28,6 +36,31 @@ class CompanySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "trust_level", "created_at"]
+
+    def validate_inn(self, value):
+        if value:
+            clean_inn = value.strip()
+            if not validate_inn(clean_inn):
+                raise serializers.ValidationError("Invalid Russian INN checksum (must be valid 10 or 12 digits).")
+            return clean_inn
+        return value
+
+    def create(self, validated_data):
+        inn = validated_data.get("inn", "")
+        email_domain = validated_data.get("email_domain", "") or validated_data.get("contact_email", "")
+        validated_data["trust_level"] = compute_company_trust_level(inn, email_domain)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        inn = validated_data.get("inn", instance.inn)
+        email_domain = (
+            validated_data.get("email_domain")
+            or validated_data.get("contact_email")
+            or instance.email_domain
+            or instance.contact_email
+        )
+        validated_data["trust_level"] = compute_company_trust_level(inn, email_domain)
+        return super().update(instance, validated_data)
 
 
 class CompanyMinimalSerializer(serializers.ModelSerializer):
@@ -79,6 +112,10 @@ class PositionSerializer(serializers.ModelSerializer):
         if salary_min is not None and salary_max is not None and salary_max < salary_min:
             raise serializers.ValidationError(
                 {"salary_max": "salary_max must be greater than or equal to salary_min."}
+            )
+        if salary_min is not None and salary_max is not None and salary_max > 2 * salary_min:
+            raise serializers.ValidationError(
+                {"salary_max": "salary_max / salary_min ratio cannot exceed 2.0."}
             )
         return attrs
 
@@ -261,3 +298,174 @@ class JdParseResultSerializer(serializers.Serializer):
     unknown_terms = serializers.ListField(child=serializers.CharField(), default=list)
     blueprint = JdParseBlueprintItemSerializer(many=True, default=list)
     source = serializers.CharField(default="rules")
+
+
+class CompanyPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ["id", "name", "trust_level", "website", "description"]
+
+
+class VacancySerializer(serializers.ModelSerializer):
+    company = CompanyPublicSerializer(read_only=True)
+    salary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Position
+        fields = [
+            "id",
+            "title",
+            "company",
+            "specialization",
+            "grades",
+            "must_skills",
+            "nice_skills",
+            "work_formats",
+            "location",
+            "salary_min",
+            "salary_max",
+            "salary_type",
+            "salary",
+            "team_context",
+            "description",
+            "created_at",
+        ]
+
+    @extend_schema_field(serializers.DictField())
+    def get_salary(self, obj):
+        return {
+            "min": obj.salary_min,
+            "max": obj.salary_max,
+            "type": obj.salary_type,
+            "currency": "RUB",
+        }
+
+
+class ApplicationCreateSerializer(serializers.Serializer):
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ApplicationCandidateSerializer(serializers.ModelSerializer):
+    position = VacancySerializer(read_only=True)
+
+    class Meta:
+        model = Application
+        fields = ["id", "position", "status", "note", "created_at", "updated_at"]
+
+
+class ApplicationEmployerSerializer(serializers.ModelSerializer):
+    candidate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Application
+        fields = ["id", "candidate", "status", "note", "created_at", "updated_at"]
+
+    @extend_schema_field(TalentShortSerializer)
+    def get_candidate(self, obj):
+        profile = getattr(obj.candidate, "candidate_profile", None)
+        if profile:
+            return TalentShortSerializer(profile).data
+        return None
+
+
+class ApplicationStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=ApplicationStatus.choices)
+
+
+# ---------------------------------------------------------------------------
+# Task BE-18: Micro-Tasks Serializers
+# ---------------------------------------------------------------------------
+
+
+class MicroTaskSerializer(serializers.ModelSerializer):
+    company = CompanyPublicSerializer(read_only=True)
+
+    class Meta:
+        model = MicroTask
+        fields = [
+            "id",
+            "company",
+            "title",
+            "specialization",
+            "grades",
+            "format",
+            "family_id",
+            "prompt_md",
+            "deadline",
+            "created_at",
+        ]
+
+
+class MicroTaskCreateSerializer(serializers.ModelSerializer):
+    key = serializers.JSONField(
+        required=False,
+        allow_null=True,
+        write_only=True,
+        help_text="Server-side secret grading key. Never returned in responses.",
+    )
+
+    class Meta:
+        model = MicroTask
+        fields = [
+            "id",
+            "title",
+            "specialization",
+            "grades",
+            "format",
+            "family_id",
+            "prompt_md",
+            "key",
+            "deadline",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class MicroTaskDropCandidateSerializer(serializers.ModelSerializer):
+    task = MicroTaskSerializer(read_only=True)
+
+    class Meta:
+        model = MicroTaskDrop
+        fields = [
+            "id",
+            "task",
+            "dropped_at",
+            "answer",
+            "score",
+            "employer_rating",
+            "submitted_at",
+        ]
+
+
+class MicroTaskSubmitSerializer(serializers.Serializer):
+    answer = serializers.JSONField(help_text="Candidate solution or approach")
+
+
+class MicroTaskRateSerializer(serializers.Serializer):
+    employer_rating = serializers.IntegerField(min_value=1, max_value=5)
+
+
+class MicroTaskSubmissionEmployerSerializer(serializers.ModelSerializer):
+    candidate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MicroTaskDrop
+        fields = [
+            "id",
+            "task_id",
+            "candidate",
+            "dropped_at",
+            "answer",
+            "score",
+            "employer_rating",
+            "submitted_at",
+        ]
+
+    @extend_schema_field(TalentShortSerializer)
+    def get_candidate(self, obj):
+        profile = getattr(obj.candidate, "candidate_profile", None)
+        if profile:
+            return TalentShortSerializer(profile).data
+        return None
+
+

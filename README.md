@@ -46,13 +46,13 @@
 
 | Приложение | Назначение и ключевые компоненты |
 |---|---|
-| **`apps.identity`** | Кастомный `User` (email как username, роли `candidate`/`employer`/`admin`), сессии в HttpOnly cookies, Argon2, версионированные согласия 152-ФЗ (`Consent`), журнал аудита (`AuditLog`), демо-персоны и time-travel. |
-| **`apps.profiles`** | `CandidateProfile` с публичным ID `C-XXXXXX`, изолированная таблица контактов `CandidateContact`, таксономия навыков `Skill`, генерация защищенного PDF «Карточка игрока» (WeasyPrint) с QR-кодом верификации (`/api/verify/<public_id>`), эвристический парсинг PDF-резюме. |
-| **`apps.assessment`** | Сессии адаптивного тестирования `AssessmentSession`, тестовые вопросы `AssessmentItem`, parametric item families (`engine.py`), расчет IRT-метрик ($\theta$, SE, rating), членство в Лигах `LeagueMembership`, кулдауны пересдач. |
-| **`apps.matching`** | Профили компаний `Company`, вакансии и потребности `Position`, шортлисты `Shortlist`. Прозрачный взвешенный скоринг с карточками причин `ReasonChips` (`verified_by_test`, `verified_by_fsp`, `declared`). Поиск талантов без утечки внутренних PK. |
-| **`apps.outreach`** | Жизненный цикл драфт-офферов `Offer` (`sent` $\to$ `viewed` $\to$ `accepted` / `declined` / `withdrawn`), оптимистичные блокировки через версионирование (`version int`, 409 при конфликтах), сервис гейтинга контактов `ContactAccessService` (`services.py`), автоматическая выдача `ContactGrant`, SSE-стриминг событий (`/api/events`). |
+| **`apps.identity`** | Кастомный `User` (email как username, роли `candidate`/`employer`/`admin`), сессии в HttpOnly cookies, Argon2, версионированные согласия 152-ФЗ (`Consent`), журнал аудита (`AuditLog`), OIDC joserfc-клиент, демо-персоны и time-travel. |
+| **`apps.profiles`** | `CandidateProfile` с публичным ID `C-XXXXXX`, изолированная таблица контактов `CandidateContact` с шифрованием AES-256-GCM at rest, отзыв доступов к контактам (`/api/candidates/me/grants/{id}/revoke`), таксономия навыков `Skill`, генерация защищенного PDF «Карточка игрока» (WeasyPrint) с QR-кодом верификации и водяными знаками компании. |
+| **`apps.assessment`** | Сессии адаптивного тестирования `AssessmentSession`, тестовые вопросы `AssessmentItem`, parametric item families (`engine.py`), расчет IRT-метрик ($\theta$, SE, rating), членство в Лигах `LeagueMembership`, кулдауны пересдач, Lab психометрические эндпоинты (`/api/lab/report`, `/api/lab/families`, `/api/lab/twins`). |
+| **`apps.matching`** | Профили компаний `Company`, вакансии и отклики `Position` / `Application`, микро-задачи `MicroTask` с еженедельными дропами, шортлисты `Shortlist`. Прозрачный скоринг с карточками причин `ReasonChips`, Need Health аналитика отказов и acceptance likelihood, антифрод (проверка ИНН, недельные квоты офферов, лимиты частоты, проверка аномалий зарплат). |
+| **`apps.outreach`** | Жизненный цикл драфт-офферов `Offer` (`sent` $\to$ `viewed` $\to$ `accepted` / `declined` / `withdrawn`), предупреждение о ставке ниже минимального порога кандидата (`below_floor`), оптимистичные блокировки (`version int`, 409), сервис гейтинга контактов `ContactAccessService`, автоматическая выдача `ContactGrant`, SSE-стриминг событий (`/api/events`). |
 | **`apps.fsp_sync`** | Модели связки `FSPLink` и верифицированных турниров `FSPResult`, защита от повторной привязки чужого FSP ID, фоновые задачи Celery для синхронизации с реестром ФСП. |
-| **`apps.core`** | Единые перечисления (`enums.py`), обработчик ошибок RFC 7807 problem+json (`errors.py`), пагинация (`pagination.py`), команда загрузки стенда `seed` (сервис `core.services` является deprecated shim для `apps.outreach.services`). |
+| **`apps.core`** | Единые перечисления (`enums.py`), обработчик ошибок RFC 7807 problem+json (`errors.py`), AES-256-GCM шифрование (`crypto.py`), пагинация (`pagination.py`), неизменяемые журналы событий (`AuditLog`, `OfferEvent`, `ApplicationEvent`), команда загрузки стенда `seed`. |
 
 ---
 

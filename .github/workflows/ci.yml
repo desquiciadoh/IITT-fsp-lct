@@ -68,6 +68,15 @@ jobs:
         run: |
           python manage.py check
 
+      - name: Django Production Deployment Check
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-long-production-secret-key-with-more-than-50-characters-and-entropy-ok"
+          ALLOWED_HOSTS: "staging.fsp-draft.ru,localhost"
+          ITEM_SEED_SECRET: "ci-item-seed-secret-long-entropy"
+        run: |
+          python manage.py check --deploy
+
       - name: Check Django Migrations Drift
         env:
           DEBUG: "False"

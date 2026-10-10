@@ -75,6 +75,9 @@ def create_candidate(
     if formats is None:
         formats = [WorkFormat.REMOTE]
 
+    if salary_min is not None and salary_max is not None and salary_max < salary_min:
+        salary_max = salary_min + 50000
+
     user = User.objects.create_user(
         email=email,
         password="password123",
@@ -270,6 +273,8 @@ class TestN1PerformanceAndQueries:
 
     @override_settings(DEBUG=False)
     def test_pool_latency_1500_candidates_under_300ms(self, setup_company_and_position):
+        from django.db import reset_queries
+
         reset_queries()
         employer, company, position, py_skill, dj_skill = setup_company_and_position
         client = APIClient()
@@ -338,8 +343,11 @@ class TestN1PerformanceAndQueries:
         assert res_warm.status_code == 200
 
         # Measure 10 requests for latency
+        from django.db import reset_queries
+
         durations = []
         for _ in range(10):
+            reset_queries()
             start = time.perf_counter()
             res = client.get(f"/api/positions/{position.id}/pool?page=1&size=20")
             dur = (time.perf_counter() - start) * 1000.0  # ms

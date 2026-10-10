@@ -27,8 +27,8 @@ def generate_qr_code_base64(url: str) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-def generate_player_card_pdf(candidate_profile) -> bytes:
-    """Generate a branded Player Card PDF with verification QR code."""
+def generate_player_card_pdf(candidate_profile, watermark: str | None = None) -> bytes:
+    """Generate a branded Player Card PDF with verification QR code and optional employer watermark."""
     verify_url = f"{settings.PUBLIC_BASE_URL}/api/verify/{candidate_profile.public_id}"
     qr_base64 = generate_qr_code_base64(verify_url)
 
@@ -51,6 +51,7 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
     skills = [html_escape(cs.skill.name) for cs in candidate_profile.skills.all()[:10]]
     public_id = html_escape(str(candidate_profile.public_id))
     full_name = html_escape(str(candidate_profile.full_name or "Кандидат"))
+    escaped_watermark = html_escape(str(watermark)) if watermark else ""
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -164,10 +165,32 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
         font-size: 11px;
         color: #64748b;
     }}
+    .watermark {{
+        position: fixed;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-30deg);
+        font-size: 26px;
+        font-weight: 800;
+        color: rgba(3, 105, 161, 0.12);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        pointer-events: none;
+        z-index: 1000;
+        white-space: nowrap;
+        text-align: center;
+    }}
+    .watermark-notice {{
+        font-size: 10px;
+        color: #0369a1;
+        margin-top: 4px;
+        font-weight: 600;
+    }}
 </style>
 </head>
 <body>
 <div class="card">
+    {f'<div class="watermark">{escaped_watermark}</div>' if escaped_watermark else ''}
     <div class="header">
         <div>
             <h1 class="title">FSP DRAFT · КАРТОЧКА ИГРОКА</h1>
@@ -201,6 +224,7 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
             <div style="font-weight: 600;">{full_name}</div>
             <div class="verify-note">Верифицированный профиль FSP Draft</div>
             <div class="verify-note">Сканируйте QR-код для онлайн-проверки</div>
+            {f'<div class="watermark-notice">Экспорт для: {escaped_watermark}</div>' if escaped_watermark else ''}
         </div>
         <div class="qr-container">
             <img src="data:image/png;base64,{qr_base64}" alt="QR verification">

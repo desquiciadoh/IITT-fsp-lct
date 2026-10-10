@@ -30,4 +30,6 @@ urlpatterns = [
     ),
     path("leagues", views.LeagueShelfView.as_view(), name="league-shelves"),
     path("lab/report", views.LabReportView.as_view(), name="lab-report"),
+    path("lab/families", views.LabFamiliesView.as_view(), name="lab-families"),
+    path("lab/twins", views.LabTwinsView.as_view(), name="lab-twins"),
 ]

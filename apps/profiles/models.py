@@ -2,6 +2,7 @@
 
 import uuid
 
+from core.crypto import EncryptedCharField
 from core.enums import (
     EvidenceSource,
     Grade,
@@ -190,6 +191,7 @@ class CandidateContact(models.Model):
     INVARIANT: This table is NEVER queried directly by employer-facing views.
     Access is only through the ContactAccess service, which requires an
     active ContactGrant and logs every access to AuditLog.
+    All contact details are encrypted at rest with AES/Fernet.
     """
 
     user = models.OneToOneField(
@@ -198,9 +200,9 @@ class CandidateContact(models.Model):
         primary_key=True,
         related_name="candidate_contacts",
     )
-    email = models.EmailField(blank=True, default="")
-    phone = models.CharField(max_length=30, blank=True, default="")
-    telegram = models.CharField(max_length=100, blank=True, default="")
+    email = EncryptedCharField(blank=True, default="")
+    phone = EncryptedCharField(blank=True, default="")
+    telegram = EncryptedCharField(blank=True, default="")
 
     class Meta:
         db_table = "candidate_contacts"

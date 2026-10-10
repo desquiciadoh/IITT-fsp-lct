@@ -1,6 +1,6 @@
 # FSP Draft: Architecture & Execution Plan
 
-> **Implementation status (2026-10-07):** The current checkout contains the Django 5.x + Django REST Framework backend MVP under `apps/`. The React/FastAPI/Valkey deployment described in the original target architecture is planned work, not shipped code. For implemented behavior, `README.md`, `docs/BACKEND.md`, `requirements.txt`, migrations, and tests are authoritative.
+> **Implementation status (2026-10-07):** The current checkout contains the Django 5.x + Django REST Framework backend MVP under `apps/` implementing the complete P0 and P1 backend milestone (BE-01 through BE-23: auth, qualification, leagues, offers, pool scoring, vacancies, micro-tasks, anti-fraud, candidate controls, encrypted contacts, lab endpoints, and Locust benchmarks). The React/FastAPI/Valkey deployment described in the original target architecture is planned work, not shipped code. For implemented behavior, `README.md`, `docs/BACKEND.md`, `requirements.txt`, migrations, and tests are authoritative.
 
 > **Working title.** LCT 2026, FSP track: an IT hiring platform with reverse recruitment and verified achievement profiles.
 > **Inputs:** `TK.md` (spec) and `QA.md` (organizer clarifications). **Language:** product UI, deck and jury docs in Russian.

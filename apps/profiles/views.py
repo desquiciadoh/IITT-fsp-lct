@@ -30,6 +30,7 @@ from profiles.serializers import (
     CandidateProfileUpdateSerializer,
     ConsentsResponseSerializer,
     ConsentUpdateSerializer,
+    ContactGrantSerializer,
     TaxonomySerializer,
 )
 
@@ -628,3 +629,56 @@ class TaxonomyView(views.APIView):
             "decline_reasons": decline_reasons,
         }
         return Response(data)
+
+
+class CandidateGrantsListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ContactGrantSerializer
+
+    @extend_schema(responses={200: ContactGrantSerializer(many=True)})
+    def get(self, request):
+        if request.user.role != UserRole.CANDIDATE:
+            raise FSPAPIError(
+                "forbidden", "Forbidden", "Only candidates can view their grants", 403
+            )
+        from outreach.models import ContactGrant
+
+        grants = (
+            ContactGrant.objects.filter(candidate=request.user)
+            .select_related("company")
+            .order_by("-granted_at")
+        )
+        serializer = ContactGrantSerializer(grants, many=True)
+        return Response(serializer.data)
+
+
+class CandidateGrantRevokeView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                "CandidateGrantRevokeResponse",
+                fields={
+                    "revoked": serializers.BooleanField(),
+                    "grant_id": serializers.CharField(),
+                },
+            )
+        },
+    )
+    def post(self, request, pk):
+        if request.user.role != UserRole.CANDIDATE:
+            raise FSPAPIError(
+                "forbidden", "Forbidden", "Only candidates can revoke grants", 403
+            )
+        from outreach.models import ContactGrant
+        from outreach.services import ContactAccessService
+
+        grant = ContactGrant.objects.filter(id=pk, candidate=request.user).first()
+        if not grant:
+            raise FSPAPIError("not_found", "Not found", "Contact grant not found", 404)
+
+        ContactAccessService.revoke_grant(grant.id, request.user.id)
+        return Response({"revoked": True, "grant_id": str(grant.id)})
+

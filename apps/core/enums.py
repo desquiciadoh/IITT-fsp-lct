@@ -181,3 +181,18 @@ class FallbackMode(models.TextChoices):
     INSTANT = "instant", "Instant"
     SHORT_TEST = "short_test", "Short Test"
 
+
+class ApplicationStatus(models.TextChoices):
+    APPLIED = "applied", "Applied"
+    REVIEWING = "reviewing", "Reviewing"
+    INVITED = "invited", "Invited"
+    REJECTED = "rejected", "Rejected"
+    HIRED = "hired", "Hired"
+    WITHDRAWN = "withdrawn", "Withdrawn"
+
+
+class MicroTaskFormat(models.TextChoices):
+    AUTO = "auto", "Auto"
+    OPEN = "open", "Open"
+
+

@@ -10,11 +10,17 @@ Covers:
 
 import pytest
 from assessment.engine_adapter import compute_league_percentiles
-from assessment.models import AssessmentSession, ItemFamily, LeagueMembership
+from assessment.models import AssessmentSession, LeagueMembership
 from assessment.services import AssessmentService, recompute_league
-from core.enums import AssessmentMode, AssessmentStatus, Grade, GradeDecision, LeagueStatus, Specialization, UserRole
+from core.enums import (
+    AssessmentMode,
+    AssessmentStatus,
+    Grade,
+    Specialization,
+    UserRole,
+)
 from fsp_sync.models import FSPResult
-from fsp_sync.services import recompute_strength, sync_fsp_data
+from fsp_sync.services import recompute_strength
 from identity.models import User
 from outreach.events import register_subscriber, unregister_subscriber
 
@@ -154,7 +160,7 @@ class TestN3RecomputeLeague:
         self, candidate_factory, django_capture_on_commit_callbacks
     ):
         c1 = candidate_factory("c1_evt@example.com")
-        m1 = LeagueMembership.objects.create(
+        LeagueMembership.objects.create(
             candidate=c1,
             specialization=Specialization.BACKEND,
             grade=Grade.SENIOR,

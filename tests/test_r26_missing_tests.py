@@ -1,6 +1,7 @@
 import pytest
 from core.enums import ConsentType, Specialization, UserRole
 from django.conf import settings
+from django.core.cache import cache
 from identity.models import AuditLog, Consent, User
 from matching.models import Company, CompanyMember
 from profiles.models import CandidateProfile, generate_public_id
@@ -70,6 +71,7 @@ class TestR26MissingTests:
 
     def test_two_employers_with_same_email_local_part(self):
         """Two employers with the same email local part (hr@alpha.com and hr@beta.com) register and operate independently."""
+        cache.clear()
         client = APIClient()
 
         # Register employer A

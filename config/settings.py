@@ -189,6 +189,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 NUM_PROXIES = int(os.environ.get("NUM_PROXIES", 0))
@@ -244,6 +245,9 @@ SPECTACULAR_SETTINGS = {
         "PositionStatusEnum": [("open", "open"), ("closed", "closed")],
         "GradeEnum": "core.enums.Grade",
         "DeclineReasonEnum": "core.enums.DeclineReason",
+        "ApplicationStatusEnum": "core.enums.ApplicationStatus",
+        "LeagueStatusEnum": "core.enums.LeagueStatus",
+        "MicroTaskFormatEnum": "core.enums.MicroTaskFormat",
     },
 }
 

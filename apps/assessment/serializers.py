@@ -291,3 +291,45 @@ class LeagueMembershipSerializer(serializers.ModelSerializer):
             "next_attempt_at",
             "next_promotion_at",
         ]
+
+
+class LabFamilyItemSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    version = serializers.IntegerField()
+    topic = serializers.CharField()
+    specs = serializers.ListField(child=serializers.CharField())
+    skills = serializers.ListField(child=serializers.CharField(), required=False)
+    format = serializers.CharField()
+    a = serializers.FloatField()
+    b = serializers.FloatField()
+    c = serializers.FloatField()
+    time_limit_s = serializers.IntegerField()
+    exposures = serializers.IntegerField()
+    exposure_rate = serializers.FloatField()
+    correct_rate = serializers.FloatField(allow_null=True)
+    expected_p_theta0 = serializers.FloatField()
+    drift_flag = serializers.BooleanField()
+
+
+class LabFamiliesResponseSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    families = LabFamilyItemSerializer(many=True)
+
+
+class LabTwinItemSerializer(serializers.Serializer):
+    family_id = serializers.CharField()
+    topic = serializers.CharField()
+    level = serializers.CharField()
+    b = serializers.FloatField()
+    time_limit_s = serializers.IntegerField()
+    instance_a = serializers.DictField()
+    instance_b = serializers.DictField()
+
+
+class LabTwinsResponseSerializer(serializers.Serializer):
+    position_id = serializers.CharField(required=False, allow_null=True)
+    position_title = serializers.CharField(required=False, allow_null=True)
+    specialization = serializers.CharField()
+    grade = serializers.CharField()
+    twins = LabTwinItemSerializer(many=True)
+

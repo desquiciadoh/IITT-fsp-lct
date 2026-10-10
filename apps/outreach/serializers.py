@@ -4,6 +4,7 @@ from core.enums import ContactChannel, DeclineReason, SalaryType
 from core.errors import ContactNotGranted
 from drf_spectacular.utils import extend_schema_field
 from matching.serializers import CompanySerializer, TalentShortSerializer
+from matching.services import compute_acceptance_likelihood
 from rest_framework import serializers
 
 from outreach.models import Offer
@@ -29,6 +30,8 @@ class OfferSerializer(serializers.ModelSerializer):
     why_you = serializers.JSONField(read_only=True)
     talent = serializers.SerializerMethodField()
     decline = serializers.SerializerMethodField()
+    below_floor = serializers.SerializerMethodField()
+    acceptance_likelihood = serializers.SerializerMethodField()
 
     class Meta:
         model = Offer
@@ -51,6 +54,8 @@ class OfferSerializer(serializers.ModelSerializer):
             "decline_comment",
             "decline",
             "why_you",
+            "below_floor",
+            "acceptance_likelihood",
             "version",
             "candidate_contacts",
             "expires_at",
@@ -77,6 +82,10 @@ class OfferSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"salary_max": "salary_max must be greater than or equal to salary_min."}
             )
+        if salary_min is not None and salary_max is not None and salary_max > 2 * salary_min:
+            raise serializers.ValidationError(
+                {"salary_max": "salary_max / salary_min ratio cannot exceed 2.0."}
+            )
         return attrs
 
     @extend_schema_field(TalentShortSerializer)
@@ -95,6 +104,26 @@ class OfferSerializer(serializers.ModelSerializer):
                 "comment": obj.decline_comment,
             }
         return None
+
+    @extend_schema_field(serializers.CharField())
+    def get_acceptance_likelihood(self, obj) -> str:
+        profile = getattr(obj.candidate, "candidate_profile", None)
+        if not profile:
+            return "medium"
+        pos_formats = (
+            list(obj.position.work_formats)
+            if obj.position and obj.position.work_formats
+            else None
+        )
+        return compute_acceptance_likelihood(
+            profile,
+            salary_max=obj.salary_max,
+            work_formats=pos_formats,
+        )
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_below_floor(self, obj) -> bool:
+        return bool(obj.below_floor)
 
     @extend_schema_field(CandidateContactsDisplaySerializer)
     def get_candidate_contacts(self, obj):
@@ -148,6 +177,10 @@ class CreateOfferSerializer(serializers.Serializer):
         if attrs["salary_max"] < attrs["salary_min"]:
             raise serializers.ValidationError(
                 {"salary_max": "salary_max must be greater than or equal to salary_min."}
+            )
+        if attrs["salary_max"] > 2 * attrs["salary_min"]:
+            raise serializers.ValidationError(
+                {"salary_max": "salary_max / salary_min ratio cannot exceed 2.0."}
             )
         return attrs
 

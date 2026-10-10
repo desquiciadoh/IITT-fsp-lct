@@ -14,13 +14,13 @@ from matching.models import Position
 
 
 def calculate_match_score(
-    candidate_profile: Any, position: Position
+    candidate_profile: Any, position: Position, detailed: bool = True
 ) -> dict[str, Any]:
     """Calculate match score (0-100) and structured ReasonChips for a candidate-position pair.
 
     Accepts either a CandidateProfile model instance or a CandidateDTO dictionary.
     """
-    reasons = []
+    reasons = [] if detailed else None
     components = {}
 
     is_dto = isinstance(candidate_profile, dict)
@@ -52,22 +52,23 @@ def calculate_match_score(
         except Exception:
             pass
 
-    gaps = []
+    gaps = [] if detailed else None
     must_matches = 0
     for s in must_skills:
         if s in candidate_skills:
             must_matches += 1
-            cs = candidate_skills[s]
-            source = cs.get("source") if isinstance(cs, dict) else cs.source
-            skill_name = cs.get("name") if isinstance(cs, dict) else cs.skill.name
-            reasons.append(
-                {
-                    "kind": "plus",
-                    "text": f"Владеет {skill_name}",
-                    "source": source,
-                }
-            )
-        else:
+            if detailed:
+                cs = candidate_skills[s]
+                source = cs.get("source") if isinstance(cs, dict) else cs.source
+                skill_name = cs.get("name") if isinstance(cs, dict) else cs.skill.name
+                reasons.append(
+                    {
+                        "kind": "plus",
+                        "text": f"Владеет {skill_name}",
+                        "source": source,
+                    }
+                )
+        elif detailed:
             reasons.append(
                 {
                     "kind": "minus",
@@ -113,34 +114,38 @@ def calculate_match_score(
         if league_grade in (position.grades or []):
             if league_status == LeagueStatus.CONFIRMED:
                 grade_score = 25
-                reasons.append(
-                    {
-                        "kind": "plus",
-                        "text": f"Грейд {league_grade.upper()} подтвержден адаптивным тестом",
-                        "source": EvidenceSource.TEST,
-                    }
-                )
+                if detailed:
+                    reasons.append(
+                        {
+                            "kind": "plus",
+                            "text": f"Грейд {league_grade.upper()} подтвержден адаптивным тестом",
+                            "source": EvidenceSource.TEST,
+                        }
+                    )
             else:
                 grade_score = 15
-                reasons.append(
-                    {
-                        "kind": "info",
-                        "text": f"Грейд {league_grade.upper()} заявлен, но не подтвержден тестом",
-                        "source": EvidenceSource.DECLARED,
-                    }
-                )
+                if detailed:
+                    reasons.append(
+                        {
+                            "kind": "info",
+                            "text": f"Грейд {league_grade.upper()} заявлен, но не подтвержден тестом",
+                            "source": EvidenceSource.DECLARED,
+                        }
+                    )
         else:
             grade_score = 5
-            reasons.append(
-                {
-                    "kind": "minus",
-                    "text": f"Грейд ({league_grade}) не совпадает с требованиями вакансии",
-                }
-            )
-            gaps.append(f"Грейд ({league_grade}) не совпадает с требованиями вакансии")
+            if detailed:
+                reasons.append(
+                    {
+                        "kind": "minus",
+                        "text": f"Грейд ({league_grade}) не совпадает с требованиями вакансии",
+                    }
+                )
+                gaps.append(f"Грейд ({league_grade}) не совпадает с требованиями вакансии")
     else:
         grade_score = 5
-        gaps.append("Грейд не подтвержден тестом")
+        if detailed:
+            gaps.append("Грейд не подтвержден тестом")
 
     components["grade"] = grade_score
 
@@ -163,14 +168,15 @@ def calculate_match_score(
 
     if fsp_results_count > 0 or fsp_link:
         fsp_score = min(15, fsp_results_count * 3 + (5 if sports_rank else 0))
-        rank_str = f" (разряд {sports_rank.upper()})" if sports_rank else ""
-        reasons.append(
-            {
-                "kind": "plus",
-                "text": f"Достижения в турнирах ФСП: {fsp_results_count} соревнований{rank_str}",
-                "source": EvidenceSource.FSP,
-            }
-        )
+        if detailed:
+            rank_str = f" (разряд {sports_rank.upper()})" if sports_rank else ""
+            reasons.append(
+                {
+                    "kind": "plus",
+                    "text": f"Достижения в турнирах ФСП: {fsp_results_count} соревнований{rank_str}",
+                    "source": EvidenceSource.FSP,
+                }
+            )
     components["fsp"] = fsp_score
 
     # 5. Salary range fit (10 points)
@@ -187,27 +193,38 @@ def calculate_match_score(
 
     if cand_min > 0:
         if cand_min <= pos_max and cand_max >= pos_min:
-            reasons.append(
-                {
-                    "kind": "plus",
-                    "text": f"Зарплатные ожидания ({cand_min}–{cand_max} ₽) попадают в вилку вакансии",
-                }
-            )
+            if detailed:
+                reasons.append(
+                    {
+                        "kind": "plus",
+                        "text": f"Зарплатные ожидания ({cand_min}–{cand_max} ₽) попадают в вилку вакансии",
+                    }
+                )
             salary_score = 10
         elif cand_min > pos_max:
-            reasons.append(
-                {
-                    "kind": "minus",
-                    "text": "Ожидания кандидата выше бюджета вакансии",
-                }
-            )
-            gaps.append("Ожидания кандидата выше бюджета вакансии")
+            if detailed:
+                reasons.append(
+                    {
+                        "kind": "minus",
+                        "text": "Ожидания кандидата выше бюджета вакансии",
+                    }
+                )
+                gaps.append("Ожидания кандидата выше бюджета вакансии")
             salary_score = 2
         else:
             salary_score = 8
     components["salary"] = salary_score
 
     total_score = min(100, sum(components.values()))
+
+    if not detailed:
+        return {
+            "total_score": round(total_score, 1),
+            "components": [],
+            "components_dict": components,
+            "reasons": [],
+            "gaps": [],
+        }
 
     components_list = [
         {

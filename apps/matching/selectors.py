@@ -196,8 +196,8 @@ def compute_pool_facets(queryset) -> dict[str, Any]:
 
     # 2. SQL-level aggregate format counts, FSP, and confirmed without multi-table Cartesian joins
     from assessment.models import LeagueMembership
-    from fsp_sync.models import FSPLink, FSPResult
     from django.db.models import Exists, OuterRef
+    from fsp_sync.models import FSPLink, FSPResult
 
     fsp_exists = Exists(FSPLink.objects.filter(candidate_id=OuterRef("user_id"))) | Exists(
         FSPResult.objects.filter(candidate_id=OuterRef("user_id"))

@@ -3,9 +3,8 @@
 import pytest
 from core.enums import Specialization, UserRole
 from django.core.management import call_command
+from profiles.models import CandidateProfile, Skill
 from rest_framework.test import APIClient
-
-from profiles.models import CandidateProfile, CandidateSkill, Skill
 
 
 @pytest.mark.django_db

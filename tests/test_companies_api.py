@@ -189,14 +189,14 @@ def test_employer_creates_company(employer_without_company):
 
     payload = {
         "name": "New Venture LLC",
-        "inn": "7701234567",
+        "inn": "7707083893",
         "website": "https://venture.example.com",
     }
     res = client.post("/api/companies", payload, format="json")
     assert res.status_code == 201
     data = res.json()
     assert data["name"] == "New Venture LLC"
-    assert data["inn"] == "7701234567"
+    assert data["inn"] == "7707083893"
 
     # Verify user is now a member of this company
     membership = CompanyMember.objects.filter(user=user).first()

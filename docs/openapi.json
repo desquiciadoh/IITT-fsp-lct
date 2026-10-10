@@ -355,6 +355,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/CandidateProfile'
           description: ''
+  /api/candidates/me/applications:
+    get:
+      operationId: candidates_me_applications_list
+      description: List of candidate's own applications (Task BE-17).
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationCandidate'
+          description: ''
+  /api/candidates/me/applications/{id}/withdraw:
+    post:
+      operationId: candidates_me_applications_withdraw_create
+      description: Candidate withdraws their application (Task BE-17).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationCandidate'
+          description: ''
   /api/candidates/me/card.pdf:
     get:
       operationId: candidates_me_card.pdf_retrieve
@@ -405,6 +444,92 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConsentsResponse'
+          description: ''
+  /api/candidates/me/grants:
+    get:
+      operationId: candidates_me_grants_list
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContactGrant'
+          description: ''
+  /api/candidates/me/grants/{id}/revoke:
+    post:
+      operationId: candidates_me_grants_revoke_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateGrantRevokeResponse'
+          description: ''
+  /api/candidates/me/micro-tasks:
+    get:
+      operationId: candidates_me_micro_tasks_list
+      description: Candidate lists their assigned micro-task drops (Task BE-18).
+      tags:
+      - candidates
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MicroTaskDropCandidate'
+          description: ''
+  /api/candidates/me/micro-tasks/{drop_id}/submit:
+    post:
+      operationId: candidates_me_micro_tasks_submit_create
+      description: Candidate submits a solution to an assigned micro-task drop (Task
+        BE-18).
+      parameters:
+      - in: path
+        name: drop_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - candidates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MicroTaskSubmit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MicroTaskSubmit'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicroTaskDropCandidate'
           description: ''
   /api/candidates/me/resume:
     post:
@@ -639,6 +764,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/FSPSyncResponse'
           description: ''
+  /api/lab/families:
+    get:
+      operationId: lab_families_retrieve
+      description: Lab catalog endpoint returning all registered question families
+        with empirical exposure & drift.
+      tags:
+      - lab
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabFamiliesResponse'
+          description: ''
   /api/lab/report:
     get:
       operationId: lab_report_retrieve
@@ -659,6 +801,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationReport'
+          description: ''
+  /api/lab/twins:
+    get:
+      operationId: lab_twins_retrieve
+      description: |-
+        Lab twin-generator endpoint for side-by-side verification of difficulty matching.
+
+        Produces two unique rendered instances with identical parameters without leaking answers.
+      parameters:
+      - in: query
+        name: grade
+        schema:
+          type: string
+      - in: query
+        name: position_id
+        schema:
+          type: string
+      - in: query
+        name: specialization
+        schema:
+          type: string
+      tags:
+      - lab
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabTwinsResponse'
           description: ''
   /api/leagues:
     get:
@@ -697,6 +871,164 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeResponse'
+          description: ''
+  /api/micro-tasks:
+    get:
+      operationId: micro_tasks_list
+      description: Employer lists or creates company micro-tasks (Task BE-18).
+      tags:
+      - micro-tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MicroTask'
+          description: ''
+    post:
+      operationId: micro_tasks_create
+      description: Employer lists or creates company micro-tasks (Task BE-18).
+      tags:
+      - micro-tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MicroTaskCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MicroTaskCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicroTask'
+          description: ''
+  /api/micro-tasks/{id}:
+    get:
+      operationId: micro_tasks_retrieve
+      description: Employer retrieves or deletes a micro-task (Task BE-18).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - micro-tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicroTask'
+          description: ''
+    delete:
+      operationId: micro_tasks_destroy
+      description: Employer retrieves or deletes a micro-task (Task BE-18).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - micro-tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/micro-tasks/{id}/submissions:
+    get:
+      operationId: micro_tasks_submissions_list
+      description: Employer views all candidate submissions for a micro-task (Task
+        BE-18).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - micro-tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MicroTaskSubmissionEmployer'
+          description: ''
+  /api/micro-tasks/submissions/{drop_id}/prefill-offer:
+    post:
+      operationId: micro_tasks_submissions_prefill_offer_create
+      description: Prefills a Draft Offer from a candidate's micro-task submission
+        (Task BE-18).
+      parameters:
+      - in: path
+        name: drop_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - micro-tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicroTaskPrefillOfferResponse'
+          description: ''
+  /api/micro-tasks/submissions/{drop_id}/rate:
+    post:
+      operationId: micro_tasks_submissions_rate_create
+      description: Employer rates a candidate's micro-task submission (Task BE-18).
+      parameters:
+      - in: path
+        name: drop_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - micro-tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MicroTaskRate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MicroTaskRate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicroTaskSubmissionEmployer'
           description: ''
   /api/offers:
     get:
@@ -1088,6 +1420,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/Position'
           description: ''
+  /api/positions/{id}/applications:
+    get:
+      operationId: positions_applications_list
+      description: Employer view of applications for a specific position (Task BE-17).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationEmployer'
+          description: ''
+  /api/positions/{id}/health:
+    get:
+      operationId: positions_health_retrieve
+      description: 'Need Health analytics for a position: funnel metrics, decline
+        reasons, diagnosis (Task BE-20).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionHealthResponse'
+          description: ''
   /api/positions/{id}/pool:
     get:
       operationId: positions_pool_retrieve
@@ -1223,6 +1602,43 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/positions/{position_pk}/applications/{id}/status:
+    patch:
+      operationId: positions_applications_status_partial_update
+      description: Employer updates candidate application status in pipeline (Task
+        BE-17).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: position_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - positions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationStatusUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationStatusUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEmployer'
+          description: ''
   /api/positions/parse:
     post:
       operationId: positions_parse_create
@@ -1270,6 +1686,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TalentDetailResponse'
+          description: ''
+  /api/talent/{public_id}/card.pdf:
+    get:
+      operationId: talent_card.pdf_retrieve
+      description: Export watermarked candidate player card PDF for employer
+      parameters:
+      - in: path
+        name: public_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - talent
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
           description: ''
   /api/talent/search:
     get:
@@ -1336,7 +1774,7 @@ paths:
     get:
       operationId: taxonomy_retrieve
       description: 'Platform taxonomy: specializations, grades, skills, and decline
-        reasons (G3).'
+        reasons (G3, N5).'
       tags:
       - taxonomy
       security:
@@ -1348,6 +1786,120 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Taxonomy'
+          description: ''
+  /api/vacancies:
+    get:
+      operationId: vacancies_list
+      description: Public listing of published vacancies (Task BE-17).
+      parameters:
+      - in: query
+        name: grades
+        schema:
+          type: string
+        description: Comma-separated grades
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number (default 1)
+      - in: query
+        name: salary_max
+        schema:
+          type: integer
+        description: Maximum salary
+      - in: query
+        name: salary_min
+        schema:
+          type: integer
+        description: Minimum salary
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Text search in title/description
+      - in: query
+        name: size
+        schema:
+          type: integer
+        description: Page size (default 20)
+      - in: query
+        name: specialization
+        schema:
+          type: string
+        description: Specialization filter
+      - in: query
+        name: work_formats
+        schema:
+          type: string
+        description: Comma-separated work formats
+      tags:
+      - vacancies
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacancyListResponse'
+          description: ''
+  /api/vacancies/{id}:
+    get:
+      operationId: vacancies_retrieve
+      description: Public vacancy detail view (Task BE-17).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - vacancies
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vacancy'
+          description: ''
+  /api/vacancies/{id}/apply:
+    post:
+      operationId: vacancies_apply_create
+      description: |-
+        Candidate submits a direct application to a vacancy (Task BE-17).
+
+        INVARIANT: Atomic creation of Application and ContactGrant.
+        Candidate contacts become accessible to the employer upon application.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - vacancies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationCandidate'
           description: ''
   /api/verify/{public_id}:
     get:
@@ -1401,6 +1953,86 @@ components:
           $ref: '#/components/schemas/AssessmentResult'
       required:
       - done
+    ApplicationCandidate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          allOf:
+          - $ref: '#/components/schemas/Vacancy'
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ApplicationStatusEnum'
+        note:
+          type: string
+          description: Cover letter or candidate note
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - position
+      - updated_at
+    ApplicationCreate:
+      type: object
+      properties:
+        note:
+          type: string
+          default: ''
+    ApplicationEmployer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        candidate:
+          allOf:
+          - $ref: '#/components/schemas/TalentShort'
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ApplicationStatusEnum'
+        note:
+          type: string
+          description: Cover letter or candidate note
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - candidate
+      - created_at
+      - id
+      - updated_at
+    ApplicationStatusEnum:
+      enum:
+      - applied
+      - reviewing
+      - invited
+      - rejected
+      - hired
+      - withdrawn
+      type: string
+      description: |-
+        * `applied` - Applied
+        * `reviewing` - Reviewing
+        * `invited` - Invited
+        * `rejected` - Rejected
+        * `hired` - Hired
+        * `withdrawn` - Withdrawn
     AssessmentEvidence:
       type: object
       properties:
@@ -1626,18 +2258,14 @@ components:
       type: object
       properties:
         email:
-          oneOf:
-          - type: string
-            format: email
-            maxLength: 254
-          - type: string
-            maxLength: 0
+          type: string
+          maxLength: 512
         phone:
           type: string
-          maxLength: 30
+          maxLength: 512
         telegram:
           type: string
-          maxLength: 100
+          maxLength: 512
     CandidateContactsDisplay:
       type: object
       properties:
@@ -1671,6 +2299,16 @@ components:
       - results
       - sports_rank
       - sync_status
+    CandidateGrantRevokeResponse:
+      type: object
+      properties:
+        revoked:
+          type: boolean
+        grant_id:
+          type: string
+      required:
+      - grant_id
+      - revoked
     CandidateLeague:
       type: object
       properties:
@@ -1781,6 +2419,14 @@ components:
           items:
             $ref: '#/components/schemas/CandidateSkill'
           readOnly: true
+        unknown_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          readOnly: true
+          description: Skills submitted by candidate that could not be mapped to canonical
+            taxonomy
         league:
           allOf:
           - $ref: '#/components/schemas/CandidateLeague'
@@ -1801,6 +2447,7 @@ components:
       - league
       - public_id
       - skills
+      - unknown_skills
     CandidateProfileUpdate:
       type: object
       properties:
@@ -1886,7 +2533,7 @@ components:
           type: string
           readOnly: true
         source:
-          $ref: '#/components/schemas/SourceEnum'
+          $ref: '#/components/schemas/CandidateSkillSourceEnum'
         level:
           type: number
           format: double
@@ -1895,6 +2542,18 @@ components:
       - id
       - name
       - source
+    CandidateSkillSourceEnum:
+      enum:
+      - test
+      - fsp
+      - microtask
+      - declared
+      type: string
+      description: |-
+        * `test` - Verified by test
+        * `fsp` - Verified by FSP
+        * `microtask` - Verified by micro-task
+        * `declared` - Declared
     Company:
       type: object
       properties:
@@ -1975,6 +2634,30 @@ components:
       - page
       - pages
       - total
+    CompanyPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        trust_level:
+          $ref: '#/components/schemas/TrustLevelEnum'
+        website:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 200
+          - type: string
+            maxLength: 0
+        description:
+          type: string
+      required:
+      - id
+      - name
     ConsentUpdate:
       type: object
       properties:
@@ -2012,6 +2695,73 @@ components:
         * `phone` - Phone
         * `telegram` - Telegram
         * `platform` - Platform
+    ContactGrant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          allOf:
+          - $ref: '#/components/schemas/ContactGrantCompany'
+          readOnly: true
+        source:
+          $ref: '#/components/schemas/ContactGrantSourceEnum'
+        source_id:
+          type: string
+          format: uuid
+          description: ID of the offer or application that created this grant
+        is_active:
+          type: boolean
+          readOnly: true
+        granted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when candidate revokes contact access
+      required:
+      - company
+      - granted_at
+      - id
+      - is_active
+      - source
+      - source_id
+    ContactGrantCompany:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        website:
+          type: string
+        email_domain:
+          type: string
+        contact_email:
+          type: string
+        trust_level:
+          type: string
+      required:
+      - contact_email
+      - email_domain
+      - id
+      - name
+      - trust_level
+      - website
+    ContactGrantSourceEnum:
+      enum:
+      - offer
+      - application
+      type: string
+      description: |-
+        * `offer` - Offer
+        * `application` - Application
     CreateOffer:
       type: object
       properties:
@@ -2159,21 +2909,21 @@ components:
       required:
       - status
       - synced_at
-    FallbackModeEnum:
-      enum:
-      - instant
-      - short_test
-      type: string
-      description: |-
-        * `instant` - instant
-        * `short_test` - short_test
     FallbackRequest:
       type: object
       properties:
         mode:
           allOf:
-          - $ref: '#/components/schemas/FallbackModeEnum'
+          - $ref: '#/components/schemas/FallbackRequestModeEnum'
           default: instant
+    FallbackRequestModeEnum:
+      enum:
+      - instant
+      - short_test
+      type: string
+      description: |-
+        * `instant` - Instant
+        * `short_test` - Short Test
     GradeEnum:
       enum:
       - intern
@@ -2342,6 +3092,126 @@ components:
         * `fallback` - Fallback
         * `promotion` - Promotion
         * `screening` - Screening
+    LabFamiliesResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        families:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabFamilyItem'
+      required:
+      - families
+      - total
+    LabFamilyItem:
+      type: object
+      properties:
+        id:
+          type: string
+        version:
+          type: integer
+        topic:
+          type: string
+        specs:
+          type: array
+          items:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+        format:
+          type: string
+        a:
+          type: number
+          format: double
+        b:
+          type: number
+          format: double
+        c:
+          type: number
+          format: double
+        time_limit_s:
+          type: integer
+        exposures:
+          type: integer
+        exposure_rate:
+          type: number
+          format: double
+        correct_rate:
+          type: number
+          format: double
+          nullable: true
+        expected_p_theta0:
+          type: number
+          format: double
+        drift_flag:
+          type: boolean
+      required:
+      - a
+      - b
+      - c
+      - correct_rate
+      - drift_flag
+      - expected_p_theta0
+      - exposure_rate
+      - exposures
+      - format
+      - id
+      - specs
+      - time_limit_s
+      - topic
+      - version
+    LabTwinItem:
+      type: object
+      properties:
+        family_id:
+          type: string
+        topic:
+          type: string
+        level:
+          type: string
+        b:
+          type: number
+          format: double
+        time_limit_s:
+          type: integer
+        instance_a:
+          type: object
+          additionalProperties: {}
+        instance_b:
+          type: object
+          additionalProperties: {}
+      required:
+      - b
+      - family_id
+      - instance_a
+      - instance_b
+      - level
+      - time_limit_s
+      - topic
+    LabTwinsResponse:
+      type: object
+      properties:
+        position_id:
+          type: string
+          nullable: true
+        position_title:
+          type: string
+          nullable: true
+        specialization:
+          type: string
+        grade:
+          type: string
+        twins:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabTwinItem'
+      required:
+      - grade
+      - specialization
+      - twins
     LeagueShelf:
       type: object
       properties:
@@ -2426,6 +3296,227 @@ components:
       - email_verified
       - id
       - role
+    MicroTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          allOf:
+          - $ref: '#/components/schemas/CompanyPublic'
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        grades:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeEnum'
+        format:
+          $ref: '#/components/schemas/MicroTaskFormatEnum'
+        family_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        prompt_md:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - company
+      - created_at
+      - id
+      - prompt_md
+      - specialization
+      - title
+    MicroTaskCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        grades:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeEnum'
+        format:
+          $ref: '#/components/schemas/MicroTaskFormatEnum'
+        family_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        prompt_md:
+          type: string
+        key:
+          writeOnly: true
+          nullable: true
+          description: Server-side secret grading key. Never returned in responses.
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - prompt_md
+      - specialization
+      - title
+    MicroTaskDropCandidate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        task:
+          allOf:
+          - $ref: '#/components/schemas/MicroTask'
+          readOnly: true
+        dropped_at:
+          type: string
+          format: date-time
+          readOnly: true
+        answer:
+          nullable: true
+        score:
+          type: number
+          format: double
+          nullable: true
+        employer_rating:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+          description: 1 to 5 rating by employer
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - dropped_at
+      - id
+      - task
+    MicroTaskFormatEnum:
+      enum:
+      - auto
+      - open
+      type: string
+      description: |-
+        * `auto` - Auto
+        * `open` - Open
+    MicroTaskPrefillOfferResponse:
+      type: object
+      properties:
+        candidate_id:
+          type: string
+        candidate_public_id:
+          type: string
+        candidate_name:
+          type: string
+        company_id:
+          type: string
+        company_name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        salary_min:
+          type: integer
+        salary_max:
+          type: integer
+        salary_type:
+          type: string
+        contact_channel:
+          type: string
+      required:
+      - candidate_id
+      - candidate_name
+      - candidate_public_id
+      - company_id
+      - company_name
+      - contact_channel
+      - description
+      - salary_max
+      - salary_min
+      - salary_type
+      - title
+    MicroTaskRate:
+      type: object
+      properties:
+        employer_rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+      required:
+      - employer_rating
+    MicroTaskSubmissionEmployer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        task_id:
+          type: string
+          format: uuid
+          readOnly: true
+        candidate:
+          allOf:
+          - $ref: '#/components/schemas/TalentShort'
+          readOnly: true
+        dropped_at:
+          type: string
+          format: date-time
+          readOnly: true
+        answer:
+          nullable: true
+        score:
+          type: number
+          format: double
+          nullable: true
+        employer_rating:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+          description: 1 to 5 rating by employer
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - candidate
+      - dropped_at
+      - id
+      - task_id
+    MicroTaskSubmit:
+      type: object
+      properties:
+        answer:
+          description: Candidate solution or approach
+      required:
+      - answer
     Offer:
       type: object
       properties:
@@ -2487,6 +3578,12 @@ components:
           readOnly: true
         why_you:
           readOnly: true
+        below_floor:
+          type: boolean
+          readOnly: true
+        acceptance_likelihood:
+          type: string
+          readOnly: true
         version:
           type: integer
           readOnly: true
@@ -2509,6 +3606,8 @@ components:
           format: date-time
           readOnly: true
       required:
+      - acceptance_likelihood
+      - below_floor
       - candidate_contacts
       - company
       - contact_channel
@@ -2610,6 +3709,11 @@ components:
         * `interview` - Interview
         * `hired` - Hired
         * `closed` - Closed
+    PatchedApplicationStatusUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicationStatusEnum'
     PersonaEnum:
       enum:
       - candidate_fsp
@@ -2760,6 +3864,56 @@ components:
       - salary_type
       - specialization
       - title
+    PositionHealthResponse:
+      type: object
+      properties:
+        position_id:
+          type: string
+        title:
+          type: string
+        total_offers:
+          type: integer
+        accepted_offers:
+          type: integer
+        declined_offers:
+          type: integer
+        expired_offers:
+          type: integer
+        acceptance_rate:
+          type: number
+          format: double
+        decline_rate:
+          type: number
+          format: double
+        decline_reasons:
+          type: object
+          additionalProperties: {}
+        top_decline_reason:
+          type: string
+          nullable: true
+        health_status:
+          type: string
+        diagnosis:
+          type: string
+        credits_remaining:
+          type: integer
+        weekly_credits_remaining:
+          type: integer
+      required:
+      - acceptance_rate
+      - accepted_offers
+      - credits_remaining
+      - decline_rate
+      - decline_reasons
+      - declined_offers
+      - diagnosis
+      - expired_offers
+      - health_status
+      - position_id
+      - title
+      - top_decline_reason
+      - total_offers
+      - weekly_credits_remaining
     PositionPoolResponse:
       type: object
       properties:
@@ -2862,18 +4016,6 @@ components:
       description: |-
         * `gross` - Gross
         * `net` - Net
-    SourceEnum:
-      enum:
-      - test
-      - fsp
-      - microtask
-      - declared
-      type: string
-      description: |-
-        * `test` - Verified by test
-        * `fsp` - Verified by FSP
-        * `microtask` - Verified by micro-task
-        * `declared` - Declared
     SpecializationEnum:
       enum:
       - backend
@@ -3124,6 +4266,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaxonomyGrade'
+        topics:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxonomyTopic'
         skills:
           type: array
           items:
@@ -3154,8 +4300,15 @@ components:
           type: string
         name:
           type: string
+        name_ru:
+          type: string
         descriptor:
           type: string
+        descriptor_ru:
+          type: string
+        theta_cut:
+          type: number
+          format: double
         rating_cut:
           type: integer
       required:
@@ -3188,6 +4341,8 @@ components:
           type: string
         name:
           type: string
+        name_ru:
+          type: string
         topics:
           type: array
           items:
@@ -3196,6 +4351,26 @@ components:
       - id
       - name
       - topics
+    TaxonomyTopic:
+      type: object
+      properties:
+        id:
+          type: string
+        name_ru:
+          type: string
+        specs:
+          type: array
+          items:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+      required:
+      - id
+      - name_ru
+      - skills
+      - specs
     TimeTravelRequest:
       type: object
       properties:
@@ -3222,6 +4397,105 @@ components:
         * `none` - None
         * `domain` - Domain verified
         * `verified` - Verified
+    Vacancy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        company:
+          allOf:
+          - $ref: '#/components/schemas/CompanyPublic'
+          readOnly: true
+        specialization:
+          $ref: '#/components/schemas/SpecializationEnum'
+        grades:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeEnum'
+          description: Acceptable grades for this position
+        must_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          description: Required skills (weight=2 in matching)
+        nice_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          description: Nice-to-have skills (weight=1 in matching)
+        work_formats:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkFormatsEnum'
+        location:
+          type: string
+          maxLength: 255
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Minimum salary in RUB/month. Must be > 0.
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Maximum salary in RUB/month. Must be >= salary_min.
+        salary_type:
+          allOf:
+          - $ref: '#/components/schemas/SalaryTypeEnum'
+          description: |-
+            Gross or net — mandatory for salary transparency
+
+            * `gross` - Gross
+            * `net` - Net
+        salary:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        team_context:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - company
+      - created_at
+      - grades
+      - id
+      - salary
+      - salary_max
+      - salary_min
+      - salary_type
+      - specialization
+      - title
+    VacancyListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vacancy'
+        total:
+          type: integer
+        page:
+          type: integer
+        pages:
+          type: integer
+      required:
+      - items
+      - page
+      - pages
+      - total
     ValidationAssessmentMetrics:
       type: object
       properties:

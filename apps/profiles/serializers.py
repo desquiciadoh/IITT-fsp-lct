@@ -4,7 +4,7 @@ import uuid
 
 from core.enums import ConsentType
 from django.db import transaction
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from matching.models import Company
 from rest_framework import serializers
 
@@ -321,6 +321,43 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             instance.save(update_fields=["unknown_skills"])
 
         return instance
+
+
+class ContactGrantSerializer(serializers.ModelSerializer):
+    company = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        from outreach.models import ContactGrant
+
+        model = ContactGrant
+        fields = [
+            "id",
+            "company",
+            "source",
+            "source_id",
+            "is_active",
+            "granted_at",
+            "revoked_at",
+        ]
+
+    @extend_schema_field(
+        inline_serializer(
+            "ContactGrantCompany",
+            fields={
+                "id": serializers.UUIDField(),
+                "name": serializers.CharField(),
+                "website": serializers.CharField(),
+                "email_domain": serializers.CharField(),
+                "contact_email": serializers.CharField(),
+                "trust_level": serializers.CharField(),
+            },
+        )
+    )
+    def get_company(self, obj):
+        from matching.serializers import CompanySerializer
+
+        return CompanySerializer(obj.company).data
 
 
 class ConsentUpdateSerializer(serializers.Serializer):

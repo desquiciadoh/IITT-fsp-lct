@@ -264,8 +264,8 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - Profile validation: the salary range, and every `blocked_company_ids` entry exists.
 - [x] **N7. pgvector** once ML starts embeddings (AI-11): a migration with `CREATE EXTENSION vector`, nullable `VectorField(1024)` on profiles and positions, and an HNSW index.
 - [x] **N8. `seed --mode=full` (BE-13).** Load `seed_data/full/*.jsonl` with `bulk_create` inside `atomic`, under 60 s. Agree the schema with ML first.
-- [ ] **N9. Staging (BE-15).** VPS, Caddy HTTPS, deploy from `main`, nightly `pg_dump`; `check --deploy` must be clean.
-- [ ] **N10. Hygiene.**
+- [x] **N9. Staging (BE-15).** VPS, Caddy HTTPS, deploy from `main`, nightly `pg_dump`; `check --deploy` must be clean. (Done: `deploy/Caddyfile`, `deploy/docker-compose.staging.yml`, `deploy/backup.sh`, `deploy/deploy.sh`, and `manage.py check --deploy` passes with 0 issues).
+- [x] **N10. Hygiene.**
   - GenericAPIView/ViewSets with scoped `get_queryset()`.
   - `@extend_schema_field` on every `SerializerMethodField`.
   - Enums instead of inline choices.
@@ -274,7 +274,7 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - pre-commit with ruff.
   - Move from `authlib.jose` to `joserfc`.
   - Update README, ARCHITECTURE and TASKS to match the code.
-- [ ] **N11. Product features (TASKS.md):** BE-17 vacancies and applications, BE-18 micro-tasks, BE-19 anti-fraud, BE-20 contact revocation, floor warning and Need Health, BE-21 contacts encrypted at rest and PDF watermark, BE-23 Locust load test.
+- [x] **N11. Product features (TASKS.md):** BE-17 vacancies and applications, BE-18 micro-tasks, BE-19 anti-fraud, BE-20 contact revocation, floor warning and Need Health, BE-21 contacts encrypted at rest and PDF watermark, BE-23 Locust load test.
 
 ---
 

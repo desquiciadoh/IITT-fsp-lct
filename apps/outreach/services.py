@@ -325,7 +325,7 @@ class OfferService:
             actor_id=actor_id,
         )
 
-        # Auto-create ContactGrant on acceptance
+        # Auto-create ContactGrant on acceptance and refund position credit (Task BE-19)
         if new_status == OfferStatus.ACCEPTED:
             ContactAccessService.create_grant(
                 candidate_id=offer.candidate_id,
@@ -333,6 +333,9 @@ class OfferService:
                 source=ContactGrantSource.OFFER,
                 source_id=offer.id,
             )
+            if offer.position_id:
+                from matching.antifraud import refund_position_credit
+                refund_position_credit(offer.position_id, offer.created_at)
 
         # Audit log
         AuditLog.objects.create(
@@ -393,10 +396,17 @@ class OfferService:
         if not company or not is_candidate_visible_to_company(profile, company):
             raise CandidateNotReachable()
 
+        # Anti-fraud: salary sanity checks (Task BE-19)
+        from matching.antifraud import consume_position_credit, validate_salary_ratio
+        validate_salary_ratio(salary_min, salary_max)
+
         # Compute why_you and match_snapshot server-side from scorer, ignoring client input
         if position_id:
             pos = Position.objects.filter(id=position_id, company_id=company_id).first()
             if pos:
+                # Anti-fraud: check and consume weekly outreach credit (5 credits/week, Task BE-19)
+                consume_position_credit(pos)
+
                 score_data = calculate_match_score(profile, pos)
                 why_you = score_data.get("reasons", [])
                 match_snapshot = score_data.get("components", {})
@@ -408,6 +418,11 @@ class OfferService:
             match_snapshot = {}
 
         expires_at = timezone.now() + timedelta(days=expires_in_days)
+
+        # Candidate controls (BE-20): below-floor private flag
+        below_floor = bool(
+            profile.salary_floor is not None and salary_max < profile.salary_floor
+        )
 
         offer = Offer.objects.create(
             company_id=company_id,
@@ -423,6 +438,7 @@ class OfferService:
             contact_value=contact_value,
             why_you=why_you,
             match_snapshot=match_snapshot,
+            below_floor=below_floor,
             expires_at=expires_at,
         )
 

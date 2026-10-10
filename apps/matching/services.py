@@ -79,6 +79,7 @@ def candidate_to_dto(profile: CandidateProfile) -> dict[str, Any]:
 
 def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
     """Fetch candidate DTOs using fast values queries without instantiating thousands of models."""
+    user_id_qs = filtered_qs.order_by().values("user_id")
     profile_rows = list(
         filtered_qs.order_by().values(
             "user_id",
@@ -99,13 +100,10 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
     if not profile_rows:
         return []
 
-    user_ids = [r["user_id"] for r in profile_rows]
-
-    # Batch skills via subquery on user_ids
-    user_id_subquery = filtered_qs.order_by().values("user_id")
+    # Batch skills via SQL subquery (avoids sending 1500+ params across wire)
     skills_by_user: dict[int, list[dict[str, Any]]] = {}
     for row in (
-        CandidateSkill.objects.filter(candidate_id__in=user_id_subquery)
+        CandidateSkill.objects.filter(candidate_id__in=user_id_qs)
         .order_by()
         .values("candidate_id", "skill_id", "skill__name", "source", "level")
     ):
@@ -118,10 +116,10 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch leagues via subquery on user_ids
+    # Batch leagues via SQL subquery
     leagues_by_user: dict[int, list[dict[str, Any]]] = {}
     for row in (
-        LeagueMembership.objects.filter(candidate_id__in=user_id_subquery)
+        LeagueMembership.objects.filter(candidate_id__in=user_id_qs)
         .order_by()
         .values(
             "candidate_id",
@@ -144,10 +142,10 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch FSP results count via subquery on user_ids
+    # Batch FSP results count via SQL subquery
     fsp_counts: dict[int, int] = {}
     for row in (
-        FSPResult.objects.filter(candidate_id__in=user_id_subquery)
+        FSPResult.objects.filter(candidate_id__in=user_id_qs)
         .order_by()
         .values("candidate_id")
         .annotate(cnt=Count("id"))
@@ -238,16 +236,14 @@ def get_position_pool(
     )
 
     # 7. Score candidates with pure DTOs (zero DB queries)
+    dto_by_user_id = {dto["user_id"]: dto for dto in dtos}
     scored_items = []
     for dto in dtos:
-        score_data = calculate_match_score(dto, position)
+        score_data = calculate_match_score(dto, position, detailed=False)
         scored_items.append(
             {
                 "user_id": dto["user_id"],
                 "score": score_data["total_score"],
-                "components": score_data["components"],
-                "reasons": score_data["reasons"],
-                "gaps": score_data.get("gaps", []),
                 "shortlisted": dto["user_id"] in shortlisted_user_ids,
             }
         )
@@ -278,18 +274,21 @@ def get_position_pool(
         page_profiles = [profiles_by_id[uid] for uid in page_user_ids if uid in profiles_by_id]
         attach_verified_topics(page_profiles)
 
-        items = [
-            {
-                "talent": TalentShortSerializer(profiles_by_id[item["user_id"]]).data,
-                "score": item["score"],
-                "components": item["components"],
-                "reasons": item["reasons"],
-                "gaps": item["gaps"],
-                "shortlisted": item["shortlisted"],
-            }
-            for item in page_items
-            if item["user_id"] in profiles_by_id
-        ]
+        items = []
+        for item in page_items:
+            uid = item["user_id"]
+            if uid in profiles_by_id and uid in dto_by_user_id:
+                detailed_score = calculate_match_score(dto_by_user_id[uid], position, detailed=True)
+                items.append(
+                    {
+                        "talent": TalentShortSerializer(profiles_by_id[uid]).data,
+                        "score": detailed_score["total_score"],
+                        "components": detailed_score["components"],
+                        "reasons": detailed_score["reasons"],
+                        "gaps": detailed_score["gaps"],
+                        "shortlisted": item["shortlisted"],
+                    }
+                )
     else:
         items = []
 
@@ -346,3 +345,40 @@ def search_talent(
         "pages": pages,
         "facets": facets,
     }
+
+
+def compute_acceptance_likelihood(
+    candidate: Any,
+    salary_max: int | None = None,
+    work_formats: list[str] | None = None,
+) -> str:
+    """Compute acceptance likelihood heuristic: 'low' | 'medium' | 'high'."""
+    if candidate is None:
+        return "medium"
+
+    if isinstance(candidate, dict):
+        salary_floor = candidate.get("salary_floor")
+        salary_min = candidate.get("salary_min")
+        cand_formats = set(candidate.get("work_formats") or [])
+    else:
+        salary_floor = getattr(candidate, "salary_floor", None)
+        salary_min = getattr(candidate, "salary_min", None)
+        cand_formats = set(getattr(candidate, "work_formats", []) or [])
+
+    if salary_max is not None:
+        if salary_floor is not None and salary_max < salary_floor:
+            return "low"
+        if salary_min is not None and salary_min > 0 and salary_max < salary_min * 0.9:
+            return "low"
+
+    if work_formats and cand_formats:
+        offer_formats = set(work_formats)
+        if cand_formats.isdisjoint(offer_formats):
+            return "low"
+
+    if salary_max is not None and salary_min is not None and salary_min > 0:
+        if salary_max >= salary_min:
+            return "high"
+
+    return "medium"
+

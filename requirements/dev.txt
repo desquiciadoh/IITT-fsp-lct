@@ -6,3 +6,4 @@ pytest-cov==7.1.0
 factory-boy==3.3.3
 Faker==40.42.0
 ruff==0.16.10
+locust==2.46.7

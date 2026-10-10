@@ -1,15 +1,13 @@
 """Tests for N2: Engine adapter conformance and sync_families management command."""
 
 import random
-from unittest.mock import patch
 
 import pytest
+from assessment import engine_adapter
+from assessment.models import ItemFamily
+from assessment.services import AssessmentService
 from core.enums import AssessmentKind, AssessmentMode, Grade, GradeDecision, Specialization
 from django.core.management import call_command
-
-from assessment import engine_adapter
-from assessment.models import AssessmentSession, ItemFamily, LeagueMembership
-from assessment.services import AssessmentService
 from identity.models import User
 
 

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 from pathlib import Path
 
 from core.enums import (
@@ -14,17 +15,23 @@ from core.errors import FSPAPIError
 from core.pagination import FSPPagination
 from core.permissions import IsCandidate
 from django.conf import settings
+from django.db import models
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import permissions, serializers, status, views
 from rest_framework.response import Response
 
-from assessment.models import AssessmentSession, LeagueMembership
+from assessment.engine.cat import item_level
+from assessment.engine.irt import p_3pl
+from assessment.families.registry import all_families, make_rng
+from assessment.models import AssessmentItem, AssessmentSession, LeagueMembership
 from assessment.serializers import (
     AnswerRequestSerializer,
     AssessmentResultSerializer,
     AssessmentSessionSerializer,
     FallbackRequestSerializer,
     ItemViewSerializer,
+    LabFamiliesResponseSerializer,
+    LabTwinsResponseSerializer,
     LeagueShelfSerializer,
     StartAssessmentSerializer,
     ValidationReportSerializer,
@@ -385,3 +392,153 @@ class LabReportView(views.APIView):
             "No validation report or fixture available.",
             status_code=500,
         )
+
+
+class LabFamiliesView(views.APIView):
+    """Lab catalog endpoint returning all registered question families with empirical exposure & drift."""
+
+    permission_classes = [permissions.AllowAny]
+    serializer_class = LabFamiliesResponseSerializer
+
+    @extend_schema(responses={200: LabFamiliesResponseSerializer})
+    def get(self, request):
+        fams = all_families()
+        total_items = AssessmentItem.objects.count()
+
+        stats = AssessmentItem.objects.values("family_id").annotate(
+            exposures=models.Count("id"),
+            answered_count=models.Count("id", filter=models.Q(correct__isnull=False)),
+            correct_count=models.Count("id", filter=models.Q(correct=True)),
+        )
+        stats_map = {row["family_id"]: row for row in stats}
+
+        family_list = []
+        for fid, fam in fams.items():
+            meta = fam.meta
+            row = stats_map.get(fid, {})
+            exposures = row.get("exposures", 0)
+            answered_count = row.get("answered_count", 0)
+            correct_count = row.get("correct_count", 0)
+
+            exposure_rate = round(exposures / total_items, 4) if total_items > 0 else 0.0
+            correct_rate = round(correct_count / answered_count, 4) if answered_count > 0 else None
+
+            expected_p = float(p_3pl(0.0, meta.a, meta.b, meta.c))
+            if answered_count >= 10 and correct_rate is not None:
+                drift_flag = bool(abs(correct_rate - expected_p) > 0.30)
+            else:
+                drift_flag = False
+
+            family_list.append(
+                {
+                    "id": meta.id,
+                    "version": meta.version,
+                    "topic": meta.topic,
+                    "specs": list(meta.specs),
+                    "skills": list(meta.skills) if meta.skills else [],
+                    "format": meta.format if isinstance(meta.format, str) else str(meta.format),
+                    "a": float(meta.a),
+                    "b": float(meta.b),
+                    "c": float(meta.c),
+                    "time_limit_s": int(meta.time_limit_s),
+                    "exposures": exposures,
+                    "exposure_rate": exposure_rate,
+                    "correct_rate": correct_rate,
+                    "expected_p_theta0": round(expected_p, 4),
+                    "drift_flag": drift_flag,
+                }
+            )
+
+        return Response({"total": len(family_list), "families": family_list})
+
+
+class LabTwinsView(views.APIView):
+    """Lab twin-generator endpoint for side-by-side verification of difficulty matching.
+
+    Produces two unique rendered instances with identical parameters without leaking answers.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    serializer_class = LabTwinsResponseSerializer
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("position_id", str, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("specialization", str, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("grade", str, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: LabTwinsResponseSerializer},
+    )
+    def get(self, request):
+        position_id = request.query_params.get("position_id")
+        specialization = request.query_params.get("specialization")
+        grade = request.query_params.get("grade")
+
+        position_id_str = None
+        position_title = None
+
+        if position_id:
+            try:
+                pos_uuid = uuid.UUID(str(position_id))
+            except (ValueError, TypeError):
+                pos_uuid = None
+
+            from matching.models import Position
+
+            position = Position.objects.filter(id=pos_uuid).first() if pos_uuid else None
+            if not position:
+                raise FSPAPIError(
+                    "position_not_found",
+                    "Position not found",
+                    f"Position with id '{position_id}' was not found.",
+                    status_code=404,
+                )
+
+            position_id_str = str(position.id)
+            position_title = position.title
+            specialization = position.specialization
+            grade = position.grades[0] if position.grades else "middle"
+
+        if not specialization:
+            specialization = "backend"
+        if not grade:
+            grade = "middle"
+
+        fams = all_families()
+        matching_fams = [f for f in fams.values() if specialization in f.meta.specs]
+        if not matching_fams:
+            matching_fams = list(fams.values())
+
+        secret = getattr(settings, "ITEM_SEED_SECRET", "lab-secret-item-seed")
+        call_session_id = str(uuid.uuid4())
+
+        twins = []
+        for idx, fam in enumerate(matching_fams):
+            rng_a = make_rng(secret, call_session_id, f"{fam.meta.id}:twin_a", idx * 2 + 1)
+            rng_b = make_rng(secret, call_session_id, f"{fam.meta.id}:twin_b", idx * 2 + 2)
+            inst_a = fam.generate(rng_a)
+            inst_b = fam.generate(rng_b)
+
+            twins.append(
+                {
+                    "family_id": fam.meta.id,
+                    "topic": fam.meta.topic,
+                    "level": item_level(fam.meta),
+                    "b": float(fam.meta.b),
+                    "time_limit_s": int(fam.meta.time_limit_s),
+                    "instance_a": inst_a.view(),
+                    "instance_b": inst_b.view(),
+                }
+            )
+
+        resp = {
+            "specialization": specialization,
+            "grade": grade,
+            "twins": twins,
+        }
+        if position_id_str:
+            resp["position_id"] = position_id_str
+            resp["position_title"] = position_title
+
+        return Response(resp)
+
