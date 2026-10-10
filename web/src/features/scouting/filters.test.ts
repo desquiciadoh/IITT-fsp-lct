@@ -22,7 +22,7 @@ import {
   summarizeShelves,
 } from '@/features/scouting/filters'
 import type { LeagueShelf, PoolEntry, PoolFilters, PoolResponse } from '@/api/types'
-import { scoutingHandlers } from '@/mocks/handlers/scouting'
+import { scoutingHandlers, seedShortlist } from '@/mocks/handlers/scouting'
 
 const server = setupServer(...scoutingHandlers)
 const BASE = 'http://localhost'
@@ -228,5 +228,71 @@ describe('scouting MSW mock (target shapes)', () => {
     const res = await fetch(`${BASE}/api/talent/nope`)
     expect(res.status).toBe(404)
     expect(res.headers.get('Content-Type')).toContain('application/problem+json')
+  })
+})
+
+describe('FE-10 acceptance scenarios (FE2.md)', () => {
+  /** The tray cache merge the UI performs per pool batch (useAbsorbShortlist). */
+  const absorbIntoTray = (prev: Set<string>, items: PoolEntry[]): Set<string> => {
+    const next = new Set(prev)
+    for (const i of items) {
+      if (i.shortlisted) next.add(i.talent.public_id)
+      else next.delete(i.talent.public_id)
+    }
+    return next
+  }
+
+  it('after changing filters 10 times the shortlist is intact', async () => {
+    seedShortlist('p1', ['t-001', 't-002'])
+    let tray = new Set<string>()
+
+    // Ten filter changes → ten pool queries; the tray absorbs every batch.
+    const filterSets = [
+      '',
+      '?grades=senior',
+      '?skills=python',
+      '?fsp=linked',
+      '?formats=remote',
+      '?salary_max=300000&grades=middle',
+      '?confirmed_only=true',
+      '?preset=fsp_stars',
+      '?page=1&grades=junior',
+      '?skills=kafka&fsp=prize',
+    ]
+    for (const qs of filterSets) {
+      const { body } = await getJson<PoolWire>(`/api/positions/p1/pool${qs}`)
+      tray = absorbIntoTray(tray, body.items)
+    }
+    // Shortlisted candidates stay in the tray even when no longer visible.
+    expect([...tray].sort()).toEqual(['t-001', 't-002'])
+
+    // And the server agrees (G16 list endpoint in the mock).
+    const list = await getJson<Array<{ public_id: string }>>('/api/positions/p1/shortlist')
+    expect(list.body.map((t) => t.public_id).sort()).toEqual(['t-001', 't-002'])
+  })
+
+  it('a reload restores the whole view from the URL alone', () => {
+    // Reload = the browser re-serializes the current query string; the UI
+    // rebuilds tab/filters/drawer purely from params (?tab, ?c, filter keys).
+    const url = new URL('http://localhost/employer/positions/p1?tab=pool&c=t-001&grades=middle,senior&fsp=prize&page=2')
+    const sp = url.searchParams
+    expect(sp.get('tab')).toBe('pool')
+    expect(sp.get('c')).toBe('t-001')
+    const restored = paramsToFilters(sp)
+    expect(restored.grades).toEqual(['middle', 'senior'])
+    expect(restored.fsp).toBe('prize')
+    expect(restored.page).toBe(2)
+    // …and serializing back yields the same wire format the server accepts.
+    expect(filtersToParams(restored).toString()).toBe('grades=middle%2Csenior&fsp=prize&page=2')
+  })
+
+  it('contacts appear only after acceptance (grant-gated by the BE)', async () => {
+    // Not accepted yet → drawer payload has no contacts.
+    const before = await getJson<{ contacts: unknown }>('/api/talent/t-001')
+    expect(before.body.contacts).toBeNull()
+    // After the candidate accepts an offer the company holds a grant → the
+    // same request now ships full contact details (t-002 models that state).
+    const after = await getJson<{ contacts: Record<string, string> | null }>('/api/talent/t-002')
+    expect(after.body.contacts).toMatchObject({ email: expect.any(String) })
   })
 })

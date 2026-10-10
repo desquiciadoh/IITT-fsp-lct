@@ -155,6 +155,17 @@ const grantedContacts = new Set<string>(['t-002'])
 
 const shortlists = new Map<string, Set<string>>()
 
+/**
+ * Test helper (used by filters.test.ts): pre-seed the shortlist of a position
+ * so acceptance scenarios ("tray survives 10 filter changes", "contacts only
+ * after acceptance") can be exercised without driving the UI.
+ */
+export function seedShortlist(positionId: string, publicIds: string[]) {
+  const key = String(positionId)
+  if (!shortlists.has(key)) shortlists.set(key, new Set())
+  for (const id of publicIds) shortlists.get(key)!.add(id)
+}
+
 const PAGE_SIZE = 20
 
 // --- scoring (target contract: components as a list) -------------------------
