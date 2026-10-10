@@ -70,8 +70,8 @@ class Gini(TypedNumberFamily):
     DECIMALS = 3
 
     def draw(self, rng):
-        left = [rng.randint(0, 12) for _ in range(2)]
-        right = [rng.randint(0, 12) for _ in range(2)]
+        left = [rng.randint(0, 30) for _ in range(2)]
+        right = [rng.randint(0, 30) for _ in range(2)]
         if sum(left) == 0:
             left[0] = 1
         if sum(right) == 0:
