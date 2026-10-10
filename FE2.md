@@ -56,7 +56,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
   - **Edit** (`/employer/positions/:id`): settings tab with `GET`/`PUT /api/positions/{id}`.
   - **Employer dashboard** (`/employer`): positions list (`GET /api/positions` returns an array) and an offers summary.
   - *Done:* a sample JD becomes a saved position (mocked parse, real save); invalid salaries never reach the server.
-- [ ] **FE-10 · Scouting** (L), route `/employer/positions/:id`.
+- [x] **FE-10 · Scouting** (L), route `/employer/positions/:id`. See `docs/FE-10-Scouting.md`.
   - **League shelves:** `GET /api/leagues?specialization=` → `[{specialization, grade, confirmed, unconfirmed, median_expectation?}]` (gap G7; mock it).
   - **Ranked pool:** `GET /api/positions/{id}/pool` → `{items, total, page}`. Each item is `{talent, score, components, reasons, shortlisted}`.
     - `talent` = `{public_id, city, work_formats, salary_min, salary_max, salary_type, league {specialization, grade, status, rating, percentile, strength}, fsp {linked, results_count, sports_rank}, skills [{id, name, source}], last_active_at}`.
