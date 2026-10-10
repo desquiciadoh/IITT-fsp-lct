@@ -102,8 +102,12 @@ def check_meta(fam: ItemFamily, skills: set[str] | None) -> list[str]:
         errs.append(f"meta: c={m.c} outside [0, 0.5)")
     if not 30 <= m.time_limit_s <= 300:
         errs.append(f"meta: time_limit_s={m.time_limit_s} outside [30, 300]")
-    if not m.topic:
-        errs.append("meta: empty topic")
+    from ..engine.content import load_content  # lazy: engine imports families.base
+    topics = load_content().topics
+    if m.topic not in topics:
+        errs.append(f"meta: topic {m.topic!r} not in content/specializations.yaml")
+    elif not set(m.specs) <= set(topics[m.topic].specs):
+        errs.append(f"meta: specs {m.specs} not all served by topic {m.topic} ({topics[m.topic].specs})")
     if skills is not None:
         unknown = sorted(s for s in m.skills if s not in skills)
         if unknown or not m.skills:

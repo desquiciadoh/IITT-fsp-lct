@@ -1,0 +1,116 @@
+# Specializations and assessment topics (ML-2, owner: ML). Read by assessment.engine.content.
+#
+# A topic is what the qualification test reports evidence on (CatResult.topics) and what
+# blueprints balance. Every item family names exactly one topic (FamilyMeta.topic), and its
+# specs must be a subset of the topic's specs. `skills` are ids from content/skills.yaml
+# (AI-owned): test evidence on a topic becomes verified evidence for these skills in matching.
+# Topic ids are stable: renaming one is a data migration for stored CatResult topics.
+
+specializations:
+  - id: backend
+    name_ru: Backend
+  - id: frontend
+    name_ru: Frontend
+  - id: ml_data
+    name_ru: ML & Data
+
+topics:
+  # ── shared: algorithms and computer science (count for every specialization) ──
+  - id: algorithms.complexity
+    name_ru: Сложность алгоритмов
+    specs: [backend, frontend, ml_data]
+    skills: [algorithms, data_structures]
+  - id: algorithms.data_structures
+    name_ru: Структуры данных
+    specs: [backend, frontend, ml_data]
+    skills: [data_structures, algorithms]
+  - id: algorithms.code_reading
+    name_ru: Чтение кода и логика
+    specs: [backend, frontend, ml_data]
+    skills: [algorithms, python]
+
+  # ── backend (SQL and Python also serve ML & Data) ──
+  - id: sql.aggregation
+    name_ru: "SQL: агрегация и группировка"
+    specs: [backend, ml_data]
+    skills: [sql, postgresql, mysql, clickhouse]
+  - id: sql.joins
+    name_ru: "SQL: соединения и подзапросы"
+    specs: [backend, ml_data]
+    skills: [sql, postgresql, mysql]
+  - id: python.core
+    name_ru: "Python: язык"
+    specs: [backend, ml_data]
+    skills: [python]
+  - id: backend.http
+    name_ru: HTTP и REST API
+    specs: [backend]
+    skills: [rest_api, nginx]
+  - id: backend.databases
+    name_ru: Транзакции и индексы
+    specs: [backend]
+    skills: [postgresql, sql, redis]
+  - id: backend.concurrency
+    name_ru: Конкурентность и асинхронность
+    specs: [backend]
+    skills: [asyncio, python, celery]
+  - id: backend.system_design
+    name_ru: Нагрузка и масштабирование
+    specs: [backend]
+    skills: [microservices, redis, kafka]
+  - id: backend.security
+    name_ru: Безопасность бэкенда
+    specs: [backend]
+    skills: [security, oauth]
+
+  # ── frontend ──
+  - id: js.event_loop
+    name_ru: "JavaScript: асинхронность и event loop"
+    specs: [frontend]
+    skills: [javascript, typescript]
+  - id: js.core
+    name_ru: "JavaScript: язык"
+    specs: [frontend]
+    skills: [javascript, typescript]
+  - id: web.css
+    name_ru: HTML и CSS
+    specs: [frontend]
+    skills: [css, html, scss]
+  - id: web.react
+    name_ru: React
+    specs: [frontend]
+    skills: [react, redux, nextjs]
+  - id: web.browser
+    name_ru: Браузер, сеть и производительность
+    specs: [frontend]
+    skills: [javascript, rest_api, websockets]
+  - id: web.typescript
+    name_ru: TypeScript
+    specs: [frontend]
+    skills: [typescript]
+  - id: web.security
+    name_ru: Безопасность фронтенда
+    specs: [frontend]
+    skills: [security, oauth]
+
+  # ── ML & Data ──
+  - id: ml.statistics
+    name_ru: Статистика и вероятность
+    specs: [ml_data]
+    skills: [machine_learning, numpy]
+  - id: ml.metrics
+    name_ru: Метрики качества моделей
+    specs: [ml_data]
+    skills: [machine_learning, scikit_learn]
+  - id: ml.models
+    name_ru: Модели и обучение
+    specs: [ml_data]
+    skills: [machine_learning, scikit_learn, xgboost, catboost, lightgbm]
+  - id: ml.data_processing
+    name_ru: Обработка данных (pandas, numpy)
+    specs: [ml_data]
+    skills: [pandas, numpy, python]
+  - id: ml.deep_learning
+    name_ru: Глубокое обучение
+    specs: [ml_data]
+    skills: [deep_learning, pytorch, tensorflow]
