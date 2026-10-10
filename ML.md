@@ -299,12 +299,13 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
 
 ### P0: in this order
 
-- [ ] **ML-0 · Publish the contract with stubs** (F-07, MK3/MK4).
+- [x] **ML-0 · Publish the contract with stubs** (F-07, MK3/MK4).
   - Create the packages from §2 with the §3 types.
   - `StubCatEngine`: serves 8 items, θ = (correct − 4)/2, decision against the claimed cut.
   - Stub `score_pool`: move the current `scoring.py` formula onto the DTOs, return the final shapes, and add a chip for every component.
   - Stub `fsp_boost`: `min(15, 5·n)`. `percentiles` can be real immediately.
   - *Done:* BE can replace `engine.py`/`scoring.py` calls with no API shape change, and `tests/ml` is green.
+  - **Done (branch `ml/ML-0-contract`):** packages from §2 exist. `assessment/engine.py` became the package `engine/`, and `engine/legacy.py` re-exports `FAMILIES_REGISTRY`/`score_assessment` for BE until N2. `tests/ml/test_contract.py` has 58 tests: an AST purity scan that resolves relative imports, an AST check for global RNG, enum constants against `core.enums`, an HMAC golden for `make_rng` pinned to a literal, a lossless `CatState` JSON round trip with `"v": 1`, the stub engine, presets, Σ contributions = score, and hand-computed mid-rank percentiles. Contract additions with defaults (decisions D1–D4 in §8): `CatState.seen`, `CatState.blueprint` + `start(..., blueprint=None)`, `CandidateCtx.microtask_dates`, weights rescaled to Σ = 100. The full suite passes on Postgres.
 - [ ] **ML-1 · Fix the 3 live families and build the harness** (AI-02; fixes ML-F1).
   - Make every key depend on the drawn parameters.
     - **SQL:** randomize the count of matching departments (0..N) and the table data, and compute the answer with an in-memory `sqlite3` oracle.
@@ -400,3 +401,15 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
 - No LLM calls anywhere on the grading or scoring path.
 - Small PRs (under ~400 lines), titled with the task ID (`ML-3 CAT engine`).
 - If you need a model or endpoint change, write it into BE.md §2 as a request rather than editing Django code.
+
+## 8. Decisions Log
+
+Decisions taken while implementing this file. Each one is referenced from the task that introduced it.
+
+| ID | Decision | Why |
+|---|---|---|
+| D1 | `CatEngine.next_family` appends a pending entry (`correct: None`) to `state.administered` and returns the same family if it is called again before `record`. `result()` scores any still-pending entry as incorrect (`late`). | `record()` only receives a family id, so the state must already know the item's a/b/c/topic. Retries are safe. A candidate who ends a session on a hard item can't skip it. |
+| D2 | `CatState` serializes `"v": 1`. New fields are optional and read with `.get`, and `from_json` refuses a newer version. Optional fields: `seen` (family ids from earlier attempts) and `blueprint` (screening quotas, passed to `start(..., blueprint=None)`). | BE stores the state in JSONB across deploys. A screening test (ML-12) needs its own topic quotas without a signature change. |
+| D3 | `make_rng` seeds `random.Random` with the full 256-bit HMAC digest. It refuses an empty secret, and `n` is the item `seq` (generation) or the selection step (`"select"`). | With an empty secret, seeds could be computed from the session id. With `n = seq`, re-serving an item renders the same instance. |
+| D4 | `score_pool` rescales any `Weights` to Σ = 100 (`Component.weight` is the effective weight), so the score stays in 0..100 and Σ contribution = score exactly (no rounding inside the engine). | Sliders and `Position.weights` can sum to anything. Rounding is left to the presentation layer. |
+| D5 | `percentiles` is the mid-rank: 100·(#below + ½·#equal)/N, with the candidate inside the league list. NaN raises. | Ties share a value, and a single member gets 50. |

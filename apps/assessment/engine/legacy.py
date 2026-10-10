@@ -1,4 +1,8 @@
-"""Deterministic Parametric Item Families and IRT scoring engine.
+"""Legacy item families and scorer behind the pre-CAT BE API (ML-0 compatibility shim).
+
+BE's services still call `FAMILIES_REGISTRY` and `score_assessment` (the old
+`assessment/engine.py` API). They stay importable from `assessment.engine` until BE
+swaps in `CatEngine` (BE.md N2); after that this module is deleted.
 
 CRITICAL INVARIANTS:
 1. LLM NEVER decides score or grade! All items are generated from parametric
@@ -11,7 +15,25 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-from core.enums import Grade, GradeDecision, Specialization
+
+# String constants instead of core.enums: engine packages are pure (CLAUDE.md invariant 6).
+# tests/ml/test_contract.py checks these against core.enums.
+class Grade:
+    INTERN = "intern"
+    JUNIOR = "junior"
+    MIDDLE = "middle"
+    SENIOR = "senior"
+
+
+class GradeDecision:
+    CONFIRMED = "confirmed"
+    UNCONFIRMED = "unconfirmed"
+
+
+class Specialization:
+    BACKEND = "backend"
+    FRONTEND = "frontend"
+    ML_DATA = "ml_data"
 
 
 @dataclass

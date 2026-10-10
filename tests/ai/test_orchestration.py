@@ -318,6 +318,8 @@ def test_blueprint_error_is_logged_with_type_only(monkeypatch, caplog):
 
 def test_blueprint_missing_module_is_silent(monkeypatch, caplog):
     monkeypatch.setitem(sys.modules, "assessment.engine", None)  # import fails with ModuleNotFoundError
+    # tests/ml imports the real submodule earlier in the same process; hide the cached copy too.
+    monkeypatch.setitem(sys.modules, "assessment.engine.blueprint", None)
 
     with caplog.at_level(logging.INFO):
         res = parse_jd(JD_TEXT, gateway=FakeLlm())
