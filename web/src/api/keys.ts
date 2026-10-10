@@ -15,6 +15,8 @@ export const keys = {
   company: ['company'] as const,
   positions: ['positions'] as const,
   position: (id: string) => ['position', id] as const,
+  /** FE-09 · one-shot JD parse result — no cache key needed; kept for clarity. */
+  positionDraft: ['position-draft'] as const,
   pool: (positionId: string) => ['pool', positionId] as const,
   leagues: (spec?: string) => ['leagues', spec ?? 'all'] as const,
   talentSearch: ['talent', 'search'] as const,

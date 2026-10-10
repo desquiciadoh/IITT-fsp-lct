@@ -8,6 +8,8 @@
  * still to be shipped, each tagged with a comment.
  */
 import type {
+  Company as GeneratedCompany,
+  Position as GeneratedPosition,
   AnswerResponse as GeneratedAnswerResponse,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
@@ -278,3 +280,52 @@ export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
   next?: AssessmentItem
   result?: AssessmentResult
 }
+
+// --- FE-09 · Company & position wizard --------------------------------------
+
+/**
+ * GET/PUT /api/companies/me (FE2.md §FE-09).
+ * gap G17 — after the BE fixes B1 there is no dedicated "create company"
+ * endpoint yet; the wizard will use PUT /api/companies/me to create it.
+ * Until then the backend auto-creates a company for employers (security bug),
+ * so `useCompany` must treat 403 `company_required` as "no company yet".
+ */
+export type Company = GeneratedCompany
+
+/** PUT /api/companies/me payload (readonly fields stripped by the schema). */
+export type CompanyInput = Omit<Company, 'id' | 'trust_level' | 'created_at'>
+
+/**
+ * GET/POST/PUT /api/positions (FE2.md §FE-09).
+ * The schema types `company` as a URI string; keep it opaque here.
+ */
+export type Position = GeneratedPosition
+export type PositionStatus = Position['status']
+
+/** POST /api/positions payload (readonly fields stripped). */
+export type PositionInput = Omit<Position, 'id' | 'company' | 'created_at'>
+
+/**
+ * PATCH-lite used by the edit screen (`GET`/`PUT /api/positions/{id}`).
+ * Same shape as PositionInput but every field optional except title/spec.
+ */
+export type PositionUpdate = Partial<PositionInput> & Pick<PositionInput, 'title' | 'specialization'>
+
+/**
+ * POST /api/positions/parse response (FE2.md §FE-09, AI.md §3).
+ * gap G6 — the backend endpoint is unstable; mocked in employer.ts until
+ * shipped. `draft` is a partial PositionInput prefill; `unknown_terms` are
+ * skill-like tokens the taxonomy did not recognize; `blueprint` feeds the
+ * assessment topic bars; `source` marks which parser produced the draft.
+ */
+export type JdParseSource = 'llm' | 'regex' | 'fallback' | 'mock'
+export type BlueprintTopic = { topic: string; weight: number }
+export type JdParseResult = {
+  draft: Partial<PositionInput>
+  unknown_terms: string[]
+  blueprint: BlueprintTopic[]
+  source: JdParseSource
+}
+
+/** POST /api/positions/parse request body. */
+export type JdParseInput = { text: string }

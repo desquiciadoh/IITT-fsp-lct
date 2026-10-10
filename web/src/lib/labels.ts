@@ -31,6 +31,12 @@ export const LEAGUE_STATUS_LABEL: Record<string, string> = {
   unconfirmed: 'неподтверждён',
 }
 
+/** Position lifecycle (BE `Position.status`, OpenAPI `positionStatusEnum`). */
+export const POSITION_STATUS_LABEL: Record<string, string> = {
+  open: 'открыта',
+  closed: 'закрыта',
+}
+
 export const OFFER_STATUS_LABEL: Record<string, string> = {
   sent: 'отправлен',
   viewed: 'просмотрен',
