@@ -1,0 +1,3 @@
+Вот извлечённые данные из резюме:
+{"specialization": "frontend", "claimed_grade": "Junior", "years_experience": "1", "roles": ["Frontend Developer"], "skills_raw": ["React", "TypeScript"], "work_formats": ["удалённо"], "salary_min": "90 000", "salary_max": null, "salary_type": "на руки", "city": "Санкт-Петербург", "about": null, "experience_text": null}
+Если нужно, могу уточнить.

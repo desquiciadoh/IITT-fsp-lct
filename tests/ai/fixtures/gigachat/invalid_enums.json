@@ -1,0 +1,20 @@
+{
+  "specialization": "бэкенд",
+  "claimed_grade": "Ведущий",
+  "years_experience": 4,
+  "roles": [
+    "Developer"
+  ],
+  "skills_raw": [
+    "Python",
+    "Postgres"
+  ],
+  "work_formats": [
+    "удаленка",
+    "в офисе"
+  ],
+  "salary_min": 200000,
+  "salary_max": 300000,
+  "salary_type": "на руки",
+  "city": "Москва"
+}

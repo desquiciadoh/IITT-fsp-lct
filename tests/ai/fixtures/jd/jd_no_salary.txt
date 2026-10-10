@@ -1,0 +1,5 @@
+Frontend Developer (React / TypeScript)
+Компания RetailTech ищет фронтенд разработчика.
+Город: Санкт-Петербург, гибридный формат.
+Стек технологий: React, TypeScript, Redux Toolkit, Next.js.
+Опыт от 2 лет. Зарплата обсуждается по итогам собеседования.
