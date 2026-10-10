@@ -10,8 +10,6 @@ CRITICAL INVARIANTS:
 2. The correct answer (key) is kept server-side only in assessment_items.key
    and is NEVER serialized in any client-facing response.
 """
-
-import hashlib
 import random
 from dataclasses import dataclass
 from typing import Any
@@ -65,160 +63,52 @@ class BaseItemFamily:
         raise NotImplementedError
 
 
-# --- Concrete Parametric Families ---
+# --- Adapters: the ML-1 families behind the legacy generate(seed: str) API ---
 
+class _LegacyAdapter(BaseItemFamily):
+    """Serves an ItemFamily (families/) through the old interface BE's services call.
 
-class BackendSqlAggregationFamily(BaseItemFamily):
-    family_id = "be.sql.group_having.v1"
-    topic = "sql.aggregation"
-    spec = Specialization.BACKEND
-    difficulty_b = 0.4
-    time_limit_s = 90
+    Keys are option ids drawn from rng (ML-F1 fixed): BE's `answer == key` check stays valid.
+    `time_limit_s` and `legacy_b` keep the legacy per-item limits and difficulties that BE's
+    lifecycle tests pin through `score_assessment` (θ = mean b + ...). The real IRT priors are
+    in `family.meta`; the CAT engine uses those.
+    """
+
+    def __init__(self, family, spec: str, time_limit_s: int, legacy_b: float):
+        m = family.meta
+        self._family = family
+        self.family_id = m.id
+        self.topic = m.topic
+        self.spec = spec
+        self.difficulty_b = legacy_b
+        self.discrimination_a = m.a
+        self.guessing_c = m.c
+        self.time_limit_s = time_limit_s
 
     def generate(self, seed: str) -> ItemInstance:
-        rng = random.Random(seed)
-        threshold = rng.choice([2, 3, 4, 5])
-        dept_names = rng.sample(["Engineering", "Marketing", "Sales", "HR", "Support"], 3)
-
-        # Problem setup
-        sql_query = f"""SELECT department, COUNT(*) as cnt, AVG(salary) as avg_sal
-FROM employees
-GROUP BY department
-HAVING COUNT(*) >= {threshold}
-ORDER BY cnt DESC;"""
-
-        # Deterministic oracle calculation
-        dept_counts = {
-            dept_names[0]: threshold + 1,
-            dept_names[1]: threshold,
-            dept_names[2]: threshold - 1,
-        }
-        matching_depts = [d for d, c in dept_counts.items() if c >= threshold]
-        correct_count = len(matching_depts)
-
-        options = [
-            {"id": "opt_a", "text_md": f"{correct_count} отдела(ов)"},
-            {"id": "opt_b", "text_md": f"{correct_count + 1} отдела(ов)"},
-            {"id": "opt_c", "text_md": f"{max(0, correct_count - 1)} отдела(ов)"},
-            {"id": "opt_d", "text_md": "0 отделов"},
-        ]
-        # Shuffle options deterministically
-        rng.shuffle(options)
-        correct_opt_id = [
-            opt["id"] for opt in options if opt["text_md"] == f"{correct_count} отдела(ов)"
-        ][0]
-
-        stem = f"В базе данных компании есть таблица `employees`. Какое количество отделов вернет следующий запрос, если отделы имеют численность {', '.join(f'{k}: {v}' for k, v in dept_counts.items())}?"
-
+        inst = self._family.generate(random.Random(seed))   # str seeds hash with sha512: stable
+        view = inst.view()
         return ItemInstance(
-            family_id=self.family_id,
-            stem_md=stem,
-            code={"lang": "sql", "text": sql_query},
-            options=options,
-            input_type="choice",
-            key=correct_opt_id,
-            fingerprint=hashlib.sha256(f"{threshold}_{correct_count}_{seed}".encode()).hexdigest()[
-                :16
-            ],
-            time_limit_s=self.time_limit_s,
+            family_id=self.family_id, stem_md=view["stem_md"], code=view["code"],
+            options=view["options"], input_type=view["input"], key=inst.key,
+            fingerprint=inst.fingerprint, time_limit_s=self.time_limit_s,
         )
 
 
-class BackendPythonComplexityFamily(BaseItemFamily):
-    family_id = "be.algo.complexity.v1"
-    topic = "algorithms.complexity"
-    spec = Specialization.BACKEND
-    difficulty_b = 0.8
-    time_limit_s = 60
+def _build_registry() -> dict[str, BaseItemFamily]:
+    from ..families.backend.sql_group_having import FAMILY as sql
+    from ..families.frontend.js_event_loop import FAMILY as event_loop
+    from ..families.shared.complexity import FAMILY as complexity
 
-    def generate(self, seed: str) -> ItemInstance:
-        rng = random.Random(seed)
-        step = rng.choice([2, 3])
-        loops = rng.choice(["single", "nested_halving"])
-
-        if loops == "nested_halving":
-            code = f"""def solve(n):
-    res = 0
-    for i in range(n):
-        j = n
-        while j > 0:
-            res += i * j
-            j //= {step}
-    return res"""
-            expected = "O(n log n)"
-        else:
-            code = f"""def solve(n):
-    res = 0
-    i = 1
-    while i < n:
-        res += i
-        i *= {step}
-    return res"""
-            expected = "O(log n)"
-
-        options = [
-            {"id": "opt_1", "text_md": expected},
-            {"id": "opt_2", "text_md": "O(n)"},
-            {"id": "opt_3", "text_md": "O(n^2)"},
-            {"id": "opt_4", "text_md": "O(1)"},
-        ]
-        rng.shuffle(options)
-        correct_opt_id = [opt["id"] for opt in options if opt["text_md"] == expected][0]
-
-        return ItemInstance(
-            family_id=self.family_id,
-            stem_md="Определите асимптотическую временную сложность следующего алгоритма в худшем случае:",
-            code={"lang": "python", "text": code},
-            options=options,
-            input_type="choice",
-            key=correct_opt_id,
-            fingerprint=hashlib.sha256(f"{loops}_{step}_{seed}".encode()).hexdigest()[:16],
-            time_limit_s=self.time_limit_s,
-        )
+    adapters = [
+        _LegacyAdapter(sql, Specialization.BACKEND, 90, legacy_b=0.4),
+        _LegacyAdapter(complexity, Specialization.BACKEND, 60, legacy_b=0.8),
+        _LegacyAdapter(event_loop, Specialization.FRONTEND, 60, legacy_b=0.5),
+    ]
+    return {a.family_id: a for a in adapters}
 
 
-class FrontendJsClosureFamily(BaseItemFamily):
-    family_id = "fe.js.event_loop.v1"
-    topic = "javascript.async"
-    spec = Specialization.FRONTEND
-    difficulty_b = 0.5
-    time_limit_s = 60
-
-    def generate(self, seed: str) -> ItemInstance:
-        rng = random.Random(seed)
-        val = rng.randint(1, 9)
-        code = f"""console.log(1);
-setTimeout(() => console.log(2), 0);
-Promise.resolve().then(() => console.log(3));
-console.log({val});"""
-        expected = f"1, {val}, 3, 2"
-
-        options = [
-            {"id": "o1", "text_md": expected},
-            {"id": "o2", "text_md": f"1, {val}, 2, 3"},
-            {"id": "o3", "text_md": f"1, 2, 3, {val}"},
-            {"id": "o4", "text_md": f"3, 1, {val}, 2"},
-        ]
-        rng.shuffle(options)
-        correct_id = [o["id"] for o in options if o["text_md"] == expected][0]
-
-        return ItemInstance(
-            family_id=self.family_id,
-            stem_md="Что будет выведено в консоль браузера в результате выполнения скрипта?",
-            code={"lang": "javascript", "text": code},
-            options=options,
-            input_type="choice",
-            key=correct_id,
-            fingerprint=hashlib.sha256(f"{val}_{seed}".encode()).hexdigest()[:16],
-            time_limit_s=self.time_limit_s,
-        )
-
-
-FAMILIES_REGISTRY: dict[str, BaseItemFamily] = {
-    BackendSqlAggregationFamily.family_id: BackendSqlAggregationFamily(),
-    BackendPythonComplexityFamily.family_id: BackendPythonComplexityFamily(),
-    FrontendJsClosureFamily.family_id: FrontendJsClosureFamily(),
-}
+FAMILIES_REGISTRY: dict[str, BaseItemFamily] = _build_registry()
 
 
 # --- IRT Scoring (Item Response Theory) ---
@@ -247,14 +137,14 @@ def score_assessment(items_data: list[dict]) -> tuple[float, float, int, str, st
 
     # Simple robust EAP approximation:
     # theta = sum((correct - c) * b) / sum(a) ...
-    correct_count = sum(1 for item in items_data if item.get("correct"))
+    correct_count = sum(1 for item in items_data if item.get('correct'))
     total_count = len(items_data)
     pct = correct_count / total_count if total_count > 0 else 0
 
     # Theta mapped from accuracy and average difficulty
-    avg_b = sum(item.get("b", 0.5) for item in items_data) / total_count
+    avg_b = sum(item.get('b', 0.5) for item in items_data) / total_count
     theta = round(avg_b + (pct - 0.5) * 2.0, 2)
-    se = round(max(0.2, 1.0 / (total_count**0.5)), 2)
+    se = round(max(0.2, 1.0 / (total_count ** 0.5)), 2)
     rating = int(1000 + 200 * theta)
 
     # Determine grade based on theta cutoffs

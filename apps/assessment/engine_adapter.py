@@ -17,12 +17,10 @@ from typing import Any, Literal, Protocol
 
 from core.enums import Grade, GradeDecision, ItemFormat, Specialization
 
-from assessment.engine.legacy import (
-    GRADE_CUTS,
-    BackendPythonComplexityFamily,
-    BackendSqlAggregationFamily,
-    FrontendJsClosureFamily,
-)
+from assessment.engine.legacy import GRADE_CUTS
+from assessment.families.backend.sql_group_having import FAMILY as sql_family
+from assessment.families.frontend.js_event_loop import FAMILY as event_loop_family
+from assessment.families.shared.complexity import FAMILY as complexity_family
 
 Spec = str
 Mode = Literal["full", "express"]
@@ -189,51 +187,107 @@ class CatEngine(Protocol):
     def result(self, state: CatState) -> CatResult: ...
 
 
-# --- Stub Family Registry conforming to FamilyMeta ---
+# --- Real & Stub Family Registries conforming to FamilyMeta ---
+
+class _CompatibilityFamily:
+    def __init__(self, family: Any, legacy_id: str):
+        self._family = family
+        self.family_id = legacy_id
+
+    def generate(self, seed: str) -> Any:
+        return self._family.generate(random.Random(seed))
+
+
+BackendSqlAggregationFamily = _CompatibilityFamily(sql_family, "be.sql.group_having.v1")
+BackendPythonComplexityFamily = _CompatibilityFamily(complexity_family, "be.algo.complexity.v1")
+FrontendJsClosureFamily = _CompatibilityFamily(event_loop_family, "fe.js.event_loop.v1")
+
+sql_meta = FamilyMeta(
+    id=sql_family.meta.id,
+    spec=Specialization.BACKEND,
+    topic=sql_family.meta.topic,
+    skills=list(sql_family.meta.skills),
+    a=sql_family.meta.a,
+    b=0.4,
+    c=sql_family.meta.c,
+    time_limit_s=90,
+    status="active",
+    format=sql_family.meta.format,
+)
+complexity_meta = FamilyMeta(
+    id=complexity_family.meta.id,
+    spec=Specialization.BACKEND,
+    topic=complexity_family.meta.topic,
+    skills=list(complexity_family.meta.skills),
+    a=complexity_family.meta.a,
+    b=0.8,
+    c=complexity_family.meta.c,
+    time_limit_s=60,
+    status="active",
+    format=complexity_family.meta.format,
+)
+event_loop_meta = FamilyMeta(
+    id=event_loop_family.meta.id,
+    spec=Specialization.FRONTEND,
+    topic=event_loop_family.meta.topic,
+    skills=list(event_loop_family.meta.skills),
+    a=event_loop_family.meta.a,
+    b=0.5,
+    c=event_loop_family.meta.c,
+    time_limit_s=60,
+    status="active",
+    format=event_loop_family.meta.format,
+)
 
 STUB_FAMILY_METAS: dict[str, FamilyMeta] = {
-    BackendSqlAggregationFamily.family_id: FamilyMeta(
-        id=BackendSqlAggregationFamily.family_id,
+    sql_meta.id: sql_meta,
+    complexity_meta.id: complexity_meta,
+    event_loop_meta.id: event_loop_meta,
+    "be.sql.group_having.v1": FamilyMeta(
+        id="be.sql.group_having.v1",
         spec=Specialization.BACKEND,
-        topic="sql.aggregation",
-        skills=["sql"],
-        a=1.2,
+        topic=sql_family.meta.topic,
+        skills=list(sql_family.meta.skills),
+        a=sql_family.meta.a,
         b=0.4,
-        c=0.25,
+        c=sql_family.meta.c,
         time_limit_s=90,
-        status="active",
+        status="retired",
         format=ItemFormat.SQL_RESULT,
     ),
-    BackendPythonComplexityFamily.family_id: FamilyMeta(
-        id=BackendPythonComplexityFamily.family_id,
+    "be.algo.complexity.v1": FamilyMeta(
+        id="be.algo.complexity.v1",
         spec=Specialization.BACKEND,
-        topic="algorithms.complexity",
-        skills=["algorithms", "python"],
-        a=1.2,
+        topic=complexity_family.meta.topic,
+        skills=list(complexity_family.meta.skills),
+        a=complexity_family.meta.a,
         b=0.8,
-        c=0.25,
+        c=complexity_family.meta.c,
         time_limit_s=60,
-        status="active",
+        status="retired",
         format=ItemFormat.COMPLEXITY,
     ),
-    FrontendJsClosureFamily.family_id: FamilyMeta(
-        id=FrontendJsClosureFamily.family_id,
+    "fe.js.event_loop.v1": FamilyMeta(
+        id="fe.js.event_loop.v1",
         spec=Specialization.FRONTEND,
-        topic="javascript.async",
-        skills=["javascript"],
-        a=1.2,
+        topic=event_loop_family.meta.topic,
+        skills=list(event_loop_family.meta.skills),
+        a=event_loop_family.meta.a,
         b=0.5,
-        c=0.25,
+        c=event_loop_family.meta.c,
         time_limit_s=60,
-        status="active",
+        status="retired",
         format=ItemFormat.CODE_OUTPUT,
     ),
 }
 
 _STUB_GENERATORS = {
-    BackendSqlAggregationFamily.family_id: BackendSqlAggregationFamily(),
-    BackendPythonComplexityFamily.family_id: BackendPythonComplexityFamily(),
-    FrontendJsClosureFamily.family_id: FrontendJsClosureFamily(),
+    sql_meta.id: sql_family,
+    complexity_meta.id: complexity_family,
+    event_loop_meta.id: event_loop_family,
+    "be.sql.group_having.v1": sql_family,
+    "be.algo.complexity.v1": complexity_family,
+    "fe.js.event_loop.v1": event_loop_family,
 }
 
 
@@ -278,11 +332,28 @@ def generate_instance(family_id: str, seed_or_rng: str | random.Random) -> Insta
         raise ValueError(f"Unknown family: {family_id}")
 
     if isinstance(seed_or_rng, random.Random):
-        seed_str = f"{seed_or_rng.getrandbits(64):016x}"
+        rng = seed_or_rng
     else:
-        seed_str = str(seed_or_rng)
+        rng = random.Random(str(seed_or_rng))
 
-    raw_item = gen.generate(seed_str)
+    try:
+        raw_item = gen.generate(rng)
+    except TypeError:
+        raw_item = gen.generate(str(seed_or_rng))
+
+    meta = STUB_FAMILY_METAS.get(family_id) or getattr(gen, "meta", None)
+    time_limit_s = getattr(meta, "time_limit_s", 120) if meta else 120
+
+    if hasattr(raw_item, "input"):
+        return Instance(
+            stem_md=raw_item.stem_md,
+            input=raw_item.input,
+            key=raw_item.key,
+            fingerprint=raw_item.fingerprint,
+            code=raw_item.code,
+            options=raw_item.options,
+            time_limit_s=time_limit_s,
+        )
     return Instance(
         stem_md=raw_item.stem_md,
         input=raw_item.input_type,
@@ -290,12 +361,26 @@ def generate_instance(family_id: str, seed_or_rng: str | random.Random) -> Insta
         fingerprint=raw_item.fingerprint,
         code=raw_item.code,
         options=raw_item.options,
-        time_limit_s=raw_item.time_limit_s,
+        time_limit_s=getattr(raw_item, "time_limit_s", time_limit_s),
     )
 
 
 def is_correct(family_id: str, key: Any, answer: dict[str, Any] | str) -> bool:
     """Verify if candidate answer matches the secret key."""
+    if isinstance(answer, str) and str(answer) == str(key):
+        return True
+    if isinstance(answer, dict):
+        val = answer.get("option_id") or answer.get("value")
+        if val is not None and str(val) == str(key):
+            return True
+    ans_dict = {"option_id": answer, "value": answer} if isinstance(answer, str) else answer
+    gen = _STUB_GENERATORS.get(family_id)
+    if gen and hasattr(gen, "is_correct"):
+        try:
+            if gen.is_correct(key, ans_dict):
+                return True
+        except Exception:
+            pass
     if isinstance(answer, dict):
         val = answer.get("option_id") or answer.get("value")
     else:
