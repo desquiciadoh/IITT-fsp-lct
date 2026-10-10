@@ -260,7 +260,7 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - Send the verify-email link by SMTP outside DEMO_MODE (MailHog in compose).
   - Profile validation: the salary range, and every `blocked_company_ids` entry exists.
 - [x] **N7. pgvector** once ML starts embeddings (AI-11): a migration with `CREATE EXTENSION vector`, nullable `VectorField(1024)` on profiles and positions, and an HNSW index.
-- [ ] **N8. `seed --mode=full` (BE-13).** Load `seed_data/full/*.jsonl` with `bulk_create` inside `atomic`, under 60 s. Agree the schema with ML first.
+- [x] **N8. `seed --mode=full` (BE-13).** Load `seed_data/full/*.jsonl` with `bulk_create` inside `atomic`, under 60 s. Agree the schema with ML first.
 - [ ] **N9. Staging (BE-15).** VPS, Caddy HTTPS, deploy from `main`, nightly `pg_dump`; `check --deploy` must be clean.
 - [ ] **N10. Hygiene.**
   - GenericAPIView/ViewSets with scoped `get_queryset()`.

@@ -7,28 +7,83 @@ Generates:
 - 4 FSP achievement profiles with verified results
 """
 
+import json
+import uuid
+from pathlib import Path
+
 from assessment.models import LeagueMembership
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 from fsp_sync.models import FSPLink, FSPResult
 from identity.models import Consent, User
 from matching.models import Company, CompanyMember, Position
+from profiles.management.commands.sync_taxonomy import sync_taxonomy_to_db
 from profiles.models import CandidateContact, CandidateProfile, CandidateSkill, Skill
 
 from core.demo_data import SEEDED_CANDIDATES
 from core.enums import (
     ConsentType,
+    Discipline,
     EvidenceSource,
     Grade,
     LeagueStatus,
+    PlacementTier,
     SalaryType,
     Specialization,
+    SportsRank,
     SyncStatus,
     TrustLevel,
     UserRole,
     WorkFormat,
 )
+
+DISCIPLINE_MAP = {
+    "Программирование алгоритмическое": Discipline.ALGORITHMIC,
+    "algorithmic": Discipline.ALGORITHMIC,
+    "Продуктовое программирование": Discipline.PRODUCT,
+    "product": Discipline.PRODUCT,
+    "Информационная безопасность": Discipline.INFOSEC,
+    "infosec": Discipline.INFOSEC,
+    "Робототехника": Discipline.ROBOTICS,
+    "robotics": Discipline.ROBOTICS,
+    "БАС": Discipline.UAS,
+    "uas": Discipline.UAS,
+}
+
+SPORTS_RANK_MAP = {
+    "КМС": SportsRank.KMS,
+    "kms": SportsRank.KMS,
+    "МС": SportsRank.MS,
+    "ms": SportsRank.MS,
+    "1": SportsRank.CAT1,
+    "1 разряд": SportsRank.CAT1,
+    "cat1": SportsRank.CAT1,
+    "2": SportsRank.CAT2,
+    "2 разряд": SportsRank.CAT2,
+    "cat2": SportsRank.CAT2,
+    "3": SportsRank.CAT3,
+    "3 разряд": SportsRank.CAT3,
+    "cat3": SportsRank.CAT3,
+}
+
+TIER_MAP = {
+    "winner": PlacementTier.WINNER,
+    "prize_winner": PlacementTier.PRIZE_WINNER,
+    "finalist": PlacementTier.FINALIST,
+    "participant": PlacementTier.PARTICIPANT,
+}
+
+
+def parse_synthetic_uuid(val: str) -> uuid.UUID:
+    """Parse synthetic or hex uuid, mapping leading non-hex chars deterministically."""
+    try:
+        return uuid.UUID(val)
+    except ValueError:
+        if val.startswith("p"):
+            return uuid.UUID("b" + val[1:])
+        return uuid.uuid5(uuid.NAMESPACE_DNS, val)
 
 
 class Command(BaseCommand):
@@ -47,9 +102,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         mode = options["mode"]
         if mode == "full":
-            raise CommandError(
-                "Full seed mode requires synthetic world data (BE-13). Use --mode=mini."
-            )
+            return self._seed_full()
 
         self.stdout.write(self.style.NOTICE(f"Seeding database in mode '{mode}'..."))
 
@@ -306,5 +359,251 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Successfully seeded database: {len(candidates_raw)} candidates, 2 companies, 3 positions, 4 FSP profiles."
+            )
+        )
+
+    def _seed_full(self):
+        self.stdout.write(
+            self.style.NOTICE("Seeding database in mode 'full' from seed_data/full/...")
+        )
+        data_dir = Path(settings.BASE_DIR) / "seed_data" / "full"
+        if not data_dir.exists():
+            raise CommandError(f"Seed data directory not found: {data_dir}")
+
+        companies_file = data_dir / "companies.jsonl"
+        positions_file = data_dir / "positions.jsonl"
+        candidates_file = data_dir / "candidates.jsonl"
+
+        for file_path in [companies_file, positions_file, candidates_file]:
+            if not file_path.exists():
+                raise CommandError(f"Required seed file not found: {file_path}")
+
+        # 1. Taxonomy
+        sync_taxonomy_to_db()
+
+        # 2. Companies & Employer Members
+        company_count = 0
+        with open(companies_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                c_data = json.loads(line)
+                c_id = parse_synthetic_uuid(c_data["id"])
+                comp, _ = Company.objects.update_or_create(
+                    id=c_id,
+                    defaults={
+                        "name": c_data["name"],
+                        "inn": c_data.get("inn", ""),
+                        "website": c_data.get("website", ""),
+                        "email_domain": c_data.get("email_domain", ""),
+                        "business_domain": c_data.get("business_domain", ""),
+                        "description": c_data.get("description", ""),
+                        "contact_email": c_data.get("contact_email", ""),
+                        "trust_level": c_data.get("trust_level", TrustLevel.NONE),
+                    },
+                )
+                company_count += 1
+                for member in c_data.get("members", []):
+                    m_email = member["email"]
+                    emp_user, _ = User.objects.get_or_create(
+                        email=m_email,
+                        defaults={
+                            "role": UserRole.EMPLOYER,
+                            "is_demo": True,
+                            "email_verified_at": timezone.now(),
+                        },
+                    )
+                    emp_user.set_unusable_password()
+                    emp_user.save()
+                    CompanyMember.objects.get_or_create(company=comp, user=emp_user)
+
+        # 3. Positions
+        pos_count = 0
+        with open(positions_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                p_data = json.loads(line)
+                p_id = parse_synthetic_uuid(p_data["id"])
+                c_id = parse_synthetic_uuid(p_data["company_id"])
+                Position.objects.update_or_create(
+                    id=p_id,
+                    defaults={
+                        "company_id": c_id,
+                        "title": p_data["title"],
+                        "specialization": p_data["specialization"],
+                        "grades": p_data["grades"],
+                        "must_skills": p_data.get("must_skills", []),
+                        "nice_skills": p_data.get("nice_skills", []),
+                        "work_formats": p_data.get("work_formats", []),
+                        "location": p_data.get("location", ""),
+                        "salary_min": p_data["salary_min"],
+                        "salary_max": p_data["salary_max"],
+                        "salary_type": p_data["salary_type"],
+                        "team_context": p_data.get("team_context", ""),
+                        "description": p_data.get("description", ""),
+                        "is_public": p_data.get("is_public", True),
+                        "status": p_data.get("status", "open"),
+                    },
+                )
+                pos_count += 1
+
+        # 4. Candidates
+        cand_count = 0
+        with open(candidates_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                cand = json.loads(line)
+                cand_id = parse_synthetic_uuid(cand["id"])
+                email = cand["email"]
+
+                user, _ = User.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        "id": cand_id,
+                        "role": UserRole.CANDIDATE,
+                        "is_demo": True,
+                        "email_verified_at": timezone.now(),
+                    },
+                )
+                user.set_unusable_password()
+                user.save()
+
+                for consent in cand.get("consents", []):
+                    c_type = consent["type"]
+                    if not Consent.objects.filter(user=user, type=c_type).exists():
+                        Consent.objects.create(
+                            user=user,
+                            type=c_type,
+                            granted=consent.get("granted", True),
+                            version=consent.get("version", "1.0"),
+                        )
+
+                blocked = [
+                    parse_synthetic_uuid(cid)
+                    for cid in cand.get("blocked_company_ids", [])
+                ]
+                profile, _ = CandidateProfile.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        "public_id": cand["public_id"],
+                        "full_name": cand.get("full_name", ""),
+                        "city": cand.get("city", ""),
+                        "timezone": cand.get("timezone", "Europe/Moscow"),
+                        "specialization": cand.get("specialization", ""),
+                        "claimed_grade": cand.get("claimed_grade", ""),
+                        "years_experience": cand.get("years_experience"),
+                        "roles": cand.get("roles", []),
+                        "work_formats": cand.get("work_formats", []),
+                        "salary_min": cand.get("salary_min"),
+                        "salary_max": cand.get("salary_max"),
+                        "salary_type": cand.get("salary_type", "net"),
+                        "salary_floor": cand.get("salary_floor"),
+                        "open_to_offers": cand.get("open_to_offers", True),
+                        "blind_mode": cand.get("blind_mode", False),
+                        "blocked_company_ids": blocked,
+                        "about": cand.get("about", ""),
+                        "completeness": cand.get("completeness", 0),
+                    },
+                )
+
+                contacts = cand.get("contacts", {})
+                CandidateContact.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        "email": contacts.get("email", user.email),
+                        "phone": contacts.get("phone", ""),
+                        "telegram": contacts.get("telegram", ""),
+                    },
+                )
+
+                for s in cand.get("skills", []):
+                    s_id = s["skill_id"]
+                    skill_obj, _ = Skill.objects.get_or_create(
+                        id=s_id,
+                        defaults={"name": s_id.title(), "topic": "general"},
+                    )
+                    source = s.get("source", EvidenceSource.TEST)
+                    level = s.get("level", 0.5)
+                    CandidateSkill.objects.update_or_create(
+                        candidate=profile,
+                        skill=skill_obj,
+                        source=source,
+                        defaults={"level": level},
+                    )
+
+                l_data = cand.get("league")
+                if l_data:
+                    spec = l_data.get("specialization", profile.specialization)
+                    status = l_data.get("status", LeagueStatus.CONFIRMED)
+                    confirmed = l_data.get("confirmed", status == LeagueStatus.CONFIRMED)
+                    LeagueMembership.objects.update_or_create(
+                        candidate=user,
+                        specialization=spec,
+                        defaults={
+                            "grade": l_data.get("grade", profile.claimed_grade),
+                            "status": status,
+                            "rating": l_data.get("rating", 1000),
+                            "strength": l_data.get("strength", 50.0),
+                            "base_strength": l_data.get(
+                                "base_strength", l_data.get("strength", 50.0)
+                            ),
+                            "fsp_boost": l_data.get("fsp_boost", 0.0),
+                            "confirmed_at": timezone.now() if confirmed else None,
+                        },
+                    )
+
+                fsp_data = cand.get("fsp")
+                if fsp_data:
+                    sports_rank_raw = fsp_data.get("sports_rank", "")
+                    sports_rank = SPORTS_RANK_MAP.get(sports_rank_raw, sports_rank_raw)
+                    FSPLink.objects.update_or_create(
+                        candidate=user,
+                        defaults={
+                            "participant_id": fsp_data["participant_id"],
+                            "sports_rank": sports_rank,
+                            "sync_status": SyncStatus.OK,
+                            "last_sync_at": timezone.now(),
+                        },
+                    )
+                    for res in fsp_data.get("results", []):
+                        disc = DISCIPLINE_MAP.get(
+                            res.get("discipline"), Discipline.ALGORITHMIC
+                        )
+                        raw_tier = res.get("tier", "")
+                        tier = TIER_MAP.get(raw_tier)
+                        if not tier:
+                            place = res.get("placement", 999)
+                            if place == 1:
+                                tier = PlacementTier.WINNER
+                            elif place <= 3:
+                                tier = PlacementTier.PRIZE_WINNER
+                            elif place <= 10:
+                                tier = PlacementTier.FINALIST
+                            else:
+                                tier = PlacementTier.PARTICIPANT
+                        FSPResult.objects.update_or_create(
+                            candidate=user,
+                            event_id=res["event_id"],
+                            defaults={
+                                "event_name": res["event_name"],
+                                "discipline": disc,
+                                "date": res["date"],
+                                "placement": res["placement"],
+                                "tier": tier,
+                                "participants_total": res.get("participants_total", 100),
+                            },
+                        )
+
+                cand_count += 1
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Successfully seeded database (full mode): {cand_count} candidates, "
+                f"{company_count} companies, {pos_count} positions."
             )
         )
