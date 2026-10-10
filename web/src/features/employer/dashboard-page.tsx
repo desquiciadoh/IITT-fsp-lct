@@ -13,7 +13,7 @@ import { GRADE_LABEL, SPEC_LABEL } from '@/lib/labels'
 
 /** FE-09 · Employer dashboard (`/employer`): positions list + offers summary. */
 export function EmployerDashboardPage() {
-  const { data: positions, isLoading, isError, error, refetch } = usePositions()
+  const { data: positions = [], isLoading, isError, error, refetch } = usePositions()
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -79,7 +79,7 @@ function PositionRow({ position: p }: { position: Position }) {
           </span>
         </span>
         <span className="flex items-center gap-2">
-          <StatusChip status={p.status ?? 'draft'} />
+          <StatusChip status={p.status ?? 'open'} />
           <SalaryTag min={p.salary_min} max={p.salary_max} type={p.salary_type} />
         </span>
       </Link>

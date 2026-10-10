@@ -9,9 +9,9 @@ import type { JdParseResult, Position, PositionInput } from '@/api/types'
 import { useTaxonomy } from '@/api/profile'
 import {
   positionFormSchema,
-  uniqueSkills,
   toPositionInput,
-  type PositionFormInput,
+  uniqueSkills,
+  type PositionFormState,
   type PositionFormValues,
 } from '@/features/employer/schemas'
 import { applyApiErrorToForm } from '@/features/auth/form-errors'
@@ -33,7 +33,7 @@ const GRADES = ['intern', 'junior', 'middle', 'senior'] as const
 const FORMATS = ['office', 'hybrid', 'remote'] as const
 const SPECS = ['backend', 'frontend', 'ml_data'] as const
 
-export const EMPTY_POSITION_FORM: PositionFormInput = {
+export const EMPTY_POSITION_FORM: PositionFormState = {
   title: '',
   specialization: 'backend',
   grades: [],
@@ -41,9 +41,9 @@ export const EMPTY_POSITION_FORM: PositionFormInput = {
   nice_skills: [],
   work_formats: [],
   location: '',
-  salary_min: '' as unknown as number,
-  salary_max: '' as unknown as number,
-  salary_type: undefined as unknown as 'gross' | 'net',
+  salary_min: '',
+  salary_max: '',
+  salary_type: undefined as unknown as 'gross' | 'net', // no default (FE2.md §FE-09)
   team_context: '',
   description: '',
   allow_adjacent: false,
@@ -51,27 +51,29 @@ export const EMPTY_POSITION_FORM: PositionFormInput = {
 }
 
 /** Map a JD parse draft onto editable form defaults (FE2.md §FE-09). */
-export function draftToForm(draft: JdParseResult['draft']): PositionFormInput {
+export function draftToForm(draft: JdParseResult['draft']): PositionFormState {
   return {
     ...EMPTY_POSITION_FORM,
     title: draft.title ?? '',
     specialization: draft.specialization ?? 'backend',
     grades: draft.grades ?? [],
     must_skills: uniqueSkills(draft.must_skills ?? []),
-    nice_skills: uniqueSkills(draft.nice_skills ?? []).filter(
-      (s) => !(draft.must_skills ?? []).map((m) => m.toLowerCase()).includes(s),
-    ),
+    nice_skills: uniqueSkills(draft.must_skills ?? []).length
+      ? uniqueSkills(draft.nice_skills ?? []).filter(
+          (s) => !(draft.must_skills ?? []).map((m) => m.toLowerCase()).includes(s),
+        )
+      : uniqueSkills(draft.nice_skills ?? []),
     work_formats: draft.work_formats ?? [],
     location: draft.location ?? '',
-    salary_min: draft.salary_min ?? ('' as unknown as number),
-    salary_max: draft.salary_max ?? ('' as unknown as number),
+    salary_min: draft.salary_min != null ? String(draft.salary_min) : '',
+    salary_max: draft.salary_max != null ? String(draft.salary_max) : '',
     salary_type: draft.salary_type ? (draft.salary_type as 'gross' | 'net') : (undefined as unknown as 'gross' | 'net'),
     team_context: draft.team_context ?? '',
     description: draft.description ?? '',
   }
 }
 
-export function positionToForm(p: Position): PositionFormInput {
+export function positionToForm(p: Position): PositionFormState {
   return {
     ...EMPTY_POSITION_FORM,
     title: p.title,
@@ -81,8 +83,8 @@ export function positionToForm(p: Position): PositionFormInput {
     nice_skills: p.nice_skills ?? [],
     work_formats: p.work_formats ?? [],
     location: p.location ?? '',
-    salary_min: p.salary_min,
-    salary_max: p.salary_max,
+    salary_min: String(p.salary_min),
+    salary_max: String(p.salary_max),
     salary_type: p.salary_type,
     team_context: p.team_context ?? '',
     description: p.description ?? '',
@@ -119,7 +121,7 @@ export function PositionForm({
   mode,
   positionId,
 }: {
-  defaultValues: PositionFormInput
+  defaultValues: PositionFormState
   unknownTerms?: string[]
   blueprint?: JdParseResult['blueprint']
   parseSource?: string
@@ -139,8 +141,10 @@ export function PositionForm({
     watch,
     control,
     formState: { errors },
-  } = useForm<PositionFormInput>({
-    resolver: zodResolver(positionFormSchema),
+  } = useForm<PositionFormState>({
+    // Raw form state is looser than the schema input (string salary, taxonomy
+    // strings per G3) — zod coerces and narrows on submit.
+    resolver: zodResolver(positionFormSchema) as never,
     defaultValues,
   })
 
@@ -166,7 +170,7 @@ export function PositionForm({
 
   const mutation = mode === 'create' ? create : update
 
-  const onSubmit = (values: PositionFormInput) => {
+  const onSubmit = (values: PositionFormState) => {
     mutation.mutate(toApiPayload(toPositionInput(values)))
   }
 
@@ -214,7 +218,7 @@ export function PositionForm({
         </p>
       )}
       {blueprint.length > 0 && (
-        <Card size="sm">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm">Профиль компетенций</CardTitle>
           </CardHeader>

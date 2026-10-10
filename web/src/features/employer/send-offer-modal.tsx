@@ -99,7 +99,8 @@ export function SendOfferModal({
     }
   }, [open, position, reset])
 
-  const onSubmit = handleSubmit((raw) => {
+  // zodResolver hands the coerced output to onSubmit; the form itself keeps raw strings.
+  const onSubmit = handleSubmit((raw: OfferFormValues) => {
     setServerCode(null)
     const input: SendOfferInput = {
       ...toSendOfferInput(raw),

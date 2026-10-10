@@ -78,6 +78,20 @@ export type PositionFormInput = Omit<z.input<typeof positionFormSchema>, 'must_s
   nice_skills?: string[]
 }
 
+/**
+ * Form values as they live inside react-hook-form BEFORE zod coercion runs:
+ * salary arrives from <input type="number"> as string, and taxonomy-driven
+ * option lists (grades / work_formats, gap G3) are plain `string[]` — the
+ * renderers index label maps by them, and `toPositionInput` narrows/filters
+ * them to the contract enums below.
+ */
+export type PositionFormState = Omit<PositionFormInput, 'salary_min' | 'salary_max' | 'grades' | 'work_formats'> & {
+  salary_min: string
+  salary_max: string
+  grades: string[]
+  work_formats: string[]
+}
+
 /** Draft skills arrays may arrive undefined from the parser; normalize once. */
 export function uniqueSkills(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean))]
@@ -96,7 +110,7 @@ const isSpec = (s: string): s is 'backend' | 'frontend' | 'ml_data' =>
  * Taxonomy-driven options are plain strings (G3), so unknown values are
  * filtered out here; zod validation still guards the required fields.
  */
-export function toPositionInput(values: PositionFormInput): PositionFormValues {
+export function toPositionInput(values: PositionFormState): PositionFormValues {
   const grades = (values.grades ?? []).filter(isGrade)
   const workFormats = (values.work_formats ?? []).filter(isFormat)
   return {
@@ -182,8 +196,8 @@ export type OfferFormInput = {
 /** Schema output after coercion (numbers) — the third useForm generic. */
 export type OfferFormValues = z.output<typeof offerFormSchema>
 
-/** Raw (coerced) form values → contract body for useSendOffer (expiry optional). */
-export function toSendOfferInput(values: OfferFormValues): {
+/** Raw (uncoerced) form state → contract body for useSendOffer (expiry optional). */
+export function toSendOfferInput(values: OfferFormInput | OfferFormValues): {
   title: string
   description: string
   salary_min: number
