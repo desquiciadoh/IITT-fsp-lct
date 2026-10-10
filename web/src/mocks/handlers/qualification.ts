@@ -416,6 +416,7 @@ export const qualificationHandlers = [
       specialization?: string
       claimed_grade?: string
       mode?: string
+      kind?: string
     }
     const active = activeInProgress()
     if (active) {
@@ -428,7 +429,7 @@ export const qualificationHandlers = [
       id: `mock-as-${++seqCounter}`,
       specialization: body.specialization ?? 'backend',
       claimed_grade: body.claimed_grade ?? 'middle',
-      kind: 'initial',
+      kind: body.kind === 'promotion' ? 'promotion' : 'initial',
       mode: body.mode ?? 'full',
       status: 'in_progress',
       startedAt: now.toISOString(),

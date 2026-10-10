@@ -169,8 +169,9 @@ describe('qualification mock — FE-05 e2e QA', () => {
   it('3) auto-submit arriving past deadline+3s grace is graded incorrect (BE.md H5)', async () => {
     const id = await startSession()
     const s = __getMockSession(id)!
-    // Jump the mock clock 61 s ahead of q-py-1's 60 s window (+3 s grace).
-    setMockNow(() => new Date(Date.parse(s.servedAt!) + 61_000))
+    // Jump the mock clock 64 s ahead of q-py-1's 60 s window — strictly past
+    // the +3 s grace (BE.md H5: ≤63 s still counts, >63 s is late).
+    setMockNow(() => new Date(Date.parse(s.servedAt!) + 64_000))
     // `isLate` defaults to the (shifted) mock clock — no real-clock leak.
     expect(isLate(s)).toBe(true)
 
@@ -194,11 +195,14 @@ describe('qualification mock — FE-05 e2e QA', () => {
     const id = await startSession()
     await post(`/api/assessments/${id}/answers`, { item_id: 'q-py-1', option_id: 'b' })
     const s = __getMockSession(id)!
-    // 61 s after q-py-2 was served → past its own deadline (+3 s grace).
-    setMockNow(() => new Date(Date.parse(s.servedAt!) + 61_000))
+    // 64 s after q-py-2 was served → strictly past its own 60 s deadline
+    // plus the 3 s grace.
+    setMockNow(() => new Date(Date.parse(s.servedAt!) + 64_000))
     expect(isLate(s)).toBe(true)
-    // And just inside the grace window it is not late yet.
-    setMockNow(() => new Date(Date.parse(s.servedAt!) + 62_000 - 1000))
+    // Inside the grace window (deadline+3 s inclusive) it is not late yet;
+    // phantom time from the 90 s q-sql-1 bank entry would also pass here —
+    // that is exactly what the snapshot prevents at 64 s above.
+    setMockNow(() => new Date(Date.parse(s.servedAt!) + 63_000))
     expect(isLate(s)).toBe(false)
   })
 
@@ -228,14 +232,18 @@ describe('qualification mock — FE-05 e2e QA', () => {
     ])
 
     // Second finish → invalid_transition (already finished).
-    const again = (await post(`/api/assessments/${id}/finish`, {})) as { body: ProblemBody }
+    const again = (await post(`/api/assessments/${id}/finish`, {})) as {
+      status: number
+      body: ProblemBody
+    }
     expect(again.status).toBe(409)
     expect(again.body.code).toBe('invalid_transition')
 
     // Answers on a finished session are rejected too.
-    const lateAns = (await post(`/api/assessments/${id}/answers`, { item_id: 'q-py-5', value: '3' })) as {
-      body: ProblemBody
-    }
+    const lateAns = (await post(`/api/assessments/${id}/answers`, {
+      item_id: 'q-py-5',
+      value: '3',
+    })) as { status: number; body: ProblemBody }
     expect(lateAns.status).toBe(409)
     expect(lateAns.body.code).toBe('invalid_transition')
   })
@@ -243,7 +251,10 @@ describe('qualification mock — FE-05 e2e QA', () => {
   it('4b) early finish with <50% answered → 409 not_enough_answers, attempt abandoned', async () => {
     const id = await startSession()
     await post(`/api/assessments/${id}/answers`, { item_id: 'q-py-1', option_id: 'b' })
-    const fin = (await post(`/api/assessments/${id}/finish`, {})) as { body: ProblemBody }
+    const fin = (await post(`/api/assessments/${id}/finish`, {})) as {
+      status: number
+      body: ProblemBody
+    }
     expect(fin.status).toBe(409)
     expect(fin.body.code).toBe('not_enough_answers')
 

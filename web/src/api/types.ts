@@ -255,6 +255,8 @@ export type StartAssessmentInput = {
   specialization?: Spec
   claimed_grade?: Grade
   mode?: AssessmentMode
+  /** `promotion` when eligibility advertises a promotion attempt (FE-05). */
+  kind?: AssessmentKind
 }
 
 /** Integrity capture payload sent with every answer (FE-05). */

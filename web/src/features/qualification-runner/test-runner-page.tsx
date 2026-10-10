@@ -140,9 +140,6 @@ function RunnerBody({
   const finish = useFinishAssessment(id)
   const { read, bumpPaste } = useIntegrity(item?.item_id)
 
-  // Manual early finish landed → terminal notice instead of the item card.
-  if (finished) return <FinishedNotice id={id} />
-
   // Draft resets on every new item.
   useEffect(() => {
     setChoice(null)
@@ -248,6 +245,11 @@ function RunnerBody({
   }
 
   // --- render states -------------------------------------------------------------
+
+  // Manual early finish landed → terminal notice instead of the item card.
+  // Rendered here (not via an early return above) so every hook runs on
+  // every render in a stable order (react-hooks/rules-of-hooks).
+  if (finished) return <FinishedNotice id={id} />
 
   if (query.isLoading) return <CardSkeleton />
 
