@@ -17,7 +17,7 @@ from typing import Any, Literal, Protocol
 
 from core.enums import Grade, GradeDecision, ItemFormat, Specialization
 
-from assessment.engine import (
+from assessment.engine.legacy import (
     GRADE_CUTS,
     BackendPythonComplexityFamily,
     BackendSqlAggregationFamily,

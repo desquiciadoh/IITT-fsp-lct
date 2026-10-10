@@ -115,6 +115,12 @@ class CandidateProfile(models.Model):
     about = models.TextField(blank=True, default="")
     experience_text = models.TextField(blank=True, default="")
     completeness = models.SmallIntegerField(default=0, help_text="Profile completeness 0-100")
+    unknown_skills = ArrayField(
+        models.CharField(max_length=100),
+        default=list,
+        blank=True,
+        help_text="Skills submitted by candidate that could not be mapped to canonical taxonomy",
+    )
 
     last_active_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)

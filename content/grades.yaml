@@ -1,0 +1,20 @@
+- id: intern
+  name: Intern
+  descriptor: "Стажер / начальные базовые навыки"
+  theta_cut: -1.0
+  rating_cut: 800
+- id: junior
+  name: Junior
+  descriptor: "Младший специалист / базовые практические навыки"
+  theta_cut: -0.2
+  rating_cut: 960
+- id: middle
+  name: Middle
+  descriptor: "Специалист / самостоятельное решение задач и практический опыт"
+  theta_cut: 0.6
+  rating_cut: 1120
+- id: senior
+  name: Senior
+  descriptor: "Ведущий специалист / глубокая экспертиза и проектирование"
+  theta_cut: 1.5
+  rating_cut: 1300

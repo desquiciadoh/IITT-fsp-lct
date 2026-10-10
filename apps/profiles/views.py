@@ -423,66 +423,132 @@ class ResumeParseView(views.APIView):
 
 
 class TaxonomyView(views.APIView):
-    """Platform taxonomy: specializations, grades, skills, and decline reasons (G3)."""
+    """Platform taxonomy: specializations, grades, skills, and decline reasons (G3, N5)."""
 
     permission_classes = [permissions.AllowAny]
     serializer_class = TaxonomySerializer
 
     @extend_schema(responses={200: TaxonomySerializer})
     def get(self, request):
-        specializations = [
-            {
-                "id": Specialization.BACKEND,
-                "name": "Backend",
-                "topics": [
-                    "sql.aggregation",
-                    "complexity",
-                    "algorithms",
-                    "databases",
-                    "concurrency",
-                ],
-            },
-            {
-                "id": Specialization.FRONTEND,
-                "name": "Frontend",
-                "topics": ["js.closure", "javascript", "react", "css_html", "performance"],
-            },
-            {
-                "id": Specialization.ML_DATA,
-                "name": "ML & Data",
-                "topics": ["python", "ml_fundamentals", "data_engineering", "math_stats"],
-            },
-        ]
+        import yaml
+        from django.conf import settings
+        from taxonomy.loader import load_skills
 
-        grades = [
-            {
-                "id": Grade.INTERN,
-                "name": "Intern",
-                "descriptor": "Стажер / начальные базовые навыки",
-                "rating_cut": 800,
-            },
-            {
-                "id": Grade.JUNIOR,
-                "name": "Junior",
-                "descriptor": "Младший специалист / базовые практические навыки",
-                "rating_cut": 960,
-            },
-            {
-                "id": Grade.MIDDLE,
-                "name": "Middle",
-                "descriptor": "Специалист / самостоятельное решение задач и практический опыт",
-                "rating_cut": 1120,
-            },
-            {
-                "id": Grade.SENIOR,
-                "name": "Senior",
-                "descriptor": "Ведущий специалист / глубокая экспертиза и проектирование",
-                "rating_cut": 1300,
-            },
-        ]
+        content_dir = settings.BASE_DIR / "content"
 
-        skills_qs = Skill.objects.all()
-        if skills_qs.exists():
+        # 1. Specializations + topics from family registry (ML.md §3 / BE.md N5)
+        specs_file = content_dir / "specializations.yaml"
+        if specs_file.exists():
+            try:
+                with open(specs_file, "r", encoding="utf-8") as f:
+                    specializations = yaml.safe_load(f) or []
+            except Exception as e:
+                logger.warning("Could not read specializations.yaml: %s", e)
+                specializations = []
+        else:
+            specializations = []
+
+        if not specializations:
+            specializations = [
+                {
+                    "id": Specialization.BACKEND,
+                    "name": "Backend",
+                    "topics": [
+                        "sql.aggregation",
+                        "complexity",
+                        "algorithms",
+                        "databases",
+                        "concurrency",
+                    ],
+                },
+                {
+                    "id": Specialization.FRONTEND,
+                    "name": "Frontend",
+                    "topics": ["js.closure", "javascript", "react", "css_html", "performance"],
+                },
+                {
+                    "id": Specialization.ML_DATA,
+                    "name": "ML & Data",
+                    "topics": ["python", "ml_fundamentals", "data_engineering", "math_stats"],
+                },
+            ]
+
+        # Gather topics dynamically from the family registry
+        spec_topics: dict[str, set[str]] = {}
+        try:
+            from assessment.families.registry import all_families
+
+            for fam in all_families().values():
+                topic = getattr(fam.meta, "topic", None)
+                if not topic:
+                    continue
+                for spec in getattr(fam.meta, "specs", ()):
+                    spec_topics.setdefault(spec, set()).add(topic)
+        except Exception:
+            pass
+
+        try:
+            from assessment.engine_adapter import all_family_metas
+
+            for meta in all_family_metas():
+                topic = getattr(meta, "topic", None)
+                spec = getattr(meta, "spec", None)
+                if topic and spec:
+                    spec_topics.setdefault(spec, set()).add(topic)
+        except Exception:
+            pass
+
+        # Merge registry topics into specializations
+        for spec_data in specializations:
+            sid = spec_data.get("id")
+            existing_topics = set(spec_data.get("topics", []))
+            registry_topics = spec_topics.get(sid, set())
+            merged = existing_topics | registry_topics
+            spec_data["topics"] = sorted(list(merged))
+
+        # 2. Grades
+        grades_file = content_dir / "grades.yaml"
+        if grades_file.exists():
+            try:
+                with open(grades_file, "r", encoding="utf-8") as f:
+                    grades = yaml.safe_load(f) or []
+            except Exception as e:
+                logger.warning("Could not read grades.yaml: %s", e)
+                grades = []
+        else:
+            grades = []
+
+        if not grades:
+            grades = [
+                {
+                    "id": Grade.INTERN,
+                    "name": "Intern",
+                    "descriptor": "Стажер / начальные базовые навыки",
+                    "rating_cut": 800,
+                },
+                {
+                    "id": Grade.JUNIOR,
+                    "name": "Junior",
+                    "descriptor": "Младший специалист / базовые практические навыки",
+                    "rating_cut": 960,
+                },
+                {
+                    "id": Grade.MIDDLE,
+                    "name": "Middle",
+                    "descriptor": "Специалист / самостоятельное решение задач и практический опыт",
+                    "rating_cut": 1120,
+                },
+                {
+                    "id": Grade.SENIOR,
+                    "name": "Senior",
+                    "descriptor": "Ведущий специалист / глубокая экспертиза и проектирование",
+                    "rating_cut": 1300,
+                },
+            ]
+
+        # 3. Skills from content/skills.yaml (via loader)
+        try:
+            catalog = load_skills()
             skills = [
                 {
                     "id": s.id,
@@ -490,30 +556,39 @@ class TaxonomyView(views.APIView):
                     "aliases": s.aliases or [],
                     "topic": s.topic or "",
                 }
-                for s in skills_qs
+                for s in catalog.values()
             ]
-        else:
-            skills = [
-                {"id": "python", "name": "Python", "aliases": ["py"], "topic": "backend"},
-                {"id": "django", "name": "Django", "aliases": ["drf"], "topic": "backend"},
-                {
-                    "id": "postgresql",
-                    "name": "PostgreSQL",
-                    "aliases": ["postgres", "psql"],
-                    "topic": "backend",
-                },
-                {"id": "docker", "name": "Docker", "aliases": ["container"], "topic": "backend"},
-                {"id": "redis", "name": "Redis", "aliases": [], "topic": "backend"},
-                {"id": "celery", "name": "Celery", "aliases": [], "topic": "backend"},
-                {"id": "fastapi", "name": "FastAPI", "aliases": [], "topic": "backend"},
-                {"id": "react", "name": "React", "aliases": ["react.js"], "topic": "frontend"},
-                {"id": "typescript", "name": "TypeScript", "aliases": ["ts"], "topic": "frontend"},
-                {"id": "javascript", "name": "JavaScript", "aliases": ["js"], "topic": "frontend"},
-                {"id": "pytorch", "name": "PyTorch", "aliases": ["torch"], "topic": "ml_data"},
-                {"id": "pandas", "name": "Pandas", "aliases": [], "topic": "ml_data"},
-            ]
+        except Exception:
+            skills_qs = Skill.objects.all()
+            if skills_qs.exists():
+                skills = [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "aliases": s.aliases or [],
+                        "topic": s.topic or "",
+                    }
+                    for s in skills_qs
+                ]
+            else:
+                skills = []
 
-        decline_reasons = [{"id": choice[0], "name": choice[1]} for choice in DeclineReason.choices]
+        # 4. Decline reasons from content/decline_reasons.yaml
+        decline_file = content_dir / "decline_reasons.yaml"
+        if decline_file.exists():
+            try:
+                with open(decline_file, "r", encoding="utf-8") as f:
+                    decline_reasons = yaml.safe_load(f) or []
+            except Exception as e:
+                logger.warning("Could not read decline_reasons.yaml: %s", e)
+                decline_reasons = []
+        else:
+            decline_reasons = []
+
+        if not decline_reasons:
+            decline_reasons = [
+                {"id": choice[0], "name": choice[1]} for choice in DeclineReason.choices
+            ]
 
         data = {
             "specializations": specializations,

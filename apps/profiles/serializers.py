@@ -89,11 +89,12 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             "completeness",
             "contacts",
             "skills",
+            "unknown_skills",
             "league",
             "fsp",
             "consents",
         ]
-        read_only_fields = ["public_id", "completeness"]
+        read_only_fields = ["public_id", "completeness", "unknown_skills"]
 
     @extend_schema_field(CandidateContactSerializer)
     def get_contacts(self, obj):
@@ -269,18 +270,34 @@ class CandidateProfileUpdateSerializer(serializers.ModelSerializer):
             contact.save()
 
         if skills_data is not None:
-            # Sync declared skills
+            # Sync declared skills using taxonomy normalization
             from core.enums import EvidenceSource
+            from taxonomy.normalize import normalize_skill
 
             instance.skills.filter(source=EvidenceSource.DECLARED).delete()
-            for skill_name in skills_data:
-                skill_id = skill_name.lower().replace(" ", "_").replace(".", "_")
-                skill_obj, _ = Skill.objects.get_or_create(
-                    id=skill_id, defaults={"name": skill_name}
-                )
-                CandidateSkill.objects.create(
-                    candidate=instance, skill=skill_obj, source=EvidenceSource.DECLARED, level=0.5
-                )
+            unknown_skills = []
+            seen_skill_ids = set()
+            for raw_skill in skills_data:
+                raw_str = str(raw_skill).strip()
+                match = normalize_skill(raw_str)
+                if match:
+                    if match.skill_id in seen_skill_ids:
+                        continue
+                    skill_obj = Skill.objects.filter(id=match.skill_id).first()
+                    if skill_obj:
+                        CandidateSkill.objects.create(
+                            candidate=instance,
+                            skill=skill_obj,
+                            source=EvidenceSource.DECLARED,
+                            level=0.5,
+                        )
+                        seen_skill_ids.add(match.skill_id)
+                    else:
+                        unknown_skills.append(raw_str)
+                else:
+                    unknown_skills.append(raw_str)
+            instance.unknown_skills = unknown_skills
+            instance.save(update_fields=["unknown_skills"])
 
         return instance
 

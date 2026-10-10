@@ -251,7 +251,7 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - Limit 5 MB; check the PDF MIME type and magic bytes.
   - Celery task on queue `llm`; wait up to 15 s, then fall back to the rules result. Error `unreadable_pdf`.
   - Call `llm_gateway.parse_resume`/`parse_jd` behind an import guard until AI ships them.
-- [ ] **N5. Taxonomy.**
+- [x] **N5. Taxonomy.**
   - `manage.py sync_taxonomy` from `content/skills.yaml`.
   - Profile skills go through `normalize_skill()`. Return `unknown_skills` instead of creating rows, inside `atomic`.
   - `GET /api/taxonomy` reads `content/*.yaml`; topics come from the family registry.

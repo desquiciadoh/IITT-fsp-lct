@@ -1,0 +1,23 @@
+- id: backend
+  name: Backend
+  topics:
+  - sql.aggregation
+  - complexity
+  - algorithms
+  - databases
+  - concurrency
+- id: frontend
+  name: Frontend
+  topics:
+  - js.closure
+  - javascript
+  - react
+  - css_html
+  - performance
+- id: ml_data
+  name: ML & Data
+  topics:
+  - python
+  - ml_fundamentals
+  - data_engineering
+  - math_stats
