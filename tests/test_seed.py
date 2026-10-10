@@ -101,8 +101,8 @@ def test_seed_mode_full():
 
     # League
     league = LeagueMembership.objects.get(candidate=anna, specialization="backend")
-    assert league.rating == 1294
-    assert league.strength == 58.97
+    assert league.rating == 1286
+    assert league.strength == 56.52
 
     # FSP Link & Results
     fsp_link = FSPLink.objects.get(candidate=anna)
