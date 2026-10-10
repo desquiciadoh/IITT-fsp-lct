@@ -102,7 +102,9 @@ export function matchesFilters(talent: TalentShort, f: PoolFilters): boolean {
   if (f.salary_max != null && (talent.salary_min ?? Infinity) > f.salary_max) return false
   if (f.skills.length) {
     // talent.skills is string[] in the pool payload; tolerate {name} objects too.
-    const names = (talent.skills ?? []).map((s) => String(typeof s === 'string' ? s : s.name).toLowerCase())
+    const names = (talent.skills ?? []).map((s: unknown) =>
+      String(typeof s === 'string' ? s : (s as { name?: string }).name ?? '').toLowerCase(),
+    )
     if (!f.skills.some((skill) => names.includes(skill.toLowerCase()))) return false
   }
   const fsp = talent.fsp as { linked?: boolean; best_tier?: string } | undefined
@@ -166,6 +168,21 @@ export function useAbsorbShortlist(
 export function deriveGaps(entry: PoolEntry): string[] {
   if (entry.gaps) return entry.gaps
   return entry.reasons.filter((r) => r.kind === 'minus').map((r) => r.text)
+}
+
+/**
+ * Relaxation hints (target G8 `relaxations`). The real BE does not ship them
+ * yet — until then, synthesize one hint per uncovered must-have skill from the
+ * minus-reasons, so the UI can render the capability when it appears.
+ */
+export function deriveRelaxations(entries: PoolEntry[]): string[] {
+  const hints = new Set<string>()
+  for (const e of entries) {
+    for (const r of e.reasons) {
+      if (r.kind === 'minus') hints.add(`Смягчите требование: ${r.text}`)
+    }
+  }
+  return [...hints].slice(0, 3)
 }
 
 // --- league shelves helpers (gap G7) ------------------------------------------

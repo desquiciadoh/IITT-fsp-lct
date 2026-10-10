@@ -316,9 +316,11 @@ import type { TalentDetailResponse as GeneratedTalentDetail } from '@/api/genera
  * everything renders through normalizeComponents(). `gaps` is target shape
  * (G8) — until then derive them from `kind === 'minus'` reasons.
  */
-export type PoolEntry = Omit<GeneratedPoolItem, 'talent' | 'components'> & {
+export type PoolEntry = Omit<GeneratedPoolItem, 'talent' | 'components' | 'reasons'> & {
   talent: TalentShort
   components: ScoreComponent[] | ScoreComponentsDict
+  /** the generated schema renders reasons as loose dicts — narrowed here */
+  reasons: Reason[]
   gaps?: string[]
 }
 
@@ -381,8 +383,13 @@ export type TalentContacts = {
   phone?: string
   telegram?: string
 }
-export type TalentDetail = Omit<GeneratedTalentDetail, 'league' | 'fsp' | 'skills' | 'contacts'> & {
+export type TalentDetail = Omit<
+  GeneratedTalentDetail,
+  'league' | 'fsp' | 'skills' | 'contacts' | 'salary_type'
+> & {
   display_name?: string
+  last_active_at?: string | null
+  salary_type?: SalaryType | string
   league?: League | null
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number } | null
   skills?: ProfileSkill[]

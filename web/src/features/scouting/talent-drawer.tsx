@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Link2, Mail, Phone, Send, Star, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { keys } from '@/api/keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { useToggleShortlist, useTalent } from '@/api/scouting'
-import type { TalentDetail, TalentShort } from '@/api/types'
+import type { SalaryType, TalentDetail, TalentShort } from '@/api/types'
+import { keys } from '@/api/keys'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/domain/states'
@@ -131,7 +131,7 @@ function DrawerBody({
         <SalaryTag
           min={talent.salary_min ?? 0}
           max={talent.salary_max ?? 0}
-          type={talent.salary_type || 'gross'}
+          type={(talent.salary_type as SalaryType) || 'gross'}
           emphasize
         />
       )}
@@ -258,7 +258,7 @@ function ShortlistToggle({
   setBusy: (v: boolean) => void
 }) {
   // The tray cache tells whether this candidate is already shortlisted.
-  const tray = useQueryClient().getQueryData<{ public_id: string }[]>(['pool', positionId, 'shortlist'])
+  const tray = useQueryClient().getQueryData<TalentShort[]>(keys.shortlist(positionId))
   const inTray = Boolean(tray?.some((t) => t.public_id === publicId))
   const toggle = useToggleShortlist(positionId)
 

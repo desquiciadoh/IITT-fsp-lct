@@ -13,9 +13,9 @@ import type { Grade, LeagueShelf, PoolEntry, Spec, TalentShort, WorkFormat } fro
  *   G9  GET /api/talent/{public_id}      → detail with contacts gated by an
  *       offer grant (null otherwise), topics section present in target shape.
  *
- * Registered BEFORE employerHandlers so its `*/api/leagues` wins over the
+ * Registered BEFORE employerHandlers so its "…/api/leagues" wins over the
  * static fixture in gaps.ts and its pool routes win over
- * `*/api/positions/:id` there (MSW is first-match-wins).
+ * "…/api/positions/:id" there (MSW is first-match-wins).
  */
 
 const stub = (data: unknown, status = 200) =>
@@ -164,7 +164,7 @@ const GRADE_POINTS: Record<string, number> = { intern: 8, junior: 15, middle: 20
 function scoreOne(t: SeedTalent): { score: number; components: Record<string, number>; reasons: PoolEntry['reasons']; gaps: string[] } {
   const must = ['python', 'django', 'postgresql']
   const nice = ['redis', 'fastapi', 'kafka']
-  const names = t.skills.map(String)
+  const names = (t.skills ?? []).map(String)
   const hitMust = must.filter((s) => names.includes(s)).length
   const hitNice = nice.filter((s) => names.includes(s)).length
   const skill = Math.round(((hitMust * 2 + hitNice) / (must.length * 2 + nice.length)) * 35)
@@ -245,7 +245,7 @@ export const scoutingHandlers = [
       if (formats.length && !(t.work_formats ?? []).some((f) => formats.includes(f))) return false
       if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false
       if (confirmedOnly && t.league.status !== 'confirmed') return false
-      if (skills.length && !skills.some((s) => t.skills.map(String).includes(s))) return false
+      if (skills.length && !skills.some((s) => (t.skills ?? []).map(String).includes(s))) return false
       if (fsp === 'linked' && !t.fsp.linked) return false
       if (fsp === 'prize' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
       if (preset === 'fsp_stars' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
@@ -280,13 +280,11 @@ export const scoutingHandlers = [
       page,
       pages,
       facets: {
-        grades: Object.fromEntries(
-          filtered.reduce<Record<string, number>>((acc, { talent: t }) => {
-            const g = t.league.grade ?? 'junior'
-            acc[g] = (acc[g] ?? 0) + 1
-            return acc
-          }, {}),
-        ),
+        grades: filtered.reduce<Record<string, number>>((acc, { talent: t }) => {
+          const g = t.league.grade ?? 'junior'
+          acc[g] = (acc[g] ?? 0) + 1
+          return acc
+        }, {}),
         fsp: {
           linked: filtered.filter(({ talent: t }) => t.fsp.linked).length,
           prize: filtered.filter(({ talent: t }) => t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? '')).length,

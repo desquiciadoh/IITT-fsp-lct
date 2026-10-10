@@ -6,6 +6,7 @@ import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
+import { scoutingHandlers } from '@/mocks/handlers/scouting'
 import { employerHandlers } from '@/mocks/handlers/employer'
 
 /**
@@ -34,10 +35,14 @@ export async function startMocks(): Promise<void> {
           ...assessmentHandlers,
           ...offerHandlers,
           ...fspHandlers,
+          // FE-10 scouting mock BEFORE employerHandlers: its league/pool/
+          // shortlist/talent routes must win over the static fixtures in
+          // gaps.ts and employer.ts (MSW is first-match-wins).
+          ...scoutingHandlers,
           ...employerHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers, ...employerHandlers]
+      : [...gapHandlers, ...demoGapHandlers, ...scoutingHandlers, ...employerHandlers]
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',
