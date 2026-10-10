@@ -190,16 +190,20 @@ export function ScoutingPage() {
         ) : (
           pageItems.map((item) => (
             <div key={item.talent.public_id} className="flex flex-col gap-2">
-              <TalentRow
-                talent={item.talent}
-                score={item.score}
-                reasons={item.reasons}
-                shortlisted={item.shortlisted}
-                onToggleShortlist={onToggleShortlist}
-                className="cursor-pointer"
-              />
-              <div className="px-4 pb-1" onClick={() => setCandidate(item.talent.public_id)}>
-                <ScoreBar score={item.score} components={item.components} />
+              {/* clicking anywhere on the row opens the drawer (?c=); the
+                  star button stops propagation inside TalentRow consumers */}
+              <div onClick={() => setCandidate(item.talent.public_id)}>
+                <TalentRow
+                  talent={item.talent}
+                  score={item.score}
+                  reasons={item.reasons}
+                  shortlisted={item.shortlisted}
+                  onToggleShortlist={onToggleShortlist}
+                  className="cursor-pointer"
+                />
+                <div className="px-4 pb-1">
+                  <ScoreBar score={item.score} components={item.components} />
+                </div>
               </div>
             </div>
           ))

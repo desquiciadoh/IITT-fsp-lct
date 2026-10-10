@@ -77,7 +77,11 @@ export function TalentRow({
               type="button"
               aria-pressed={shortlisted}
               aria-label={shortlisted ? 'Убрать из избранного' : 'В избранное'}
-              onClick={() => onToggleShortlist(talent.public_id)}
+              onClick={(e) => {
+                // keep row-level click handlers (drawer) from firing on star toggle
+                e.stopPropagation()
+                onToggleShortlist(talent.public_id)
+              }}
               className="rounded-md p-1 text-muted-foreground transition-colors hover:text-primary"
             >
               <Star

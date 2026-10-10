@@ -110,7 +110,7 @@ export function useScoutingUrlState(_positionId: string) {
 
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])
 
-  /** Replace the whole filter object; resets page unless only page changed. */
+  /** Replace the whole filter object; resets page unless only page/candidate changed. */
   const setFilters = useCallback(
     (next: Partial<ScoutingFilters>) => {
       setSearchParams(
@@ -122,11 +122,14 @@ export function useScoutingUrlState(_positionId: string) {
             page: next.page ?? current.page,
             candidate: next.candidate === undefined ? current.candidate : next.candidate,
           }
-          // any filter change (not page-only) resets pagination
+          // Any FILTER change (i.e. anything other than page/drawer) resets
+          // pagination to 1 — but ONLY when the request did not carry its own
+          // explicit page. An explicit `page` in the same call is honored, so
+          // atomic "new filters + page N" updates never get clobbered.
           const filterChanged = !sameFilters(current, withoutPageCandidate)
           const final: ScoutingFilters = {
             ...withoutPageCandidate,
-            page: filterChanged ? 1 : withoutPageCandidate.page,
+            page: filterChanged && next.page === undefined ? 1 : withoutPageCandidate.page,
           }
           return serializeFilters(final)
         },
@@ -138,9 +141,13 @@ export function useScoutingUrlState(_positionId: string) {
 
   const setPage = useCallback((page: number) => setFilters({ page }), [setFilters])
 
-  /** Open/close the drawer via `?c=`. */
+  /**
+   * Open/close the drawer via `?c=`. Closing passes an explicit empty value,
+   * which removes the key from the URL entirely (serializeFilters drops it).
+   */
   const setCandidate = useCallback(
-    (publicId?: string) => setFilters({ candidate: publicId }),
+    (publicId?: string) =>
+      setFilters({ candidate: publicId === undefined ? '' : publicId }),
     [setFilters],
   )
 

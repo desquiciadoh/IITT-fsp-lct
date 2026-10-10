@@ -1,18 +1,1 @@
-# Dependencies
-node_modules/
-
-# Build artifacts
-dist/
-build/
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
-# Logs
-*.log
-
-# Editor/IDE
-.vscode/
-.idea/
+(empty)

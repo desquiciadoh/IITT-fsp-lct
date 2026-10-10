@@ -21,6 +21,8 @@ export default defineConfig({
     },
   },
   test: {
+    // node is the default (pure logic tests); DOM tests opt in per-file via
+    // `// @vitest-environment happy-dom` — keeps FE-05/FE-09 suites untouched.
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
   },
