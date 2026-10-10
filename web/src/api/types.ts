@@ -373,6 +373,20 @@ export type LeagueShelf = {
 export type ShortlistEntry = TalentShort
 
 /**
+ * FE-12 · GET /api/talent/search — plain talent search (no position scoring).
+ * The generated schema declares only {items,total,page}; `pages` and `facets`
+ * are BE gaps G8/G14 — optional so the UI can detect the capability instead of
+ * hardcoding it (client-side facet counting + filter fallback when absent).
+ */
+export type TalentSearchResponse = {
+  items: TalentShort[]
+  total: number
+  page: number
+  pages?: number
+  facets?: Record<string, Record<string, number>>
+}
+
+/**
  * GET /api/talent/{public_id} — talent fields plus about/experience_text and
  * contacts (null unless the company has a grant). Sections for topics,
  * assessments and integrity flags come later (gap G9): hide them when absent.
