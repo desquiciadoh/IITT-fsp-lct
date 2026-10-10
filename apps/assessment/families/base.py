@@ -44,7 +44,7 @@ class Instance:
     input: InputKind
     key: Any                                      # SERVER-SIDE ONLY -> AssessmentItem.key
     fingerprint: str                              # sha256 of the drawn PARAMETERS (not the seed)
-    code: dict[str, str] | None = None            # {"lang": "python"|"javascript"|"sql", "text": ...}
+    code: dict[str, str] | None = None            # {"lang": python|javascript|typescript|sql|css|html|http, "text": ...}
     options: list[dict[str, str]] | None = None   # [{"id": opaque, "text_md": ...}], shuffled, distinct
 
     def view(self) -> dict:

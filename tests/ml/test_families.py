@@ -426,3 +426,25 @@ def test_is_number_correct_normalises_and_never_evals():
 def test_choice_options_needs_enough_distinct_distractors():
     with pytest.raises(ValueError):
         choice_options(random.Random(0), "1", ["1", "1.0", "2"])
+
+
+NODE_FAMILIES = sorted(fid for fid, fam in FAMILIES.items() if getattr(fam, "NODE_CHECK", False))
+
+
+@pytest.mark.skipif(shutil.which("node") is None and not os.environ.get("CI"),
+                    reason="Node.js not installed (required in CI)")
+@pytest.mark.parametrize("fid", NODE_FAMILIES)
+def test_js_family_keys_match_real_node(fid, tmp_path):
+    """The Python generator and oracle model JS semantics; real Node is the referee."""
+    from assessment.families.frontend.js_core import node_answer
+    fam = FAMILIES[fid]
+    for i in range(30):
+        inst = fam.generate(make_rng(b"node", "s", fid, i))
+        script = tmp_path / f"item_{i}.js"
+        script.write_text(inst.code["text"], encoding="utf-8")
+        out = subprocess.run(["node", str(script)], capture_output=True, text=True, timeout=30, check=True).stdout
+        got = node_answer(out)
+        if inst.input == "choice":
+            assert got == harness.answer_text(inst), (inst.code["text"], got)
+        else:
+            assert float(got) == pytest.approx(float(inst.key)), (inst.code["text"], got)
