@@ -7,7 +7,6 @@ from __future__ import annotations
 import datetime
 from typing import Literal
 
-import pytest
 from matching.engine import relax as R
 from matching.engine.types import CandidateCtx, NeedCtx, SkillEvidence
 
