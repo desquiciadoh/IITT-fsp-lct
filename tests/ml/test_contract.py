@@ -18,7 +18,7 @@ from assessment.families.base import FamilyMeta, Instance, fingerprint_of
 from assessment.families.registry import active_metas, all_families, make_rng
 from matching.engine import types as mtypes
 from matching.engine.score import passes_hard_filters, preset, score_pool
-from matching.engine.strength import fsp_boost, percentile_of, percentiles
+from matching.engine.strength import percentile_of, percentiles
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE_DIRS = [ROOT / "apps/assessment/families", ROOT / "apps/assessment/engine",
@@ -229,7 +229,7 @@ def test_score_pool_shapes_sum_and_tiebreak():
         assert s.score == pytest.approx(sum(c.contribution for c in s.components), abs=1e-9)
         assert 0 <= s.score <= 100 and len(s.reasons) >= len(s.components)
         assert all(r.text for r in s.reasons)
-    assert out[-1].gaps == ("sql", "python")
+    assert out[-1].gaps == ("SQL", "Python")             # display names of missing must-haves
 
 
 @pytest.mark.parametrize("name", ["balanced", "skills", "budget"])
@@ -263,11 +263,3 @@ def test_percentiles_mid_rank_by_hand():
     assert percentile_of(3.0, [1.0, 2.0, 2.0, 3.0]) == 87.5
     with pytest.raises(ValueError):
         percentiles([float("nan"), 1.0, 0.0])
-
-
-def test_stub_fsp_boost_is_bounded_and_counts_distinct_results():
-    r = mtypes.FspResultCtx("winner", datetime.date(2025, 5, 1), "algorithmic", 100, None)
-    r2 = mtypes.FspResultCtx("finalist", datetime.date(2025, 6, 1), "product", 50, 4)
-    assert fsp_boost(None, [], NOW) == 0.0
-    assert fsp_boost(None, [r, r], NOW) == 5.0
-    assert fsp_boost("ms", [r, r2] * 5, NOW) == 10.0

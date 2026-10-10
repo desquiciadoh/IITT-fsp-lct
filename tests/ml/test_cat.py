@@ -401,3 +401,13 @@ def test_real_registry_runs_a_session_end_to_end():
         eng.record(st, m.id, fams[m.id].is_correct(inst.key, {"option_id": inst.key}))
     res = eng.result(st)
     assert res.evidence and all(e[2] for e in res.evidence)
+
+
+def test_verified_skills_come_from_answered_families_in_good_topics():
+    from assessment.engine.topics import verified_skills
+    adm = [_entry("sql.aggregation", 1.2, 0.0, 0.25, True, 1), _entry("python.core", 1.2, 0.0, 0.25, False, 2),
+           _entry("backend.http", 1.2, 0.0, 0.25, None, 3)]
+    adm[0]["family_id"], adm[1]["family_id"], adm[2]["family_id"] = "f.sql", "f.py", "f.http"
+    skills = {"f.sql": ("sql",), "f.py": ("python",), "f.http": ("rest_api",)}
+    topics = [("python.core", "limited"), ("sql.aggregation", "strong")]
+    assert verified_skills(topics, adm, skills) == ["sql"]
