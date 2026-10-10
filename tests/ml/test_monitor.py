@@ -5,6 +5,7 @@ Pure tests: no DB, no network, runs under pytest tests/ml.
 from __future__ import annotations
 
 import random
+
 import pytest
 from assessment.engine import monitor as M
 from assessment.engine.irt import p_3pl
