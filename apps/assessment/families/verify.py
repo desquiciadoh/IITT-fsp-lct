@@ -72,9 +72,14 @@ def entropy_bits(values: Iterable[str]) -> float:
 
 
 def content_of(inst: Instance) -> str:
-    """Item content independent of option order and ids."""
-    opts = sorted(o["text_md"] for o in inst.options) if inst.options else None
-    return json.dumps([inst.stem_md, inst.input, inst.code, opts], ensure_ascii=False, sort_keys=True)
+    """What makes two items the same question: stem, code and the correct answer's text.
+
+    Distractor texts and option order are left out: they can be drawn independently of the
+    parameters (redraw families), and a leaked question/answer pair is reusable whatever the
+    distractors are. This is also what the collision rate counts.
+    """
+    return json.dumps([inst.stem_md, inst.input, inst.code, answer_text(inst)], ensure_ascii=False,
+                      sort_keys=True)
 
 
 def _skills_catalog() -> set[str]:
@@ -143,9 +148,11 @@ def _check_instance(fam: ItemFamily, inst: Instance) -> list[str]:
     except Exception as e:  # the harness reports any oracle crash as a family error
         errs.append(f"oracle: raised {type(e).__name__}: {e}")
     else:
+        answer = {"option_id": oracle_key} if inst.input == "choice" else {"value": oracle_key}
         if oracle_key is None:
             errs.append("oracle: no unique option matches the oracle's answer")
-        elif oracle_key != inst.key:
+        elif not (oracle_key == inst.key or (inst.input != "choice" and isinstance(oracle_key, str)
+                                             and fam.is_correct(inst.key, answer))):
             errs.append("oracle: disagrees with the key")
 
     if inst.input == "choice":
@@ -176,7 +183,9 @@ def _check_instance(fam: ItemFamily, inst: Instance) -> list[str]:
             errs.append("is_correct: accepts an empty answer")
         if fam.is_correct(inst.key, {"value": near_miss(inst.key)}):
             errs.append("is_correct: accepts a near miss")
-        if len(str(inst.key)) > 3 and str(inst.key) in blob:
+        # Text keys only: a numeric answer may legitimately equal an input (a median is a value
+        # of the sample), so its presence in the stem is not a leak.
+        if _as_number(str(inst.key)) is None and len(str(inst.key)) > 3 and str(inst.key) in blob:
             errs.append("leak: the typed answer appears in view()")
     return errs
 

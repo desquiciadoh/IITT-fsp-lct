@@ -71,7 +71,8 @@ def fsp_boost(rank: str | None, results: Sequence[FspResultCtx], now: datetime.d
 def activity(microtask_dates: Sequence[datetime.date], now: datetime.datetime) -> float:
     """0..1 from accepted micro-tasks, each decaying with a 90-day half-life."""
     today = _to_date(now)
-    s = sum(0.5 ** ((today - d).days / ACTIVITY_HALF_LIFE_DAYS) for d in sorted(set(microtask_dates))
+    # one entry per accepted task: several tasks on one day all count (dates are not identities)
+    s = sum(0.5 ** ((today - d).days / ACTIVITY_HALF_LIFE_DAYS) for d in sorted(microtask_dates)
             if d <= today)
     return 1.0 - math.exp(-s)
 

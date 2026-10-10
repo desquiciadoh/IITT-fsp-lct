@@ -6,13 +6,13 @@ SkillFit    Σ w·evidence / Σ w over the need's skills, must w = 2, nice w = 1
             candidate's CatResult topics that cover the skill; level if no topic), FSP or
             micro-task 0.8 × level, declared 0.4 × level.
             A need without skills gives 0.5 (no information either way).
-GradeFit    exact grade: confirmed 1.0, unconfirmed 0.6; adjacent grade (only if allowed):
-            0.5, × 0.6 if unconfirmed (0.3); otherwise 0.
-SalaryFit   both ranges in gross (salary.to_gross, NDFL scale). Expectation [cmin, cmax], budget max B:
-            cmax <= B                -> 1.0
-            cmin <= B < cmax         -> 0.5 + 0.5 · (B − cmin)/(cmax − cmin)
-            cmin > B                 -> 0.5 · max(0, 1 − (cmin − B)/(0.25 · B))  (0 at 25 % over budget)
-            no expectation           -> 0.5
+GradeFit    exact grade 1.0, adjacent grade (only if allowed) 0.5, otherwise 0. Whether the
+            grade is confirmed is not priced here: an unconfirmed candidate's whole score is
+            ranked ×0.75 in score.py, once (D13).
+SalaryFit   both ranges in gross (salary.to_gross, NDFL scale). Affordability of an amount x for a
+            budget max B: f(x) = 1 for x <= B, falling linearly to 0 at 1.25·B. SalaryFit is the
+            mean of f over the expectation [cmin, cmax] (f(cmin) for a single amount), so it is
+            continuous in both ends and in the width; no expectation -> 0.5.
 SemanticFit cosine of the need and profile embeddings mapped linearly from [0.2, 0.8] to [0, 1];
             0.5 while embeddings are off (ML-9).
 Freshness   0.5^(days since last activity / 30).
@@ -31,7 +31,6 @@ MUST_W, NICE_W = 2.0, 1.0
 SOURCE_BASE = {"test": 1.0, "fsp": 0.8, "microtask": 0.8, "declared": 0.4}
 TOPIC_SCALE = {"strong": 1.0, "moderate": 0.75, "limited": 0.4}
 RELATED_FACTOR = 0.5
-UNCONFIRMED_GRADE = 0.6
 ADJACENT_GRADE = 0.5
 OVER_BUDGET_ZERO = 0.25
 SEMANTIC_LO, SEMANTIC_HI = 0.2, 0.8
@@ -146,9 +145,9 @@ def grade_fit(need: NeedCtx, c: CandidateCtx) -> tuple[float, list[Reason]]:
     if g in need.grades:
         if confirmed:
             return 1.0, [Reason("plus", f"Грейд {name} подтверждён тестом", "test")]
-        return UNCONFIRMED_GRADE, [Reason("info", f"Грейд {name} не подтверждён тестом", "declared")]
+        return 1.0, [Reason("info", f"Грейд {name} заявлен, тест его не подтвердил", "declared")]
     if need.allow_adjacent and any(_adjacent(g, x) for x in need.grades):
-        value = ADJACENT_GRADE * (1.0 if confirmed else UNCONFIRMED_GRADE)
+        value = ADJACENT_GRADE
         status = "подтверждён" if confirmed else "не подтверждён"
         return value, [Reason("info", f"Соседний грейд {name} ({status})", "test" if confirmed else "declared")]
     return 0.0, [Reason("minus", f"Грейд {name} не подходит вакансии", None)]
@@ -168,14 +167,30 @@ def salary_fit(need: NeedCtx, c: CandidateCtx) -> tuple[float, list[Reason]]:
     cmax = max(cmax, cmin)
     budget = to_gross(need.salary_max, need.salary_type)
     shown = f"{_rub(cmin)}–{_rub(cmax)} gross" if cmax > cmin else f"{_rub(cmin)} gross"
+    value = _afford(cmin, budget) if cmax == cmin else _afford_integral(cmin, cmax, budget) / (cmax - cmin)
     if cmax <= budget:
-        return 1.0, [Reason("plus", f"Ожидания {shown} в пределах вилки", "declared")]
+        return value, [Reason("plus", f"Ожидания {shown} в пределах вилки", "declared")]
     if cmin <= budget:
-        value = 0.5 + 0.5 * (budget - cmin) / (cmax - cmin)
         return value, [Reason("info", f"Ожидания {shown} частично в вилке", "declared")]
     over = (cmin - budget) / budget
-    value = 0.5 * max(0.0, 1.0 - over / OVER_BUDGET_ZERO)
     return value, [Reason("minus", f"Ожидания выше бюджета на {math.ceil(over * 100)} %", "declared")]
+
+
+def _afford(x: float, budget: float) -> float:
+    """1 up to the budget, then linearly down to 0 at (1 + OVER_BUDGET_ZERO) · budget."""
+    if x <= budget:
+        return 1.0
+    return max(0.0, 1.0 - (x - budget) / (OVER_BUDGET_ZERO * budget))
+
+
+def _afford_integral(a: float, b: float, budget: float) -> float:
+    """∫_a^b _afford(x) dx (piecewise linear: flat, ramp, zero)."""
+    top = (1.0 + OVER_BUDGET_ZERO) * budget
+    total = max(0.0, min(b, budget) - a)                               # flat part at 1
+    lo, hi = max(a, budget), min(b, top)
+    if hi > lo:                                                        # ramp part: trapezoid
+        total += (hi - lo) * (_afford(lo, budget) + _afford(hi, budget)) / 2
+    return total
 
 
 # ── SemanticFit, Freshness ─────────────────────────────────────────────────

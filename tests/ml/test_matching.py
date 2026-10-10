@@ -7,7 +7,11 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import math
+import os
 import re
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 from matching.engine import features as F
@@ -24,6 +28,7 @@ from matching.engine.types import (
 )
 
 NOW = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
+ROOT = Path(__file__).resolve().parents[2]
 CYRILLIC = re.compile("[а-яё]", re.IGNORECASE)
 
 
@@ -101,6 +106,8 @@ def test_activity_and_freshness_by_hand():
     # one task today: S = 1 -> 1 − e^−1; one 90 days ago: S = 0.5
     assert activity([NOW.date()], NOW) == pytest.approx(1 - math.exp(-1))
     assert activity([NOW.date() - datetime.timedelta(days=90)], NOW) == pytest.approx(1 - math.exp(-0.5))
+    # three tasks accepted the same day count three times: S = 3
+    assert activity([NOW.date()] * 3, NOW) == pytest.approx(1 - math.exp(-3))
     assert freshness(NOW, NOW) == 1.0 and freshness(None, NOW) == 0.0
     assert freshness(NOW - datetime.timedelta(days=30), NOW) == pytest.approx(0.5)
 
@@ -142,9 +149,23 @@ NEED = NeedCtx(position_id="P-1", specialization="backend", grades=("middle",), 
                location="Москва", salary_min=250_000, salary_max=320_000, salary_type="gross")
 
 
-def test_skill_fit_by_hand():
-    # skills.yaml (AI): python–sql and docker–kubernetes are related
+GRAPH = {"python": ("sql",), "sql": ("python",), "docker": ("kubernetes",), "kubernetes": ("docker",)}
+SKILL_TOPICS = {"sql": ("sql.aggregation", "sql.joins"), "python": ("python.core",)}
+
+
+@pytest.fixture
+def fixed_taxonomy(monkeypatch):
+    """A tiny fixed graph, so the goldens test the math, not AI's skills.yaml or our content."""
+    monkeypatch.setattr(F, "_related", lambda: GRAPH)
+    monkeypatch.setattr(F, "_skill_topics", lambda: SKILL_TOPICS)
+
+
+def test_live_taxonomy_still_has_the_relations_the_product_relies_on():
     assert "sql" in F._related()["python"] and "kubernetes" in F._related()["docker"]
+    assert "sql.aggregation" in F._skill_topics()["sql"]
+
+
+def test_skill_fit_by_hand(fixed_taxonomy):
     c = _cand(skills=(SkillEvidence("sql", "test", 1.0), SkillEvidence("python", "declared", 1.0),
                       SkillEvidence("kubernetes", "fsp", 1.0)),
               topic_levels={"sql.aggregation": "strong", "sql.joins": "moderate"})
@@ -159,7 +180,7 @@ def test_skill_fit_by_hand():
     assert any("смежный навык SQL" in t for t in texts)
 
 
-def test_skill_fit_topic_level_scales_test_evidence_and_gaps_list_missing_musts():
+def test_skill_fit_topic_level_scales_test_evidence_and_gaps_list_missing_musts(fixed_taxonomy):
     c = _cand(skills=(SkillEvidence("sql", "test", 1.0),), topic_levels={"sql.aggregation": "limited"})
     # sql 0.4 (limited), python related via sql 0.5·0.4 = 0.2, docker 0 -> (0.8 + 0.4 + 0)/5 = 0.24
     value, reasons, gaps = F.skill_fit(NEED, c)
@@ -171,8 +192,8 @@ def test_skill_fit_topic_level_scales_test_evidence_and_gaps_list_missing_musts(
 
 
 @pytest.mark.parametrize("grade, status, adjacent, expected", [
-    ("middle", "confirmed", False, 1.0), ("middle", "unconfirmed", False, 0.6),
-    ("senior", "confirmed", True, 0.5), ("senior", "unconfirmed", True, 0.3),
+    ("middle", "confirmed", False, 1.0), ("middle", "unconfirmed", False, 1.0),      # ×0.75 is in the score (D13)
+    ("senior", "confirmed", True, 0.5), ("senior", "unconfirmed", True, 0.5),
     ("senior", "confirmed", False, 0.0), ("intern", "confirmed", True, 0.0), (None, None, True, 0.0)])
 def test_grade_fit_table(grade, status, adjacent, expected):
     need = dataclasses.replace(NEED, allow_adjacent=adjacent)
@@ -180,12 +201,15 @@ def test_grade_fit_table(grade, status, adjacent, expected):
     assert value == pytest.approx(expected) and reasons
 
 
+# budget B = 320 000; f(x) = 1 up to B, then 1 − (x − B)/80 000, 0 from 400 000
 @pytest.mark.parametrize("smin, smax, stype, expected", [
-    (200_000, 300_000, "gross", 1.0),                       # within 320 000
-    (300_000, 400_000, "gross", 0.5 + 0.5 * 20 / 100),       # 0.6
-    (350_000, None, "gross", 0.5 * (1 - (30 / 320) / 0.25)),  # 0.3125
-    (300_000, None, "net", 0.5 * (1 - (28_235 / 320_000) / 0.25)),   # 348 235 gross
-    (500_000, 600_000, "gross", 0.0),                        # > 25 % over
+    (200_000, 300_000, "gross", 1.0),                                   # within the budget
+    (300_000, 400_000, "gross", (20_000 + 80_000 * 0.5) / 100_000),     # 0.6
+    (350_000, None, "gross", 1 - 30_000 / 80_000),                      # 0.625
+    (300_000, None, "net", 1 - 28_235 / 80_000),                        # 348 235 gross
+    (319_000, 321_000, "gross", (1_000 + 1_000 * (1 + (1 - 1 / 80)) / 2) / 2_000),   # 0.996875
+    (320_000, None, "gross", 1.0),
+    (500_000, 600_000, "gross", 0.0),                                   # all beyond 400 000
     (None, None, None, 0.5),
 ])
 def test_salary_fit_by_hand(smin, smax, stype, expected):
@@ -193,10 +217,13 @@ def test_salary_fit_by_hand(smin, smax, stype, expected):
     assert value == pytest.approx(expected) and reasons
 
 
-def test_salary_fit_is_continuous_at_the_budget():
-    at = F.salary_fit(NEED, _cand(salary_min=320_000, salary_max=400_000))[0]
-    above = F.salary_fit(NEED, _cand(salary_min=320_001, salary_max=None))[0]
-    assert at == pytest.approx(0.5) and above == pytest.approx(0.5, abs=1e-4)
+def test_salary_fit_is_continuous_at_the_budget_and_in_the_width():
+    point = [F.salary_fit(NEED, _cand(salary_min=x, salary_max=None))[0] for x in (319_999, 320_000, 320_001)]
+    assert max(point) - min(point) < 1e-4                                # ML-4 review: was a 1.0 -> 0.5 cliff
+    narrow = F.salary_fit(NEED, _cand(salary_min=350_000, salary_max=350_002))[0]
+    assert narrow == pytest.approx(F.salary_fit(NEED, _cand(salary_min=350_000, salary_max=None))[0], abs=1e-4)
+    values = [F.salary_fit(NEED, _cand(salary_min=x, salary_max=x + 50_000))[0] for x in range(250_000, 420_000, 1_000)]
+    assert all(b <= a + 1e-12 for a, b in zip(values, values[1:], strict=False))   # monotone
 
 
 def test_semantic_fit_neutral_without_embeddings_and_mapped_with():
@@ -223,7 +250,7 @@ def test_every_component_has_a_russian_chip_and_contributions_sum_to_score():
     assert any(r.source == "fsp" for r in s.reasons) and any(r.source == "test" for r in s.reasons)
 
 
-def test_score_by_hand_for_one_candidate():
+def test_score_by_hand_for_one_candidate(fixed_taxonomy):
     c = _cand(skills=(SkillEvidence("sql", "test", 1.0), SkillEvidence("python", "test", 1.0),
                       SkillEvidence("docker", "declared", 1.0)),
               topic_levels={"sql.aggregation": "strong", "python.core": "moderate"}, strength=80.0)
@@ -233,34 +260,49 @@ def test_score_by_hand_for_one_candidate():
     s = score_candidate(NEED, c, preset("balanced"), NOW)
     assert s.score == pytest.approx(83.3)
     unconfirmed = score_candidate(NEED, dataclasses.replace(c, league_status="unconfirmed"), preset("balanced"), NOW)
-    # grade drops to 0.6 (−6 points), then everything × 0.75: (83.3 − 6) · 0.75 = 57.975
-    assert unconfirmed.score == pytest.approx(57.975)
+    # ranked ×0.75 once (D13): 83.3 · 0.75 = 62.475
+    assert unconfirmed.score == pytest.approx(62.475)
     assert any("×0.75" in r.text for r in unconfirmed.reasons)
+
+
+LEAGUE = [-0.6, -0.2, 0.1, 0.3, 0.5, 0.7, 0.9, 1.2]       # θ of the Middle league members
+
+
+def _with_strength(c: CandidateCtx) -> CandidateCtx:
+    """Strength and percentile as BE would store them: computed by strength() over one league."""
+    sb = strength(c, LEAGUE, NOW)
+    return dataclasses.replace(c, strength=sb.total, percentile=sb.percentile)
 
 
 def _fixture_pool():
     sql_py = (SkillEvidence("sql", "test", 1.0), SkillEvidence("python", "test", 1.0))
     lv = {"sql.aggregation": "strong", "python.core": "strong"}
-    return {
-        # verified skills, strong, FSP prize-winner
-        "C-ANNA": _cand("C-ANNA", skills=sql_py, topic_levels=lv, strength=88.0, fsp_rank="kms",
+    raw = {
+        # verified skills, θ 0.7, FSP prize-winner with KMS
+        "C-ANNA": _cand("C-ANNA", skills=sql_py, topic_levels=lv, theta=0.7, fsp_rank="kms",
                         fsp_results=(_r("prize_winner"),)),
-        # same skills, no FSP, a bit lower strength
-        "C-ALEX": _cand("C-ALEX", skills=sql_py, topic_levels=lv, strength=78.0),
+        # the same without FSP
+        "C-ALEX": _cand("C-ALEX", skills=sql_py, topic_levels=lv, theta=0.7),
         # the same skills only declared
         "C-DECL": _cand("C-DECL", skills=(SkillEvidence("sql", "declared", 1.0),
-                                          SkillEvidence("python", "declared", 1.0)), strength=78.0),
+                                          SkillEvidence("python", "declared", 1.0)), theta=0.7),
         # like Alex but did not confirm the claimed grade
-        "C-UNCF": _cand("C-UNCF", skills=sql_py, topic_levels=lv, strength=78.0, league_status="unconfirmed"),
+        "C-UNCF": _cand("C-UNCF", skills=sql_py, topic_levels=lv, theta=0.7, league_status="unconfirmed"),
         # like Alex but expects 40 % over the budget
-        "C-EXPN": _cand("C-EXPN", skills=sql_py, topic_levels=lv, strength=78.0, salary_min=450_000,
+        "C-EXPN": _cand("C-EXPN", skills=sql_py, topic_levels=lv, theta=0.7, salary_min=450_000,
                         salary_max=500_000),
         # like Alex but inactive for half a year
-        "C-IDLE": _cand("C-IDLE", skills=sql_py, topic_levels=lv, strength=78.0,
+        "C-IDLE": _cand("C-IDLE", skills=sql_py, topic_levels=lv, theta=0.7,
                         last_active_at=NOW - datetime.timedelta(days=180)),
         # no relevant skills at all
-        "C-NONE": _cand("C-NONE", strength=78.0),
+        "C-NONE": _cand("C-NONE", theta=0.7),
+        # strong, no FSP (θ 1.2, top of the league)
+        "C-STAR": _cand("C-STAR", skills=sql_py, topic_levels=lv, theta=1.2),
+        # weaker FSP winner with MS rank (θ −0.2)
+        "C-MEDL": _cand("C-MEDL", skills=sql_py, topic_levels=lv, theta=-0.2, fsp_rank="ms",
+                        fsp_results=(_r("winner"), _r("winner", 2))),
     }
+    return {k: _with_strength(v) for k, v in raw.items()}
 
 
 def test_hand_ranked_pool():
@@ -268,11 +310,16 @@ def test_hand_ranked_pool():
     out = score_pool(NEED, list(pool.values()), preset("balanced"), NOW)
     order = [s.public_id for s in out]
     rank = {pid: i for i, pid in enumerate(order)}
-    assert order[0] == "C-ANNA"
+    assert order[0] == "C-STAR"                    # the strongest skills and θ win, with or without FSP
     # each pair differs in one property only; the better one must rank higher
     for better, worse in [("C-ALEX", "C-DECL"), ("C-ALEX", "C-UNCF"), ("C-ALEX", "C-EXPN"),
-                          ("C-ALEX", "C-IDLE"), ("C-DECL", "C-NONE"), ("C-ANNA", "C-ALEX")]:
+                          ("C-ALEX", "C-IDLE"), ("C-DECL", "C-NONE"), ("C-ANNA", "C-ALEX"),
+                          ("C-UNCF", "C-NONE"),       # verified must-haves beat none, even unconfirmed (D13)
+                          ("C-STAR", "C-MEDL")]:      # a strong non-FSP beats a weak FSP medallist
         assert rank[better] < rank[worse], (better, worse, order)
+    score = {s.public_id: s.score for s in out}
+    # FSP moves a score only through Strength: at most 15 Strength points × 20/100 weight = 3.0
+    assert 0 < score["C-ANNA"] - score["C-ALEX"] <= 3.0
     assert next(s for s in out if s.public_id == "C-NONE").gaps == ("SQL", "Python")
 
 
@@ -284,6 +331,15 @@ def test_presets_change_the_order_the_way_their_names_say():
     budget_first = {s.public_id: s.score for s in score_pool(NEED, [expensive, cheap_decl], preset("budget"), NOW)}
     assert skills_first["C-EXPN"] > skills_first["C-DECL"]      # verified skills win
     assert budget_first["C-DECL"] > budget_first["C-EXPN"]      # affordable wins
+
+
+def test_engines_import_no_django_even_transitively():
+    """Purity across package boundaries: the matching engine reads AI's taxonomy and ML content."""
+    code = ("import sys; sys.path.insert(0, 'apps'); import matching.engine.score, assessment.engine.cat, "
+            "validation.schema; import matching.engine.features as F; F._related(); F._skill_topics(); "
+            "assert 'django' not in sys.modules, sorted(m for m in sys.modules if m.startswith('django'))")
+    env = {k: v for k, v in os.environ.items() if k != "DJANGO_SETTINGS_MODULE"}
+    subprocess.run([sys.executable, "-c", code], cwd=str(ROOT), env=env, check=True, timeout=120)
 
 
 def test_score_pool_is_deterministic_and_validates_weights():

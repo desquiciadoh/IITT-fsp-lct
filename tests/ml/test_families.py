@@ -185,10 +185,21 @@ class _TypedTooLenient(_TypedGood):
 
 
 class _TypedKeyInStem(_TypedGood):
+    """A text answer (a word made of hex letters) that the stem gives away."""
+
+    meta = dataclasses.replace(_TypedGood.meta, id="t.test.typedtext.v1")
+
     def generate(self, rng):
-        inst = super().generate(rng)
-        inst.stem_md += f" (подсказка: {inst.key})"
-        return inst
+        p = {"x": rng.getrandbits(48)}
+        word = f"{p['x']:012x}"
+        return Instance(stem_md=f"Перепишите слово {word} (подсказка: {word})", input="text", key=word,
+                        fingerprint=fingerprint_of(p))
+
+    def is_correct(self, key, answer):
+        return isinstance(answer.get("value"), str) and answer["value"].strip() == key
+
+    def oracle(self, inst):
+        return inst.stem_md.split()[2]
 
 
 @pytest.mark.parametrize("cls, expected", [
