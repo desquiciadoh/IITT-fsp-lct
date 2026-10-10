@@ -4,7 +4,8 @@
 # specialization appears here; tests/ml checks that every topic has an active family once
 # ML-6 lands (before that, the CAT skips topics with no family).
 #
-# Rationale: about 25 % shared algorithms/CS (comparable across specializations), the rest
+# Rationale: 20-30 % shared algorithms/CS (backend 30, frontend 25, ML & Data 20; comparable
+# across specializations), the rest
 # spread over the topics employers ask about most in JDs for that specialization (SQL and
 # Python for backend, the JS language and React for frontend, statistics and metrics for
 # ML & Data). Small topics (security, deep learning) get 5 %: about one item in a 20-item test.

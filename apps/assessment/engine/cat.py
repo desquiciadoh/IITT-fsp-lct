@@ -6,7 +6,9 @@ IrtCatEngine
                uniformly among the top 5 (randomesque exposure control) with the passed rng.
                A family is eligible if it serves the session's spec, was not administered in this
                session, and its topic is under its blueprint quota (count < ⌊w·(n+1)⌋ + 1, so a
-               topic never runs more than one item ahead of its proportional share). Families unseen
+               topic never runs more than one item ahead of its proportional share); topics behind
+               their share go first: only topics within 0.5 of the largest deficit w·(n+1) − count
+               compete (Kingsbury-Zara with slack), so quotas act as floors too. Families unseen
                in earlier attempts are preferred. The first item is targeted at start_theta(claimed),
                later ones at the current θ̂. Ties break by family id.
   record       scores the pending item (late -> incorrect) and re-estimates θ̂, SE (EAP, neutral prior).
@@ -35,6 +37,8 @@ TopicLevel = Literal["strong", "moderate", "limited"]
 
 MODES: tuple[str, ...] = ("full", "express")
 KINDS: tuple[str, ...] = ("initial", "fallback", "promotion", "screening")
+
+DEFICIT_SLACK = 0.5  # topics within half an item of the largest deficit compete on information
 
 STATE_VERSION = 1   # bump only with a from_json migration; new fields are optional and read with .get
 
@@ -96,6 +100,8 @@ class CatResult:
     fallback_grade: Grade | None    # highest lower grade with P(θ ≥ cut) ≥ 0.8, else None
     topics: list[tuple[str, TopicLevel]]
     evidence: list[tuple[int, Grade, bool]]     # (seq, item level, correct)
+    complete: bool = False          # a stop rule ended the test (D8); False -> never confirmed
+    stop_reason: str | None = None  # express | max_items | se | ci | pool_exhausted | None
 
 
 class CatEngine(Protocol):
@@ -107,7 +113,11 @@ class CatEngine(Protocol):
       make_rng(secret, session_id, "select", n=seq), and persists state.
     - `record` scores the pending entry; `late=True` scores it as incorrect.
     - `result` scores any entry still pending as incorrect (a served item that was never
-      answered counts against the candidate, so ending a session can't skip a hard item).
+      answered counts against the candidate, so ending a session can't skip a hard item). It
+      works on a copy and never changes `state`; it applies the stop rules itself, so calling it
+      right after the last `record` gives the same answer as after `next_family` returns None.
+    - A pending family that left the pool (retired mid-session) is looked up in the registry,
+      so the session can finish; `next_family` never selects it again.
     - `blueprint` (screening only) replaces the spec blueprint's topic quotas; it never
       changes how θ is scored.
     """
@@ -147,15 +157,20 @@ class IrtCatEngine:
         theta, se = eap([], [])
         return CatState(spec=spec, claimed=claimed, mode=mode, kind=kind, administered=[],
                         theta=theta, se=se, min_items=lo, max_items=hi, seen=sorted(set(seen)),
-                        blueprint=_normalised(blueprint) if blueprint is not None else None)
+                        blueprint=self._normalised(blueprint, spec) if blueprint is not None else None)
 
     def next_family(self, state, pool, rng) -> FamilyMeta | None:
         by_id = {m.id: m for m in pool}
         pending = [x for x in state.administered if x["correct"] is None]
         if pending:
-            meta = by_id.get(pending[-1]["family_id"])
-            if meta is None:
-                raise ValueError(f"pending family {pending[-1]['family_id']!r} is not in the pool")
+            fid = pending[-1]["family_id"]
+            meta = by_id.get(fid)
+            if meta is None:                  # retired while pending: finish it from the registry
+                from ..families.registry import all_families
+                fam = all_families().get(fid)
+                if fam is None:
+                    raise ValueError(f"pending family {fid!r} is unknown")
+                meta = fam.meta
             return meta
         if state.stop_reason is not None:
             return None
@@ -183,20 +198,24 @@ class IrtCatEngine:
         return state
 
     def result(self, state) -> CatResult:
-        for x in state.administered:
+        st = CatState.from_json(state.to_json())          # never mutate the caller's state
+        if st.stop_reason is None and not any(x["correct"] is None for x in st.administered):
+            st.stop_reason = self.stop_rule(st)           # finished by the last record()
+        for x in st.administered:
             if x["correct"] is None:                      # served, never answered: incorrect (D1)
                 x["correct"], x["late"] = False, True
-        items, resp = _responses(state.administered)
+        items, resp = _responses(st.administered)
         post = posterior(items, resp)
-        d = decide(post, state.claimed, self.is_complete(state), self.content)
-        state.theta, state.se = d.theta, d.se
-        reference = state.claimed if d.decision == "confirmed" else d.result_grade
+        complete = self.is_complete(st)
+        d = decide(post, st.claimed, complete, self.content)
+        reference = st.claimed if d.decision == "confirmed" else d.result_grade
         return CatResult(
             theta=d.theta, se=d.se, rating=d.rating, rating_ci=d.rating_ci, result_grade=d.result_grade,
             decision=d.decision, promotion_unlocked=d.promotion_unlocked, fallback_grade=d.fallback_grade,
-            topics=topic_levels(state.administered, reference, self.content),
+            topics=topic_levels(st.administered, reference, self.content),
             evidence=[(x["seq"], band_of(x["b"], self.content), bool(x["correct"]))
-                      for x in state.administered])
+                      for x in st.administered],
+            complete=complete, stop_reason=st.stop_reason)
 
     # ── rules ─────────────────────────────────────────────────────────────
     def stop_rule(self, state: CatState) -> str | None:
@@ -215,6 +234,22 @@ class IrtCatEngine:
         if lo >= cut or hi < cut:
             return "ci"
         return None
+
+    def _normalised(self, blueprint: list[tuple[str, float]], spec: str) -> list[tuple[str, float]]:
+        """Screening quotas: topics of the spec only, duplicates merged, weights summing to 1."""
+        allowed = set(self.content.topics_for(spec))
+        merged: dict[str, float] = {}
+        for t, w in blueprint:
+            t, w = str(t), float(w)
+            if t not in allowed:
+                raise ValueError(f"blueprint topic {t!r} is not a {spec} topic")
+            if w < 0 or not math.isfinite(w):
+                raise ValueError(f"blueprint weight for {t!r} must be finite and >= 0")
+            merged[t] = merged.get(t, 0.0) + w
+        total = sum(merged.values())
+        if total <= 0:
+            raise ValueError("a screening blueprint needs at least one topic with a positive weight")
+        return [(t, merged[t] / total) for t in sorted(merged) if merged[t] > 0]
 
     def is_complete(self, state: CatState) -> bool:
         """A stop rule ended the test; pool exhaustion counts only after min_items answers."""
@@ -239,7 +274,13 @@ class IrtCatEngine:
             w = weights.get(m.topic, 0.0)
             return w > 0 and counts.get(m.topic, 0) < math.floor(w * (n + 1)) + 1
 
+        def deficit(m: FamilyMeta) -> float:
+            return weights.get(m.topic, 0.0) * (n + 1) - counts.get(m.topic, 0)
+
         eligible = [m for m in cands if under_quota(m)]
+        if eligible:                         # floor (Kingsbury-Zara): the most-behind topics compete
+            top = max(deficit(m) for m in eligible)
+            eligible = [m for m in eligible if deficit(m) >= top - DEFICIT_SLACK]
         if not eligible:                     # every quota is full or empty: any blueprint topic, else any
             eligible = [m for m in cands if weights.get(m.topic, 0.0) > 0] or cands
         unseen = [m for m in eligible if m.id not in state.seen]
@@ -258,9 +299,4 @@ def _responses(administered: list[dict]) -> tuple[list[tuple[float, float, float
             [bool(x["correct"]) for x in answered])
 
 
-def _normalised(blueprint: list[tuple[str, float]]) -> list[tuple[str, float]]:
-    clean = [(str(t), float(w)) for t, w in blueprint if float(w) > 0]
-    total = sum(w for _, w in clean)
-    if not clean or total <= 0:
-        raise ValueError("a screening blueprint needs at least one topic with a positive weight")
-    return sorted(((t, w / total) for t, w in clean), key=lambda tw: tw[0])
+

@@ -411,3 +411,92 @@ def test_verified_skills_come_from_answered_families_in_good_topics():
     skills = {"f.sql": ("sql",), "f.py": ("python",), "f.http": ("rest_api",)}
     topics = [("python.core", "limited"), ("sql.aggregation", "strong")]
     assert verified_skills(topics, adm, skills) == ["sql"]
+
+
+# ── review fixes (ML-3 review) ─────────────────────────────────────────────
+
+def test_blueprint_quotas_are_floors_too():
+    eng = IrtCatEngine()
+    weights = C.blueprints["backend"]
+    for seed in range(30):
+        rng = random.Random(seed)
+        pool = _pool(seed=seed)
+        st = eng.start("backend", "middle", "full", "initial", pool, set())
+        st.min_items = st.max_items = 20
+        while (m := eng.next_family(st, pool, random.Random(seed * 1000 + len(st.administered)))) is not None:
+            eng.record(st, m.id, rng.random() < 0.5)
+            n = len(st.administered)
+            counts = Counter(x["topic"] for x in st.administered)
+            for topic, w in weights.items():
+                assert counts.get(topic, 0) >= math.floor(w * n) - 1, (seed, n, topic)
+        assert set(Counter(x["topic"] for x in st.administered)) == set(weights)   # all 11 topics
+
+
+def test_result_does_not_depend_on_calling_next_family_first_and_never_mutates():
+    eng = IrtCatEngine()
+    pool = _pool()
+    st = eng.start("backend", "junior", "full", "initial", pool, set())
+    for k in range(40):
+        if eng.stop_rule(st) is not None:
+            break
+        m = eng.next_family(st, pool, random.Random(k))
+        eng.record(st, m.id, True)
+    assert st.stop_reason is None                      # BE finalises without a last next_family
+    snapshot = json.dumps(st.to_json(), sort_keys=True)
+    early = eng.result(st)
+    assert json.dumps(st.to_json(), sort_keys=True) == snapshot
+    assert early.complete and early.decision == "confirmed" and early.stop_reason in ("se", "ci")
+    assert eng.next_family(st, pool, random.Random(99)) is None
+    assert eng.result(st) == early
+
+
+def test_result_on_a_pending_item_leaves_it_pending_for_record():
+    eng = IrtCatEngine()
+    pool = _pool()
+    st = eng.start("backend", "junior", "full", "initial", pool, set())
+    m = eng.next_family(st, pool, random.Random(0))
+    preview = eng.result(st)
+    assert preview.evidence == [(1, item_level(m), False)] and not preview.complete
+    eng.record(st, m.id, True)                          # still pending: no "not pending" error
+    assert st.administered[0]["correct"] is True
+
+
+def test_pending_family_retired_mid_session_is_finished_from_the_registry():
+    from assessment.families.registry import active_metas
+    eng = IrtCatEngine()
+    pool = active_metas("backend")
+    st = eng.start("backend", "junior", "full", "initial", pool, set())
+    m = eng.next_family(st, pool, random.Random(0))
+    smaller = [x for x in pool if x.id != m.id]         # e.g. the leak monitor retired it
+    assert eng.next_family(st, smaller, random.Random(1)) == m
+    eng.record(st, m.id, True)
+    nxt = eng.next_family(st, smaller, random.Random(2))
+    assert nxt is None or nxt.id != m.id
+
+
+def test_screening_blueprint_is_validated_and_merged():
+    eng = IrtCatEngine()
+    with pytest.raises(ValueError, match="not a backend topic"):
+        eng.start("backend", "middle", "full", "screening", [], set(), blueprint=[("web.react", 1.0)])
+    with pytest.raises(ValueError):
+        eng.start("backend", "middle", "full", "screening", [], set(), blueprint=[("sql.joins", -1.0)])
+    st = eng.start("backend", "middle", "full", "screening", [], set(),
+                   blueprint=[("sql.joins", 1.0), ("python.core", 1.0), ("sql.joins", 2.0)])
+    assert st.blueprint == [("python.core", 0.25), ("sql.joins", 0.75)]
+
+
+def test_single_item_topics_are_always_moderate():
+    one_wrong_easy = [_entry("t", 1.4, -1.0, 0.25, False, 1)]
+    one_right_hard = [_entry("t", 1.4, 2.0, 0.25, True, 1)]
+    assert topic_levels(one_wrong_easy, "middle", C) == [("t", "moderate")]
+    assert topic_levels(one_right_hard, "middle", C) == [("t", "moderate")]
+
+
+@pytest.mark.xfail(strict=True, reason="N2 is gated on ML-6: the pool needs >= 20 families per spec")
+def test_registry_is_big_enough_for_a_full_cat():
+    """When this passes (XPASS fails the run), remove the marker: BE may wire IrtCatEngine (N2)."""
+    from assessment.families.registry import active_metas
+    for spec in ("backend", "frontend", "ml_data"):
+        metas = active_metas(spec)
+        assert len(metas) >= 2 * IrtCatEngine.FULL_MAX // 2 and len(metas) >= 20
+        assert {m.topic for m in metas} == set(C.topics_for(spec))
