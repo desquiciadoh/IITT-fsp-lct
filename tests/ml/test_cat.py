@@ -493,11 +493,10 @@ def test_single_item_topics_are_always_moderate():
     assert topic_levels(one_right_hard, "middle", C) == [("t", "moderate")]
 
 
-@pytest.mark.xfail(strict=True, reason="N2 is gated on ML-6: the pool needs >= 20 families per spec")
 def test_registry_is_big_enough_for_a_full_cat():
-    """When this passes (XPASS fails the run), remove the marker: BE may wire IrtCatEngine (N2)."""
+    """The N2 gate (BE.md ML-3 row): >= 20 active families per spec covering every blueprint topic."""
     from assessment.families.registry import active_metas
     for spec in ("backend", "frontend", "ml_data"):
         metas = active_metas(spec)
-        assert len(metas) >= 2 * IrtCatEngine.FULL_MAX // 2 and len(metas) >= 20
+        assert len(metas) >= IrtCatEngine.FULL_MAX
         assert {m.topic for m in metas} == set(C.topics_for(spec))

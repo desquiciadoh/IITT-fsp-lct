@@ -123,3 +123,10 @@ def test_blueprint_feeds_the_jd_parser():
     assert res.blueprint and abs(sum(b["weight"] for b in res.blueprint) - 1) < 1e-9
     assert {b["topic"] for b in res.blueprint} <= set(C.topics_for("backend"))
     assert res.fallback_reason == "provider_fake"                 # no "+blueprint" failure marker
+
+
+def test_item_bank_doc_is_current():
+    """docs/ml/item-bank.md is generated from the registry; regenerate with
+    `cd apps && python -m assessment.families.catalog` after changing families or content."""
+    from assessment.families.catalog import OUT, render
+    assert OUT.read_text(encoding="utf-8") == render()
