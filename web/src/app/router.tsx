@@ -13,6 +13,7 @@ import { StartPage } from '@/features/qualification-runner/start-page'
 import { TestRunnerPage } from '@/features/qualification-runner/test-runner-page'
 import { OffersListPage } from '@/features/offers/offers-list-page'
 import { OfferDetailPage } from '@/features/offers/offer-detail-page'
+import { OffersBoardPage } from '@/features/employer/offers-board-page'
 import { SettingsPage } from '@/features/settings/settings-page'
 import { AppLayout } from '@/app/layouts/app-layout'
 import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
@@ -92,7 +93,7 @@ export const router = createBrowserRouter([
                 element: ph('Вакансия (детально)', 'FE2', 'FE-14'),
               },
               { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
-              { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-17') },
+              { path: '/employer/offers', element: <OffersBoardPage /> },
             ],
           },
         ],
