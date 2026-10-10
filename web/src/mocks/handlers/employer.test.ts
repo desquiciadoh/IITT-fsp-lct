@@ -117,6 +117,7 @@ describe('FE-09 employer mock: company (gap G17)', () => {
 
 describe('FE-09 employer mock: JD parse (gap G6)', () => {
   it('parses a sample JD into the target shape', async () => {
+    await reset()
     const jd = `Senior Backend Developer
     Обязательны: python, django, postgresql, redis.
     Будет плюсом: kafka, celery. Опыт с Elasticsearch приветствуется.

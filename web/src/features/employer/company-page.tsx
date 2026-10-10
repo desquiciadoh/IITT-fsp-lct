@@ -164,7 +164,7 @@ export function CompanyPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Профиль компании</h1>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          Доверие: <TrustBadge level={company?.trust_level ?? 'unverified'} showLabel />
+          Доверие: <TrustBadge level={company?.trust_level ?? 'none'} showLabel />
         </span>
       </div>
       <Card>
