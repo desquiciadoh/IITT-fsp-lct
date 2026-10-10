@@ -142,13 +142,13 @@ class VulnClass(ClassificationFamily):
                               "    return HttpResponse(out.stdout)"],
         "SSRF": ["def {fn}(request):\n    {v} = request.GET['{param}']\n    resp = requests.get({v}, timeout=5)\n"
                  "    return HttpResponse(resp.content)"],
-        "IDOR": ["@login_required\ndef {fn}(request, {col}_id):\n    obj = {model}.objects.get(id={col}_id)\n"
+        "IDOR": ["@login_required\ndef {fn}(request, {col}_id):\n    obj = get_object_or_404({model}, pk={col}_id)\n"
                  "    return JsonResponse(model_to_dict(obj))"],
     }
     DETECTORS = {  # oracle: the dangerous sink the user value reaches, recognised on the code
         "SQL-инъекция": r"execute\(\s*f\"SELECT", "XSS": r"HttpResponse\(f\"<",
         "Path traversal": r"os\.path\.join\(.*\)\n\s+with open", "Command injection": r"shell=True",
-        "SSRF": r"requests\.get\(\w+,", "IDOR": r"objects\.get\(id=\w+_id\)",
+        "SSRF": r"requests\.get\(\w+,", "IDOR": r"get_object_or_404\(\w+, pk=\w+_id\)",
     }
 
     PREAMBLES = ("    # {ticket}", "    logger.info('request from %s', request.user)", "    metrics.incr('{fn}')",
