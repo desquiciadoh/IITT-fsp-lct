@@ -273,7 +273,6 @@ class TestN1PerformanceAndQueries:
 
     @override_settings(DEBUG=False)
     def test_pool_latency_1500_candidates_under_300ms(self, setup_company_and_position):
-        from django.db import reset_queries
 
         reset_queries()
         employer, company, position, py_skill, dj_skill = setup_company_and_position
@@ -343,8 +342,6 @@ class TestN1PerformanceAndQueries:
         assert res_warm.status_code == 200
 
         # Measure 10 requests for latency
-        from django.db import reset_queries
-
         durations = []
         for _ in range(10):
             reset_queries()

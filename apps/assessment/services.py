@@ -498,7 +498,53 @@ class AssessmentService:
         session.decision = decision
         session.status = AssessmentStatus.FINISHED
         session.finished_at = now_real
+
+        # Save verified topics into session state
+        if cat_result and cat_result.topics and isinstance(session.state, dict):
+            session.state["topics"] = [list(t) for t in cat_result.topics]
+
         session.save()
+
+        # Test evidence: upsert CandidateSkill(source='test') for verified_skills
+        try:
+            from core.enums import EvidenceSource
+            from profiles.models import CandidateProfile, CandidateSkill, Skill
+
+            from assessment.engine.topics import verified_skills
+            from assessment.engine_adapter import all_family_metas
+            from assessment.families.registry import all_families
+
+            skills_by_family: dict[str, tuple[str, ...]] = {}
+            try:
+                for fid, fam in all_families().items():
+                    skills_by_family[fid] = tuple(fam.meta.skills)
+            except Exception:
+                pass
+            for meta in all_family_metas():
+                if meta.id not in skills_by_family:
+                    skills_by_family[meta.id] = tuple(meta.skills)
+
+            v_skills = verified_skills(
+                topics=cat_result.topics if cat_result else [],
+                administered=cat_state.administered if cat_state else [],
+                skills_by_family=skills_by_family,
+            )
+            if v_skills:
+                candidate_profile = CandidateProfile.objects.filter(user=user).first()
+                if candidate_profile:
+                    for skill_id in v_skills:
+                        skill_obj, _ = Skill.objects.get_or_create(
+                            id=skill_id,
+                            defaults={"name": skill_id},
+                        )
+                        CandidateSkill.objects.update_or_create(
+                            candidate=candidate_profile,
+                            skill=skill_obj,
+                            source=EvidenceSource.TEST,
+                            defaults={"level": 1.0},
+                        )
+        except Exception as e:
+            logger.warning("Failed to upsert verified skills: %s", e)
 
         # Cooldown applied ONLY after a failed/unconfirmed claim
         cooldown_days = getattr(settings, "GRADE_RETRY_COOLDOWN_DAYS", 30)
@@ -706,7 +752,7 @@ def recompute_league(specialization: str, grade: str) -> list[LeagueMembership]:
         LeagueMembership.objects.filter(
             specialization=specialization,
             grade=grade,
-        ).select_related("candidate")
+        )
     )
     if not memberships:
         return []
@@ -730,13 +776,12 @@ def recompute_league(specialization: str, grade: str) -> list[LeagueMembership]:
         publish_domain_event(
             "league.updated",
             {
+                "membership_id": str(m.id),
                 "candidate_id": str(m.candidate_id),
                 "specialization": m.specialization,
                 "grade": m.grade,
-                "status": m.status,
-                "rating": m.rating,
-                "strength": m.strength,
                 "percentile": m.percentile,
+                "strength": float(m.strength),
             },
         )
 
