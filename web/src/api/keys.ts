@@ -8,6 +8,7 @@ export const keys = {
   eligibility: (spec: string) => ['eligibility', spec] as const,
   assessments: ['assessments'] as const,
   assessment: (id: string) => ['assessment', id] as const,
+  session: (id: string) => ['session', id] as const,
   result: (id: string) => ['result', id] as const,
   offers: (status?: string) => ['offers', status ?? 'all'] as const,
   offer: (id: string) => ['offer', id] as const,
