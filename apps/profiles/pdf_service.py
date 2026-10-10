@@ -1,4 +1,5 @@
 """Player Card PDF generator service with QR code validation."""
+
 import base64
 import io
 import logging
@@ -26,13 +27,16 @@ def generate_qr_code_base64(url: str) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-def generate_player_card_pdf(candidate_profile) -> bytes:
-    """Generate a branded Player Card PDF with verification QR code."""
+def generate_player_card_pdf(candidate_profile, watermark: str | None = None) -> bytes:
+    """Generate a branded Player Card PDF with verification QR code and optional employer watermark."""
     verify_url = f"{settings.PUBLIC_BASE_URL}/api/verify/{candidate_profile.public_id}"
     qr_base64 = generate_qr_code_base64(verify_url)
 
     # Get league membership
-    league = candidate_profile.user.league_memberships.first()
+    league_qs = candidate_profile.user.league_memberships.all()
+    if candidate_profile.specialization:
+        league_qs = league_qs.filter(specialization=candidate_profile.specialization)
+    league = league_qs.first()
     rating = league.rating if league else 1000
     grade = html_escape(str(league.grade).upper() if league else "UNRATED")
     spec = html_escape(str(league.specialization).upper() if league else "IT")
@@ -41,12 +45,13 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
     # Get FSP achievements
     fsp_results = list(candidate_profile.user.fsp_results.all())
     fsp_rank = ""
-    if hasattr(candidate_profile.user, 'fsp_link'):
+    if hasattr(candidate_profile.user, "fsp_link"):
         fsp_rank = html_escape(str(candidate_profile.user.fsp_link.sports_rank).upper())
 
     skills = [html_escape(cs.skill.name) for cs in candidate_profile.skills.all()[:10]]
     public_id = html_escape(str(candidate_profile.public_id))
     full_name = html_escape(str(candidate_profile.full_name or "Кандидат"))
+    escaped_watermark = html_escape(str(watermark)) if watermark else ""
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -160,10 +165,32 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
         font-size: 11px;
         color: #64748b;
     }}
+    .watermark {{
+        position: fixed;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-30deg);
+        font-size: 26px;
+        font-weight: 800;
+        color: rgba(3, 105, 161, 0.12);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        pointer-events: none;
+        z-index: 1000;
+        white-space: nowrap;
+        text-align: center;
+    }}
+    .watermark-notice {{
+        font-size: 10px;
+        color: #0369a1;
+        margin-top: 4px;
+        font-weight: 600;
+    }}
 </style>
 </head>
 <body>
 <div class="card">
+    {f'<div class="watermark">{escaped_watermark}</div>' if escaped_watermark else ''}
     <div class="header">
         <div>
             <h1 class="title">FSP DRAFT · КАРТОЧКА ИГРОКА</h1>
@@ -176,7 +203,7 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
         <div class="stat-box">
             <div class="stat-label">Лига и Грейд</div>
             <div class="stat-value">{spec} · {grade}</div>
-            <small style="color: {'#16a34a' if status_label == 'CONFIRMED' else '#ea580c'}">{status_label}</small>
+            <small style="color: {"#16a34a" if status_label == "CONFIRMED" else "#ea580c"}">{status_label}</small>
         </div>
         <div class="stat-box">
             <div class="stat-label">Рейтинг силы (IRT)</div>
@@ -187,16 +214,17 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
 
     <div class="skills">
         <div class="stat-label" style="margin-bottom: 6px;">Стек и ключевые навыки:</div>
-        {' '.join(f'<span class="skill-chip">{s}</span>' for s in skills) if skills else '<span style="color:#94a3b8">Навыки уточняются</span>'}
+        {" ".join(f'<span class="skill-chip">{s}</span>' for s in skills) if skills else '<span style="color:#94a3b8">Навыки уточняются</span>'}
     </div>
 
-    {'<div class="fsp-section"><strong>Достижения ФСП:</strong> ' + f'Разряд: {fsp_rank}. ' + f'Турниров в реестре: {len(fsp_results)}</div>' if fsp_results or fsp_rank else ''}
+    {'<div class="fsp-section"><strong>Достижения ФСП:</strong> ' + f"Разряд: {fsp_rank}. " + f"Турниров в реестре: {len(fsp_results)}</div>" if fsp_results or fsp_rank else ""}
 
     <div class="footer">
         <div>
             <div style="font-weight: 600;">{full_name}</div>
             <div class="verify-note">Верифицированный профиль FSP Draft</div>
             <div class="verify-note">Сканируйте QR-код для онлайн-проверки</div>
+            {f'<div class="watermark-notice">Экспорт для: {escaped_watermark}</div>' if escaped_watermark else ''}
         </div>
         <div class="qr-container">
             <img src="data:image/png;base64,{qr_base64}" alt="QR verification">
@@ -211,17 +239,27 @@ def generate_player_card_pdf(candidate_profile) -> bytes:
 
         def _safe_url_fetcher(url, timeout=10, ssl_context=None):
             """Only allow data: URIs to prevent SSRF."""
-            if url.startswith('data:'):
+            if url.startswith("data:"):
                 from weasyprint import default_url_fetcher
+
                 return default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
             raise ValueError(f"External URL fetching is disabled: {url}")
 
         return HTML(string=html_content, url_fetcher=_safe_url_fetcher).write_pdf()
-    except ImportError:
-        logger.warning("weasyprint not installed, returning HTML fallback")
-        return html_content.encode('utf-8')
+    except (ImportError, OSError) as e:
+        logger.warning("weasyprint not available: %s", e)
+        from core.errors import FSPAPIError
+
+        raise FSPAPIError(
+            "pdf_service_unavailable",
+            "PDF Service Unavailable",
+            "Player card PDF generation service is currently unavailable",
+            503,
+        )
     except Exception:
         logger.exception("PDF generation failed")
         from core.errors import FSPAPIError
-        raise FSPAPIError('pdf_generation_failed', 'PDF Error',
-                          'Player card PDF generation failed', 503)
+
+        raise FSPAPIError(
+            "pdf_generation_failed", "PDF Error", "Player card PDF generation failed", 503
+        )
