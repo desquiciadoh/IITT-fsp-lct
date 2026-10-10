@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, "feature/**" ]
   pull_request:
-    branches: [ main, develop ]
 
 jobs:
   backend-checks:
@@ -40,10 +38,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install system dependencies (WeasyPrint / Cairo / Pango)
@@ -58,7 +56,25 @@ jobs:
 
       - name: Run Ruff Lint
         run: |
-          ruff check .
+          ruff check apps config tests
+
+      - name: Django System Check
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-secret-key-temporary-for-check"
+          ALLOWED_HOSTS: "localhost,127.0.0.1"
+          ITEM_SEED_SECRET: "ci-item-seed-secret"
+        run: |
+          python manage.py check
+
+      - name: Django Production Deployment Check
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-long-production-secret-key-with-more-than-50-characters-and-entropy-ok"
+          ALLOWED_HOSTS: "staging.fsp-draft.ru,localhost"
+          ITEM_SEED_SECRET: "ci-item-seed-secret-long-entropy"
+        run: |
+          python manage.py check --deploy
 
       - name: Check Django Migrations Drift
         env:
@@ -87,7 +103,7 @@ jobs:
           POSTGRES_PORT: "5432"
           ITEM_SEED_SECRET: "ci-item-seed-secret"
         run: |
-          pytest --tb=short
+          pytest --cov=apps --cov-fail-under=75
 
       - name: Verify OpenAPI Schema Drift
         env:
@@ -96,5 +112,5 @@ jobs:
           ALLOWED_HOSTS: "localhost,127.0.0.1"
           ITEM_SEED_SECRET: "ci-item-seed-secret"
         run: |
-          python manage.py spectacular --format openapi-json --file docs/openapi.ci.json
-          python -c "import json; openapi_current = json.load(open('docs/openapi.json', encoding='utf-8')); openapi_new = json.load(open('docs/openapi.ci.json', encoding='utf-8')); assert openapi_current['paths'].keys() == openapi_new['paths'].keys(), 'OpenAPI paths drift detected! Regenerate docs/openapi.json'"
+          python manage.py spectacular --file docs/openapi.json --fail-on-warn
+          git diff --exit-code docs/openapi.json

@@ -1,6 +1,6 @@
 # FSP Draft: Architecture & Execution Plan
 
-> **Implementation status (2026-10-07):** The current checkout contains the Django 5.x + Django REST Framework backend MVP under `apps/`. The React/FastAPI/Valkey deployment described in the original target architecture is planned work, not shipped code. For implemented behavior, `README.md`, `docs/BACKEND.md`, `requirements.txt`, migrations, and tests are authoritative.
+> **Implementation status (2026-10-07):** The current checkout contains the Django 5.x + Django REST Framework backend MVP under `apps/` implementing the complete P0 and P1 backend milestone (BE-01 through BE-23: auth, qualification, leagues, offers, pool scoring, vacancies, micro-tasks, anti-fraud, candidate controls, encrypted contacts, lab endpoints, and Locust benchmarks). The React/FastAPI/Valkey deployment described in the original target architecture is planned work, not shipped code. For implemented behavior, `README.md`, `docs/BACKEND.md`, `requirements.txt`, migrations, and tests are authoritative.
 
 > **Working title.** LCT 2026, FSP track: an IT hiring platform with reverse recruitment and verified achievement profiles.
 > **Inputs:** `TK.md` (spec) and `QA.md` (organizer clarifications). **Language:** product UI, deck and jury docs in Russian.
@@ -78,12 +78,12 @@ API ───── Django + Django REST Framework modular monolith (Swagger at 
 
 | Module | Owns | Core logic |
 |---|---|---|
-| core | enums, error hierarchy (RFC 7807), pagination, seed | Pure leaf module; zero dependencies on domain models |
+| core | enums, error hierarchy (RFC 7807), pagination, seed | Pure leaf module; zero dependencies on domain models (`core.services` is a deprecated re-export shim) |
 | identity | users, identities, sessions, consents, audit log | email verification, argon2id, OIDC client with PKCE, RBAC and ownership guards |
 | profiles | profile, skills, contact vault, privacy | PDF parse prefill, Player Card PDF with WeasyPrint & QR, candidate visibility selector |
 | assessment | item families, attempts, results, cooldowns | test sessions, deadline_at enforcement, CAT/IRT state persistence, clean ML adapter boundary |
 | matching | leagues, strength, pools, search | SQL prefilter, batched DTO hydration, clean ML scoring adapter boundary |
-| outreach | positions, offers, credits, contact grants, events | offer state machine (optimistic locking), ContactAccessService, Domain Event Bus, SSE view |
+| outreach | positions, offers, credits, contact grants, events | offer state machine (optimistic locking), ContactAccessService (`outreach/services.py`), Domain Event Bus, SSE view |
 | fsp_sync | FSP links, results, ranks | registry adapter, sync Celery tasks, idempotent strength recomputation |
 | fsp_mock | synthetic OIDC IdP & FSP registry | Keycloak-compatible OIDC discovery, JWKS (RS256), PKCE auth/token, participant achievements |
 
@@ -201,7 +201,7 @@ Weight presets (Balanced, Skills-first, Budget-first) and sliders re-rank live, 
 `SENT → VIEWED → ACCEPTED → INTERVIEW → HIRED / CLOSED`, plus `DECLINED (reason)`, `EXPIRED` (14 days) and `WITHDRAWN` (by the employer, before a response).
 
 - **Mandatory fields**, enforced by DB CHECK constraints and validation: description, company, salary_min ≤ salary_max in RUB, a gross/net label, and a contact channel. A position can stay private (no vacancy needed) or be published as a vacancy, which also requires a salary range.
-- **Contact gating:** acceptance or a direct application creates a `contact_grant`, which is audit-logged and revocable by the candidate. Without a grant, contacts are absent from every employer payload.
+- **Contact gating:** managed strictly by `ContactAccessService` in `apps/outreach/services.py`. Acceptance or a direct application creates a `contact_grant`, which is audit-logged and revocable by the candidate. Without a grant, contacts are absent from every employer payload, and unauthorized access attempts return 403 and create an `AuditLog` entry.
 - **Real time:** every transition emits a domain event, which goes through Valkey pub/sub to both parties over SSE (with 10-second polling as a fallback).
 - **Anti-spam and anti-fraud:** N invitation credits per position per week, refunded when an offer is accepted, so precise targeting pays. Candidates can set a private salary floor. Offers below it trigger a "below the candidate's floor" warning for the sender, which is yes/no only and never reveals the value.
 - **Feedback loop:** structured decline reasons (salary, stack, format, company, timing, not looking) feed a "Need Health" panel for the employer, e.g. "most declines cite salary".
