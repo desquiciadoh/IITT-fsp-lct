@@ -158,6 +158,8 @@ export function usePositionPool(positionId: string | undefined, filters: Scoutin
 function normalizePoolItem(raw: PoolItemView): PoolItemView {
   return {
     ...raw,
+    // keep the components payload as-is; ScoreBar normalizes dict|list via
+    // normalizeComponents() at render time (single normalization point)
     reasons: raw.reasons ?? [],
     gaps: raw.gaps ?? raw.reasons?.filter((r) => r.kind === 'minus').map((r) => r.text),
   }
