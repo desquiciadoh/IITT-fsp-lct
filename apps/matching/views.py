@@ -1,5 +1,6 @@
 """Matching app API views."""
 
+import logging
 from core.errors import ContactNotGranted, FSPAPIError
 from core.pagination import FSPPagination, PaginationQuerySerializer
 from core.permissions import IsEmployer
@@ -24,6 +25,8 @@ from matching.serializers import (
     TalentShortSerializer,
 )
 from matching.services import get_position_pool, search_talent
+
+logger = logging.getLogger(__name__)
 
 
 def get_employer_company(user):
@@ -382,102 +385,46 @@ class PositionParseView(views.APIView):
             )
 
         text = serializer.validated_data["text"]
-        import re
 
-        lower_text = text.lower()
+        try:
+            from matching.tasks import parse_jd_task
 
-        specialization = "backend"
-        if "frontend" in lower_text or "react" in lower_text or "vue" in lower_text:
-            specialization = "frontend"
-        elif "ml" in lower_text or "data science" in lower_text or "machine learning" in lower_text:
-            specialization = "ml_data"
+            async_res = parse_jd_task.apply_async(args=[text], queue="llm")
+            res_dict = async_res.get(timeout=15)
+            # Ensure draft fallback defaults
+            draft = res_dict.get("draft") or {}
+            if not draft.get("salary_type"):
+                draft["salary_type"] = "gross"
+            res_dict["draft"] = draft
+            return Response(res_dict)
+        except Exception as celery_err:
+            logger.warning(
+                "Celery parse_jd failed or timed out (%s), falling back to rules",
+                type(celery_err).__name__,
+            )
+            try:
+                from llm_gateway import FakeLlm, parse_jd
 
-        grades = []
-        if "intern" in lower_text or "стажер" in lower_text:
-            grades.append("intern")
-        if "junior" in lower_text or "джуниор" in lower_text:
-            grades.append("junior")
-        if "middle" in lower_text or "мидл" in lower_text:
-            grades.append("middle")
-        if "senior" in lower_text or "сеньор" in lower_text or "лид" in lower_text:
-            grades.append("senior")
-        if not grades:
-            grades = ["middle"]
-
-        known_skills = {
-            "python": "python",
-            "django": "django",
-            "fastapi": "fastapi",
-            "postgresql": "postgresql",
-            "postgres": "postgresql",
-            "docker": "docker",
-            "react": "react",
-            "typescript": "typescript",
-            "sql": "sql",
-            "algorithms": "algorithms",
-            "pytorch": "pytorch",
-        }
-        found_skills = set()
-        for kw, skill_id in known_skills.items():
-            if re.search(r"\b" + re.escape(kw) + r"\b", lower_text):
-                found_skills.add(skill_id)
-
-        must_skills = sorted(found_skills)
-        nice_skills = []
-
-        formats = []
-        if "remote" in lower_text or "удален" in lower_text or "удалён" in lower_text:
-            formats.append("remote")
-        if "hybrid" in lower_text or "гибрид" in lower_text:
-            formats.append("hybrid")
-        if "office" in lower_text or "офис" in lower_text:
-            formats.append("office")
-        if not formats:
-            formats = ["remote"]
-
-        salary_min = None
-        salary_max = None
-        range_match = re.search(
-            r"(?:от\s*)?(\d+[\d\s]*\d+)\s*(?:до|-|–|—)\s*(\d+[\d\s]*\d+)\s*(?:руб|rub|₽)?",
-            lower_text,
-        )
-        if range_match:
-            n1 = int(re.sub(r"\s+", "", range_match.group(1)))
-            n2 = int(re.sub(r"\s+", "", range_match.group(2)))
-            salary_min, salary_max = min(n1, n2), max(n1, n2)
-        else:
-            sal_matches = re.findall(r"(\d+[\d\s]*\d+)\s*(?:руб|rub|₽)", lower_text)
-            if sal_matches:
-                nums = [int(re.sub(r"\s+", "", m)) for m in sal_matches]
-                if len(nums) == 1:
-                    salary_min = nums[0]
-                elif len(nums) >= 2:
-                    salary_min, salary_max = min(nums[0], nums[1]), max(nums[0], nums[1])
-
-        title = text.strip().split("\n")[0][:100] if text.strip() else "Software Engineer"
-
-        draft = {
-            "title": title,
-            "specialization": specialization,
-            "grades": grades,
-            "must_skills": must_skills,
-            "nice_skills": nice_skills,
-            "work_formats": formats,
-            "location": "Москва" if "москв" in lower_text else "",
-            "salary_min": salary_min,
-            "salary_max": salary_max,
-            "salary_type": "gross",
-            "team_context": "",
-            "description": text[:1000],
-        }
-
-        result = {
-            "draft": draft,
-            "unknown_terms": [],
-            "blueprint": [],
-            "source": "rules",
-        }
-        return Response(result)
+                result = parse_jd(text, gateway=FakeLlm())
+                draft = result.draft
+                if not draft.get("salary_type"):
+                    draft["salary_type"] = "gross"
+                return Response(
+                    {
+                        "draft": draft,
+                        "unknown_terms": result.unknown_terms,
+                        "blueprint": result.blueprint,
+                        "source": result.source,
+                    }
+                )
+            except Exception as e:
+                logger.exception("Failed to parse JD with rules fallback: %s", e)
+                raise FSPAPIError(
+                    "jd_parse_failed",
+                    "Failed to parse job description",
+                    "Please fill the position manually or try again later.",
+                    500,
+                ) from None
 
 
 class TalentSearchView(views.APIView):

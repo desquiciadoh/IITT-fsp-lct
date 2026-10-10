@@ -44,7 +44,13 @@ def calculate_match_score(
                 for cs in candidate_profile.skills.select_related("skill").all()
             }
 
-    must_skills = [s.lower() for s in (position.must_skills or [])]
+    must_skills = getattr(position, "_cached_must_skills", None)
+    if must_skills is None:
+        must_skills = [s.lower() for s in (position.must_skills or [])]
+        try:
+            position._cached_must_skills = must_skills
+        except Exception:
+            pass
 
     gaps = []
     must_matches = 0

@@ -123,6 +123,8 @@ def recompute_strength(candidate):
 
     CRITICAL INVARIANT: Grade is NEVER altered by FSP achievements.
     """
+    from assessment.services import recompute_league
+
     results_count = candidate.fsp_results.count()
     fsp_boost = min(15.0, results_count * 5.0)
 
@@ -131,6 +133,8 @@ def recompute_strength(candidate):
         lm.fsp_boost = fsp_boost
         lm.strength = min(100.0, max(0.0, lm.base_strength + fsp_boost))
         lm.save(update_fields=["fsp_boost", "strength"])
+        recompute_league(lm.specialization, lm.grade)
+        lm.refresh_from_db()
         updated_memberships.append(lm)
     return updated_memberships[0] if updated_memberships else None
 

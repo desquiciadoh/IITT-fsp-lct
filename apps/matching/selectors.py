@@ -194,21 +194,30 @@ def compute_pool_facets(queryset) -> dict[str, Any]:
         if grade:
             grade_counts[grade] = row["count"]
 
-    # 2. SQL-level aggregate format counts, FSP, and confirmed
-    agg = queryset.aggregate(
-        remote=Count("pk", filter=Q(work_formats__contains=["remote"]), distinct=True),
-        hybrid=Count("pk", filter=Q(work_formats__contains=["hybrid"]), distinct=True),
-        office=Count("pk", filter=Q(work_formats__contains=["office"]), distinct=True),
-        fsp=Count(
-            "pk",
-            filter=Q(user__fsp_link__isnull=False) | Q(user__fsp_results__isnull=False),
-            distinct=True,
-        ),
-        confirmed=Count(
-            "pk",
-            filter=Q(user__league_memberships__status=LeagueStatus.CONFIRMED),
-            distinct=True,
-        ),
+    # 2. SQL-level aggregate format counts, FSP, and confirmed without multi-table Cartesian joins
+    from assessment.models import LeagueMembership
+    from fsp_sync.models import FSPLink, FSPResult
+    from django.db.models import Exists, OuterRef
+
+    fsp_exists = Exists(FSPLink.objects.filter(candidate_id=OuterRef("user_id"))) | Exists(
+        FSPResult.objects.filter(candidate_id=OuterRef("user_id"))
+    )
+    confirmed_exists = Exists(
+        LeagueMembership.objects.filter(
+            candidate_id=OuterRef("user_id"),
+            status=LeagueStatus.CONFIRMED,
+        )
+    )
+
+    agg = queryset.annotate(
+        _has_fsp=fsp_exists,
+        _has_confirmed=confirmed_exists,
+    ).aggregate(
+        remote=Count("pk", filter=Q(work_formats__contains=["remote"])),
+        hybrid=Count("pk", filter=Q(work_formats__contains=["hybrid"])),
+        office=Count("pk", filter=Q(work_formats__contains=["office"])),
+        fsp=Count("pk", filter=Q(_has_fsp=True)),
+        confirmed=Count("pk", filter=Q(_has_confirmed=True)),
     )
 
     format_counts = {}

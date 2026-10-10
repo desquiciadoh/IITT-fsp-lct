@@ -241,13 +241,13 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - One batched query (`select_related`/`prefetch_related`), turned into DTO dicts and passed to the scorer.
   - Pagination and facets in SQL.
   - Tests: `django_assert_max_num_queries(15)`, and p95 < 300 ms on 1,500 candidates.
-- [ ] **N2. Engine adapter.** Create `assessment/engine_adapter.py` with the ML.md §3 interface (`start`, `next_item`, `record`, `result`, `CatState.to_json`), backed by the current stub. Services call only the adapter.
+- [x] **N2. Engine adapter.** Create `assessment/engine_adapter.py` with the ML.md §3 interface (`start`, `next_item`, `record`, `result`, `CatState.to_json`), backed by the current stub. Services call only the adapter.
   - Add `manage.py sync_families` and stop the lazy `ItemFamily` `get_or_create(format='choice')`.
   - When ML ships `CatEngine`, swap it in inside the adapter.
-- [ ] **N3. `recompute_league(spec, grade)`** via the adapter (stub: rank-based percentile).
+- [x] **N3. `recompute_league(spec, grade)`** via the adapter (stub: rank-based percentile).
   - Trigger it after finalize and after FSP sync, and emit `league.updated`.
   - Idempotency test.
-- [ ] **N4. Resume and JD.**
+- [x] **N4. Resume and JD.**
   - Limit 5 MB; check the PDF MIME type and magic bytes.
   - Celery task on queue `llm`; wait up to 15 s, then fall back to the rules result. Error `unreadable_pdf`.
   - Call `llm_gateway.parse_resume`/`parse_jd` behind an import guard until AI ships them.

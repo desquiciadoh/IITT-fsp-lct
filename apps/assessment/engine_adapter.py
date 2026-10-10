@@ -7,9 +7,11 @@ until ML ships the full CatEngine.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import hmac
 import random
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -526,3 +528,38 @@ def sync_families_to_db() -> int:
         )
         synced += 1
     return synced
+
+
+def compute_league_percentiles(
+    scores: Sequence[tuple[Any, float]] | Mapping[Any, float],
+) -> dict[Any, float]:
+    """Compute rank-based percentiles for league members.
+
+    Follows ML.md §3 contract:
+    - Empty league returns empty dict.
+    - Single member returns 100.0%.
+    - Rank is computed as count of members with score <= member_score.
+    - Percentile is round((rank / total) * 100.0, 1).
+    - Ties share the highest rank among equals.
+    """
+    if not scores:
+        return {}
+
+    if isinstance(scores, Mapping):
+        items = list(scores.items())
+    else:
+        items = list(scores)
+
+    if not items:
+        return {}
+
+    n = len(items)
+    sorted_values = sorted(val for _, val in items)
+
+    results: dict[Any, float] = {}
+    for item_id, val in items:
+        rank = bisect.bisect_right(sorted_values, val)
+        results[item_id] = round((rank / n) * 100.0, 1)
+
+    return results
+

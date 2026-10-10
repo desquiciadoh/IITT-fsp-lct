@@ -561,17 +561,8 @@ class AssessmentService:
         recompute_strength(user)
         membership.refresh_from_db()
 
-        publish_domain_event(
-            "league.updated",
-            {
-                "candidate_id": str(user.id),
-                "specialization": session.specialization,
-                "grade": assigned_grade,
-                "status": league_status,
-                "rating": rating,
-                "strength": membership.strength,
-            },
-        )
+        # Recompute league percentiles and emit league.updated
+        recompute_league(session.specialization, membership.grade)
 
         return session
 
@@ -665,6 +656,7 @@ class AssessmentService:
             membership.save()
 
             recompute_strength(user)
+            recompute_league(session.specialization, lower_grade)
             return session, False
         elif mode == "short_test":
             # One short test per original session: any later session at the
@@ -701,3 +693,52 @@ class AssessmentService:
                 f"Unknown mode: {mode}",
                 400,
             )
+
+
+def recompute_league(specialization: str, grade: str) -> list[LeagueMembership]:
+    """Recompute rank-based percentiles for all members of a specialization x grade League.
+
+    Idempotent: updates percentile field and emits league.updated domain events.
+    """
+    from assessment.engine_adapter import compute_league_percentiles
+
+    memberships = list(
+        LeagueMembership.objects.filter(
+            specialization=specialization,
+            grade=grade,
+        ).select_related("candidate")
+    )
+    if not memberships:
+        return []
+
+    scores = []
+    for m in memberships:
+        score = (
+            m.theta
+            if m.theta is not None
+            else (float(m.rating) if m.rating is not None else float(m.strength))
+        )
+        scores.append((m.id, score))
+
+    percentiles_map = compute_league_percentiles(scores)
+
+    for m in memberships:
+        pct = percentiles_map.get(m.id)
+        if m.percentile != pct:
+            m.percentile = pct
+            m.save(update_fields=["percentile"])
+        publish_domain_event(
+            "league.updated",
+            {
+                "candidate_id": str(m.candidate_id),
+                "specialization": m.specialization,
+                "grade": m.grade,
+                "status": m.status,
+                "rating": m.rating,
+                "strength": m.strength,
+                "percentile": m.percentile,
+            },
+        )
+
+    return memberships
+

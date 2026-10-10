@@ -292,6 +292,11 @@ CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "").lower() in ("true", "1")
+if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+    CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 1
 CELERY_BEAT_SCHEDULE = {
     "expire-stale-offers": {
         "task": "outreach.tasks.expire_offers",

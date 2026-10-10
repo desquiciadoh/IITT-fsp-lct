@@ -337,9 +337,9 @@ class TestN1PerformanceAndQueries:
         res_warm = client.get(f"/api/positions/{position.id}/pool?page=1&size=20")
         assert res_warm.status_code == 200
 
-        # Measure 5 requests for latency
+        # Measure 10 requests for latency
         durations = []
-        for _ in range(5):
+        for _ in range(10):
             start = time.perf_counter()
             res = client.get(f"/api/positions/{position.id}/pool?page=1&size=20")
             dur = (time.perf_counter() - start) * 1000.0  # ms
@@ -348,7 +348,8 @@ class TestN1PerformanceAndQueries:
             assert res.json()["total"] == 1500
 
         durations.sort()
-        # p95 (or worst of 5 runs)
-        p95 = durations[-1]
+        # 95th percentile
+        idx = min(len(durations) - 1, int(round(0.95 * (len(durations) - 1))))
+        p95 = durations[idx]
         print(f"\n[LATENCY BENCHMARK] 1,500 candidates pool latency runs (ms): {durations}, p95={p95:.1f}ms")
         assert p95 < 300.0, f"Latency p95 {p95:.1f}ms exceeded 300ms limit"

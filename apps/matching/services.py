@@ -80,7 +80,7 @@ def candidate_to_dto(profile: CandidateProfile) -> dict[str, Any]:
 def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
     """Fetch candidate DTOs using fast values queries without instantiating thousands of models."""
     profile_rows = list(
-        filtered_qs.values(
+        filtered_qs.order_by().values(
             "user_id",
             "public_id",
             "full_name",
@@ -101,10 +101,13 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
 
     user_ids = [r["user_id"] for r in profile_rows]
 
-    # Batch skills via fetched user_ids
+    # Batch skills via subquery on user_ids
+    user_id_subquery = filtered_qs.order_by().values("user_id")
     skills_by_user: dict[int, list[dict[str, Any]]] = {}
-    for row in CandidateSkill.objects.filter(candidate_id__in=user_ids).values(
-        "candidate_id", "skill_id", "skill__name", "source", "level"
+    for row in (
+        CandidateSkill.objects.filter(candidate_id__in=user_id_subquery)
+        .order_by()
+        .values("candidate_id", "skill_id", "skill__name", "source", "level")
     ):
         skills_by_user.setdefault(row["candidate_id"], []).append(
             {
@@ -115,16 +118,20 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch leagues via fetched user_ids
+    # Batch leagues via subquery on user_ids
     leagues_by_user: dict[int, list[dict[str, Any]]] = {}
-    for row in LeagueMembership.objects.filter(candidate_id__in=user_ids).values(
-        "candidate_id",
-        "specialization",
-        "grade",
-        "status",
-        "rating",
-        "percentile",
-        "strength",
+    for row in (
+        LeagueMembership.objects.filter(candidate_id__in=user_id_subquery)
+        .order_by()
+        .values(
+            "candidate_id",
+            "specialization",
+            "grade",
+            "status",
+            "rating",
+            "percentile",
+            "strength",
+        )
     ):
         leagues_by_user.setdefault(row["candidate_id"], []).append(
             {
@@ -137,10 +144,11 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch FSP results count via fetched user_ids
+    # Batch FSP results count via subquery on user_ids
     fsp_counts: dict[int, int] = {}
     for row in (
-        FSPResult.objects.filter(candidate_id__in=user_ids)
+        FSPResult.objects.filter(candidate_id__in=user_id_subquery)
+        .order_by()
         .values("candidate_id")
         .annotate(cnt=Count("id"))
     ):

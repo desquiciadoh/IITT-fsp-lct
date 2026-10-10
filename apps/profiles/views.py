@@ -334,42 +334,91 @@ class ResumeParseView(views.APIView):
                 "unreadable_pdf", "Invalid file type", "Only PDF files are supported", 422
             )
 
-        from llm_gateway import FakeLlm, UnreadablePdf, parse_resume
+        content_type = getattr(file_obj, "content_type", "") or ""
+        if content_type and content_type.lower() not in (
+            "application/pdf",
+            "application/x-pdf",
+            "application/octet-stream",
+            "binary/octet-stream",
+        ):
+            raise FSPAPIError(
+                "unreadable_pdf", "Invalid file type", "Only PDF files are supported", 422
+            )
 
         file_bytes = file_obj.read()
+
+        # Check PDF magic bytes (%PDF)
+        if not file_bytes.startswith(b"%PDF"):
+            raise FSPAPIError(
+                "unreadable_pdf",
+                "Invalid PDF header",
+                "Файл PDF поврежден или не является корректным PDF-документом.",
+                422,
+            )
+
         try:
-            # Rules only inline; the GigaChat path runs in the Celery `llm` task (BE.md N4).
-            # Provider failures never reach this view: parse_resume falls back to rules itself.
-            parse_res = parse_resume(file_bytes, gateway=FakeLlm())
+            from llm_gateway import FakeLlm, UnreadablePdf, parse_resume
+        except ImportError:
+            logger.error("llm_gateway package is not available")
+            raise FSPAPIError(
+                "resume_parse_failed",
+                "Сервис распознавания недоступен",
+                "Заполните профиль вручную или попробуйте позже.",
+                503,
+            )
+
+        parse_res_data = None
+        try:
+            from profiles.tasks import parse_resume_task
+
+            async_res = parse_resume_task.apply_async(args=[file_bytes], queue="llm")
+            parse_res_data = async_res.get(timeout=15)
         except UnreadablePdf:
             logger.info("Resume rejected as unreadable (sha=%s)", hashlib.sha256(file_bytes).hexdigest()[:12])
             raise FSPAPIError(
-                'unreadable_pdf',
-                'Не удалось прочитать PDF',
-                'Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.',
+                "unreadable_pdf",
+                "Не удалось прочитать PDF",
+                "Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.",
                 422,
             )
-        except Exception as e:
-            # A bug, not a bad PDF. Log the type, the file hash and file:line:function of each
-            # frame, never the message or source lines (they may quote CV text), and answer
-            # problem+json instead of Django's HTML 500.
-            file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
-            frames = " > ".join(
-                f"{frame.filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
-                for frame in traceback.extract_tb(e.__traceback__)
+        except Exception as celery_err:
+            logger.warning(
+                "Celery parse_resume failed or timed out (%s), falling back to rules",
+                type(celery_err).__name__,
             )
-            logger.error("Resume parse failed (%s, sha=%s) at %s", type(e).__name__, file_sha, frames)
-            raise FSPAPIError(
-                'resume_parse_failed',
-                'Не удалось разобрать резюме',
-                'Заполните профиль вручную или попробуйте позже.',
-                500,
-            ) from None
+            try:
+                parse_res = parse_resume(file_bytes, gateway=FakeLlm())
+                parse_res_data = {
+                    "prefill": parse_res.prefill,
+                    "unknown_terms": parse_res.unknown_terms,
+                    "source": parse_res.source,
+                }
+            except UnreadablePdf:
+                logger.info("Resume rejected as unreadable (sha=%s)", hashlib.sha256(file_bytes).hexdigest()[:12])
+                raise FSPAPIError(
+                    "unreadable_pdf",
+                    "Не удалось прочитать PDF",
+                    "Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.",
+                    422,
+                )
+            except Exception as e:
+                file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
+                frames = " > ".join(
+                    f"{frame.filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
+                    for frame in traceback.extract_tb(e.__traceback__)
+                )
+                logger.error("Resume parse failed (%s, sha=%s) at %s", type(e).__name__, file_sha, frames)
+                raise FSPAPIError(
+                    "resume_parse_failed",
+                    "Не удалось разобрать резюме",
+                    "Заполните профиль вручную или попробуйте позже.",
+                    500,
+                ) from None
 
         return Response({
-            'prefill': parse_res.prefill,
-            'unknown_terms': parse_res.unknown_terms,
-            'source': parse_res.source,
+            "prefill": parse_res_data["prefill"],
+            "unknown_terms": parse_res_data["unknown_terms"],
+            "source": parse_res_data["source"],
         })
 
 
