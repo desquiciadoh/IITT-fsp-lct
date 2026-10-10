@@ -240,7 +240,7 @@ export const scoutingHandlers = [
     const confirmedOnly = sp.get('confirmed_only') === 'true'
     const preset = sp.get('preset')
 
-    let filtered = scored.filter(({ talent: t }) => {
+    const filtered = scored.filter(({ talent: t }) => {
       if (grades.length && !grades.includes(t.league.grade ?? '')) return false
       if (formats.length && !(t.work_formats ?? []).some((f) => formats.includes(f))) return false
       if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false

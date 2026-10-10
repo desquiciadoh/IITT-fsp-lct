@@ -121,8 +121,9 @@ describe('client-side fallback (gap G8)', () => {
     const items = [entry('lo', 10), entry('mid', 55), entry('hi', 90), entry('no', 5, { talent: { ...entry('no', 5).talent, skills: [] } })]
     const data: PoolResponse = { items, total: items.length, page: 1 }
     const view = applyClientFilters(data, withFilters({ skills: ['python'], page: 1 }))
-    expect(view.items.map((i) => i.talent.public_id)).toEqual(['hi', 'mid'])
-    expect(view.total).toBe(2)
+    // 'lo' also carries the python skill; only 'no' (skills: []) drops out.
+    expect(view.items.map((i) => i.talent.public_id)).toEqual(['hi', 'mid', 'lo'])
+    expect(view.total).toBe(3)
     expect(view.pages).toBe(1)
     // clamps out-of-range pages
     expect(applyClientFilters(data, withFilters({ page: 99 })).page).toBe(1)
