@@ -8,8 +8,10 @@
  * still to be shipped, each tagged with a comment.
  */
 import type {
+  AnswerResponse as GeneratedAnswerResponse,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
+  ItemView as GeneratedItemView,
   CandidateProfile as GeneratedCandidateProfile,
   ConsentsResponse,
   ContactChannelEnum,
@@ -45,7 +47,6 @@ export type DeclineReason = (typeof DeclineReasonEnum)[keyof typeof DeclineReaso
 export type GradeDecision = (typeof DecisionEnum)[keyof typeof DecisionEnum] | ''
 export type ContactChannel = (typeof ContactChannelEnum)[keyof typeof ContactChannelEnum]
 export type TrustLevel = (typeof TrustLevelEnum)[keyof typeof TrustLevelEnum]
-export type AssessmentSession = GeneratedAssessmentSession
 export type { ConsentsResponse, FSPLinkResponse }
 
 /** The schema renders `role` as a loose string. */
@@ -214,7 +215,66 @@ export type AssessmentResult = Omit<
   next_attempt_at?: string | null
 }
 
-/** GET /api/assessments/eligibility?specialization= */
-export type Eligibility = Omit<EligibilityResponse, 'next_attempt_at'> & {
+/**
+ * GET /api/assessments/eligibility?specialization= (FE-05 start screen).
+ * gap G5: `reason` carries the machine code (`cooldown_active`) and
+ * `next_attempt_at` the ISO moment when the cooldown ends — the backend
+ * returns both today, but the schema marks them optional.
+ */
+export type Eligibility = Omit<EligibilityResponse, 'next_attempt_at' | 'active_session_id'> & {
   next_attempt_at?: string | null
+  active_session_id?: string | null
+}
+
+// --- FE-05 · Test runner ----------------------------------------------------
+
+export type ItemInputType = 'choice' | 'number' | 'text'
+
+/**
+ * GET /api/assessments/{id} → `current` (FE2.md §FE-05).
+ * The schema flattens `code`/`options` to `unknown`; the runtime shapes are:
+ * `code: {lang, text} | null`, `options: [{id, text_md}] | null`.
+ * gap G5: `level` (difficulty) and `max_items` (progress total) are not on
+ * the backend yet — optional here, mocked in qualification.ts.
+ */
+export type AssessmentItem = Omit<GeneratedItemView, 'code' | 'options' | 'input_type'> & {
+  code: { lang: string; text: string } | null
+  options: { id: string; text_md: string }[] | null
+  input_type: ItemInputType
+  level?: number | null
+}
+
+export type AssessmentSession = Omit<GeneratedAssessmentSession, 'current'> & {
+  /** Served item for the in-progress session; null once finished/expired. */
+  current: AssessmentItem | null
+  max_items?: number | null
+}
+
+/** POST /api/assessments body (schema leaves the enums loose). */
+export type StartAssessmentInput = {
+  specialization?: Spec
+  claimed_grade?: Grade
+  mode?: AssessmentMode
+}
+
+/** Integrity capture payload sent with every answer (FE-05). */
+export type AnswerIntegrity = {
+  focus_loss: number
+  paste: number
+}
+
+export type AnswerInput = {
+  item_id: string
+  option_id?: string
+  value?: string
+  integrity?: AnswerIntegrity
+}
+
+/**
+ * POST /api/assessments/{id}/answers → `{done:false,next}` or `{done:true,result}`.
+ * Exactly one branch is present at runtime; the schema renders both optional.
+ */
+export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
+  next?: AssessmentItem
+  result?: AssessmentResult
 }

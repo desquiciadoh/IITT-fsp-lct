@@ -16,6 +16,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   item_not_current: 'Ответ принят не на текущий вопрос — обновление…',
   assessment_expired: 'Время теста истекло.',
   not_finished: 'Тест ещё не завершён.',
+  not_enough_answers: 'Отвечено меньше половины заданий — попытка засчитана как прерванная.',
   fallback_not_available: 'Фолбэк сейчас недоступен.',
   unreadable_pdf: 'Не удалось прочитать PDF. Заполните форму вручную.',
   salary_invalid: 'Проверьте диапазон зарплаты.',

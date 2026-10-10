@@ -3,6 +3,7 @@ import { coreHandlers } from '@/mocks/handlers/core'
 import { demoHandlers, demoGapHandlers } from '@/mocks/handlers/demo'
 import { gapHandlers } from '@/mocks/handlers/gaps'
 import { assessmentHandlers } from '@/mocks/handlers/assessments'
+import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
 
@@ -22,6 +23,13 @@ export async function startMocks(): Promise<void> {
           ...gapHandlers,
           ...demoGapHandlers,
           ...demoHandlers,
+          // Stateful runner mock FIRST: its eligibility/session endpoints must
+          // win over the static fixtures (MSW is first-match-wins, and the
+          // wildcard `*/api/assessments/:id` below would otherwise swallow
+          // `/api/assessments/eligibility`). Result fixtures for demo ids are
+          // still served by assessmentHandlers via `/result`, which cannot
+          // collide with any qualification route.
+          ...qualificationHandlers,
           ...assessmentHandlers,
           ...offerHandlers,
           ...fspHandlers,
