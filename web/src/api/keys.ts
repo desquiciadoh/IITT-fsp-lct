@@ -16,6 +16,9 @@ export const keys = {
   positions: ['positions'] as const,
   position: (id: string) => ['position', id] as const,
   pool: (positionId: string) => ['pool', positionId] as const,
+  /** FE-10 — per-filter pool query; base prefix ['pool', id] for invalidation. */
+  poolQuery: (positionId: string, query: string) => ['pool', positionId, 'query', query] as const,
+  shortlist: (positionId: string) => ['pool', positionId, 'shortlist'] as const,
   leagues: (spec?: string) => ['leagues', spec ?? 'all'] as const,
   talentSearch: ['talent', 'search'] as const,
   talent: (publicId: string) => ['talent', publicId] as const,

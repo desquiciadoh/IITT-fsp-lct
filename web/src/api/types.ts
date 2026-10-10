@@ -305,6 +305,94 @@ export type JdParseResult = {
   source?: string
 }
 
+// --- FE-10 · Scouting --------------------------------------------------------
+
+import type { PoolItem as GeneratedPoolItem } from '@/api/generated/models/poolItem'
+import type { TalentDetailResponse as GeneratedTalentDetail } from '@/api/generated/models/talentDetailResponse'
+
+/**
+ * GET /api/positions/{id}/pool item. `components` is a dict today (skill/
+ * grade/strength/fsp/salary, max 35/25/15/15/10) and becomes a list (gap G8);
+ * everything renders through normalizeComponents(). `gaps` is target shape
+ * (G8) — until then derive them from `kind === 'minus'` reasons.
+ */
+export type PoolEntry = Omit<GeneratedPoolItem, 'talent' | 'components'> & {
+  talent: TalentShort
+  components: ScoreComponent[] | ScoreComponentsDict
+  gaps?: string[]
+}
+
+/**
+ * The generated schema declares only {items,total,page}. `pages`, `facets`
+ * and `relaxations` are BE gap G8 — optional so the UI can detect the
+ * capability instead of hardcoding it (client-side filter fallback when
+ * `facets` is absent).
+ */
+export type PoolResponse = {
+  items: PoolEntry[]
+  total: number
+  page: number
+  pages?: number
+  facets?: Record<string, Record<string, number>>
+  relaxations?: string[]
+}
+
+/** Pool filters, synced to the URL query string (FE-10). Sent as query params; */
+/** the backend may ignore them today (G8) — see the client-side fallback. */
+export type PoolFilters = {
+  grades: Grade[]
+  skills: string[]
+  fsp: 'any' | 'linked' | 'prize'
+  formats: WorkFormat[]
+  salary_max: number | null
+  confirmed_only: boolean
+  preset: string | null
+  page: number
+}
+
+/**
+ * gap G7 — GET /api/leagues?specialization= returns a plain array of shelves
+ * `{specialization, grade, confirmed, unconfirmed, median_expectation?}`.
+ * The static mock in gaps.ts returns {items,...}; the scouting mock serves the
+ * target array shape and wins by registration order.
+ */
+export type LeagueShelf = {
+  specialization: Spec
+  grade: Grade
+  confirmed: number
+  unconfirmed: number
+  median_expectation?: number | null
+}
+
+/**
+ * gap G16 — GET /api/positions/{id}/shortlist (list endpoint not shipped).
+ * Until then the tray is built from `shortlisted: true` pool items.
+ */
+export type ShortlistEntry = TalentShort
+
+/**
+ * GET /api/talent/{public_id} — talent fields plus about/experience_text and
+ * contacts (null unless the company has a grant). Sections for topics,
+ * assessments and integrity flags come later (gap G9): hide them when absent.
+ */
+export type TalentContacts = {
+  full_name?: string
+  email?: string
+  phone?: string
+  telegram?: string
+}
+export type TalentDetail = Omit<GeneratedTalentDetail, 'league' | 'fsp' | 'skills' | 'contacts'> & {
+  display_name?: string
+  league?: League | null
+  fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number } | null
+  skills?: ProfileSkill[]
+  contacts?: TalentContacts | null
+  // gap G9 — hidden while absent
+  topics?: ResultTopic[]
+  assessments?: unknown[]
+  integrity_flags?: unknown[]
+}
+
 /** Integrity capture payload sent with every answer (FE-05). */
 export type AnswerIntegrity = {
   focus_loss: number
