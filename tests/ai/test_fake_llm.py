@@ -1,0 +1,233 @@
+"""Unit tests for FakeLlm rule-based extraction and AI-R6 regressions."""
+import datetime
+import time
+from pathlib import Path
+
+import llm_gateway.fake as fake_module
+import pytest
+from llm_gateway import extract_text, redact
+from llm_gateway.fake import FakeLlm
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def test_fake_llm_resume_extraction():
+    llm = FakeLlm()
+    cv_text = """[NAME]
+Python Backend Developer
+Опыт работы: 3 года
+Город: Москва
+Формат: удаленно, возможен гибрид
+Ожидания по зарплате: от 220 000 руб на руки
+Стек: Python, FastAPI, PostgreSQL, Docker, Redis, Celery
+Обо мне: Разрабатываю высоконагруженные асинхронные микросервисы.
+"""
+    draft = llm.resume(cv_text)
+
+    assert draft.specialization == "backend"
+    assert draft.claimed_grade in ("middle", "junior")
+    assert draft.years_experience == 3.0
+    assert "remote" in draft.work_formats
+    assert draft.salary_min == 220000
+    assert draft.salary_type == "net"
+    assert draft.city == "Москва"
+    assert "Python" in draft.skills_raw
+    assert "FastAPI" in draft.skills_raw
+    assert "PostgreSQL" in draft.skills_raw
+
+
+def test_fake_llm_jd_extraction():
+    llm = FakeLlm()
+    jd_text = """Senior Frontend Engineer (React)
+Требования:
+- Отличное знание JavaScript, TypeScript, React
+- Опыт работы с Redux Toolkit, Next.js
+Будет плюсом:
+- Понимание Docker, CI/CD, Jest
+Условия:
+- Удаленная работа (remote)
+- Зарплата от 300 000 до 400 000 руб на руки
+"""
+    draft = llm.jd(jd_text)
+
+    assert draft.specialization == "frontend"
+    assert "senior" in draft.grades
+    assert "remote" in draft.work_formats
+    assert draft.salary_min == 300000
+    assert draft.salary_max == 400000
+    assert draft.salary_type == "net"
+    # Skills split
+    assert any("React" in s or "TypeScript" in s for s in draft.must_skills_raw)
+    assert any("Docker" in s or "CI/CD" in s for s in draft.nice_skills_raw)
+
+
+def test_fake_llm_phrase():
+    llm = FakeLlm()
+    facts = [
+        "Опыт разработки на Python более 4 лет",
+        "Подтвержденный грейд Senior по результатам тестирования",
+    ]
+    res = llm.phrase(facts)
+    assert "Python" in res
+    assert "Senior" in res
+    assert res.endswith(".")
+
+
+def test_fake_llm_air6_regressions():
+    llm = FakeLlm()
+
+    # 1. Experience vs salary range: опыт от 3 до 5 лет ... зарплата от 300 000 до 400 000
+    jd1 = "Требуется инженер. Опыт от 3 до 5 лет. Зарплата от 300 000 до 400 000 руб."
+    draft1 = llm.jd(jd1)
+    assert draft1.salary_min == 300000
+    assert draft1.salary_max == 400000
+
+    # 2. Cyrillic k / к suffix: от 150к до 250к
+    jd2 = "Зарплатная вилка от 150к до 250к на руки."
+    draft2 = llm.jd(jd2)
+    assert draft2.salary_min == 150000
+    assert draft2.salary_max == 250000
+    assert draft2.salary_type == "net"
+
+    # 3. Gross vs .NET/Kubernetes
+    jd3 = "Зарплата от 300 000 руб gross. Стек: Kubernetes, .NET Core."
+    draft3 = llm.jd(jd3)
+    assert draft3.salary_min == 300000
+    assert draft3.salary_type == "gross"
+
+    # 4. Specialization scoring: Header 'Backend developer' outweighs body mention of 'React'
+    cv4 = """[NAME]
+Backend developer
+Опыт 4 года
+Знаю немного React для личных проектов, но основной профиль backend на Python.
+"""
+    draft4 = llm.resume(cv4)
+    assert draft4.specialization == "backend"
+
+    # 5. Grade: Ignore 'под руководством senior', derive from 1 year experience -> junior
+    cv5 = """[NAME]
+Leading projects под руководством senior архитектора.
+Опыт 1 год в стартапе.
+"""
+    draft5 = llm.resume(cv5)
+    assert draft5.claimed_grade == "junior"
+
+    # 6. Empty JD defaults
+    draft6 = llm.jd("")
+    assert draft6.title is None
+    assert draft6.specialization is None
+    assert draft6.grades == []
+    assert draft6.work_formats == []
+    assert draft6.salary_type is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # amounts outside a salary line are not a salary
+        ("Python developer\nОбработка 10 000 - 50 000 запросов в секунду в компании", (None, None)),
+        ("Нагрузка: от 10 000 до 50 000 RPS\nКомпания: Яндекс", (None, None)),
+        # a single amount next to a salary word or a currency
+        ("Зарплата: 200 000 руб. Работа с .NET", (200000, None)),
+        ("Ожидаемый доход 250 000 ₽ на руки", (250000, None)),
+        # ranges with an ellipsis, thousands suffixes, a year range before the salary
+        ("Зарплата 200 000…300 000 ₽ на руки", (200000, 300000)),
+        ("Вилка 150-200 тыс руб", (150000, 200000)),
+        ("Зарплата в 2019-2023 росла, сейчас вилка 300 000 - 400 000 руб", (300000, 400000)),
+    ],
+)
+def test_fake_llm_salary_lines(text, expected):
+    draft = FakeLlm().jd(text)
+    assert (draft.salary_min, draft.salary_max) == expected
+
+
+def test_fake_llm_hostile_salary_lines_are_fast_and_safe():
+    """400 digits used to raise OverflowError; a long digit run made the regex quadratic (35 s)."""
+    assert FakeLlm().jd("Зарплата " + "1" * 400 + " руб").salary_min is None
+
+    started = time.perf_counter()
+    draft = FakeLlm().jd("Зарплата руб " + "1 " * 50_000)
+    assert time.perf_counter() - started < 3.0
+    assert (draft.salary_min, draft.salary_max) == (None, None)
+
+
+def test_fake_llm_does_not_invent_values():
+    draft = FakeLlm().resume("Какой-то текст без должности\nPython")
+    assert draft.roles == []
+    assert draft.claimed_grade is None
+    assert draft.work_formats == []
+    assert draft.salary_type is None
+
+
+def test_fake_llm_jd_grade_ignores_body_mentions():
+    draft = FakeLlm().jd("Python разработчик\nВы будете работать с Team Lead и senior коллегами")
+    assert draft.grades == []
+
+
+@pytest.mark.parametrize(
+    ("text", "years"),
+    [
+        ("Опыт работы — 4 года 6 месяцев", 4.5),
+        ("Общий стаж: 5 лет", 5.0),
+        ("5+ years of experience in Python", 5.0),
+        ("Опыт более 3 лет", 3.0),
+    ],
+)
+def test_fake_llm_years(text, years):
+    assert FakeLlm().resume(text).years_experience == years
+
+
+def test_fake_llm_sections_from_hero_cv():
+    """about keeps wrapped lines; experience_text is the "Опыт работы" section only."""
+    text = redact(extract_text((FIXTURES_DIR / "cv" / "cv_backend_middle.pdf").read_bytes())).text
+    draft = FakeLlm().resume(text)
+
+    assert draft.about.endswith("REST API и микросервисов.")
+    assert draft.experience_text.startswith("ООО Технологии Будущего")
+    assert "зарплате" not in draft.experience_text
+    assert "Навыки" not in draft.experience_text
+    assert draft.roles == ["Python Backend Developer"]
+
+
+@pytest.mark.parametrize(
+    ("fixture", "spec", "grades", "salary", "salary_type", "formats"),
+    [
+        ("jd_backend_must_nice.txt", "backend", ["senior"], (320000, 420000), "net", ["remote", "hybrid"]),
+        ("jd_english.txt", "backend", ["senior"], (350000, 450000), "net", ["remote"]),
+        ("jd_experience_range.txt", "backend", ["senior"], (300000, 400000), None, ["remote"]),
+        ("jd_gross.txt", "ml_data", [], (280000, 380000), "gross", ["remote", "office"]),
+        ("jd_no_salary.txt", "frontend", [], (None, None), None, ["hybrid"]),
+    ],
+)
+def test_fake_llm_jd_fixtures(fixture, spec, grades, salary, salary_type, formats):
+    draft = FakeLlm().jd((FIXTURES_DIR / "jd" / fixture).read_text(encoding="utf-8"))
+    assert draft.specialization == spec
+    assert draft.grades == grades
+    assert (draft.salary_min, draft.salary_max) == salary
+    assert draft.salary_type == salary_type
+    assert draft.work_formats == formats
+    assert draft.must_skills_raw
+
+
+@pytest.mark.parametrize(
+    ("experience", "years"),
+    [
+        ("Ozon\n2020 - 2023\nАвито\n2020 – 2023", 3.0),  # parallel jobs count once
+        ("Ozon, 03.2019 - 05.2023", 4.2),  # month ends are inclusive
+        ("Ozon, 2018-2020\nVK, 2019-2022", 4.0),  # overlap merged
+        ("Ozon, 2015-2017\nVK, 2020-2022", 4.0),  # a gap is not counted
+        ("Сбер, янв 2024 — н.в.", 2.8),
+        ("Сбер, сентябрь 2025 – по настоящее время", 1.2),
+        ("Tinkoff, Mar 2026 - present", 0.7),
+    ],
+)
+def test_years_from_date_ranges(monkeypatch, experience, years):
+    monkeypatch.setattr(fake_module, "_today", lambda: datetime.date(2026, 10, 10))
+    text = f"Python-разработчик\nОпыт работы\n{experience}\nОбразование\nМГУ, 2010-2015"
+    assert FakeLlm().resume(text).years_experience == years
+
+
+def test_explicit_years_win_over_ranges_and_education_is_ignored(monkeypatch):
+    monkeypatch.setattr(fake_module, "_today", lambda: datetime.date(2026, 10, 10))
+    assert FakeLlm().resume("Опыт 5 лет\nОпыт работы\nOzon, 2024-2025").years_experience == 5.0
+    assert FakeLlm().resume("Образование\nМГУ, 2010-2015").years_experience is None

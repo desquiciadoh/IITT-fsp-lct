@@ -1,6 +1,8 @@
 """Profiles app API views."""
 
+import hashlib
 import logging
+import traceback
 
 from core.enums import (
     ConsentType,
@@ -332,37 +334,43 @@ class ResumeParseView(views.APIView):
                 "unreadable_pdf", "Invalid file type", "Only PDF files are supported", 422
             )
 
-        extracted_text = ""
+        from llm_gateway import FakeLlm, UnreadablePdf, parse_resume
+
+        file_bytes = file_obj.read()
         try:
-            from pypdf import PdfReader
-
-            reader = PdfReader(file_obj)
-            if len(reader.pages) == 0:
-                raise ValueError("PDF has no pages")
-            for page in reader.pages:
-                extracted_text += page.extract_text() or ""
-        except Exception:
+            # Rules only inline; the GigaChat path runs in the Celery `llm` task (BE.md N4).
+            # Provider failures never reach this view: parse_resume falls back to rules itself.
+            parse_res = parse_resume(file_bytes, gateway=FakeLlm())
+        except UnreadablePdf:
+            logger.info("Resume rejected as unreadable (sha=%s)", hashlib.sha256(file_bytes).hexdigest()[:12])
             raise FSPAPIError(
-                "unreadable_pdf", "Unreadable PDF", "Unable to parse provided PDF file", 422
+                'unreadable_pdf',
+                'Не удалось прочитать PDF',
+                'Файл PDF поврежден, защищен паролем или не содержит распознаваемого текста.',
+                422,
             )
+        except Exception as e:
+            # A bug, not a bad PDF. Log the type, the file hash and file:line:function of each
+            # frame, never the message or source lines (they may quote CV text), and answer
+            # problem+json instead of Django's HTML 500.
+            file_sha = hashlib.sha256(file_bytes).hexdigest()[:12]
+            frames = " > ".join(
+                f"{frame.filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
+                for frame in traceback.extract_tb(e.__traceback__)
+            )
+            logger.error("Resume parse failed (%s, sha=%s) at %s", type(e).__name__, file_sha, frames)
+            raise FSPAPIError(
+                'resume_parse_failed',
+                'Не удалось разобрать резюме',
+                'Заполните профиль вручную или попробуйте позже.',
+                500,
+            ) from None
 
-        # Basic rule-based extraction fallback (AI adapter boundary)
-        prefill = {
-            "specialization": "backend"
-            if "python" in extracted_text.lower() or "backend" in extracted_text.lower()
-            else "frontend",
-            "claimed_grade": "middle" if "middle" in extracted_text.lower() else "junior",
-            "skills": [],
-            "about": extracted_text[:300] if extracted_text else "Parsed from resume",
-        }
-
-        return Response(
-            {
-                "prefill": prefill,
-                "unknown_terms": [],
-                "source": "stub",
-            }
-        )
+        return Response({
+            'prefill': parse_res.prefill,
+            'unknown_terms': parse_res.unknown_terms,
+            'source': parse_res.source,
+        })
 
 
 class TaxonomyView(views.APIView):
