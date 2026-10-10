@@ -10,8 +10,9 @@ Difficulty prior b = 0.2 (lower middle): the micro/macrotask order is a standard
 interview question, but mixed delays and queueMicrotask trip up juniors. Distractors are
 the usual wrong models: program order, timers before microtasks, async in program order,
 queueMicrotask treated as a timer, microtasks run as a stack; when a short script makes
-several of them coincide, random orders that keep the sync logs first fill the gap (never
-near-copies of the answer, which made the answer the 'centre' of the options).
+several of them coincide, structured fillers (sync first, microtasks before timers, a different
+order inside a queue) fill the gap. The triple is chosen so that the answer's centrality rank
+among the options is uniform; a script that can't reach the drawn rank is redrawn.
 """
 from __future__ import annotations
 
@@ -56,38 +57,29 @@ def _centrality_rank(options: list[list[str]]) -> int | None:
     return sum(1 for t in totals[1:] if t < totals[0])
 
 
-def _pick_distractors(rng: random.Random, correct, wrong_models, fillers) -> list[list[str]]:
-    """Three wrong orders such that the answer's centrality rank among the four is uniform.
+def _pick_distractors(rng: random.Random, correct, wrong_models, fillers,
+                      target: int) -> list[list[str]] | None:
+    """Three wrong orders such that the answer has centrality rank `target` among the four.
 
     Distractors built from misconceptions each change one aspect of the true order, so the
     true order tends to be the one closest to all others: a test-wise candidate picks it
-    without reading the code (ML-1 review). We draw the rank the answer must have (0 = most
-    central .. 3 = least), then sample triples, misconceptions preferred, until one fits.
+    without reading the code (ML-1 review). The caller draws the rank once per item (0 = most
+    central .. 3 = least); triples are sampled, misconceptions first. None means this script
+    can't reach the rank, and the caller redraws the script (never a random fallback).
     """
     pool: list[list[str]] = []
     for order in wrong_models + fillers:
         if order != correct and order not in pool:
             pool.append(order)
     wrong = [o for o in pool if o in wrong_models]
-    target = rng.randrange(4)
-    fallback = None
+    if len(pool) < 3:
+        return None
     for attempt in range(400):
         source = wrong if attempt < 100 and len(wrong) >= 3 else pool
-        if len(source) < 3:
-            source = pool
-        if len(source) < 3:
-            break
         triple = rng.sample(source, 3)
-        rank = _centrality_rank([correct, *triple])
-        if rank == target:
+        if _centrality_rank([correct, *triple]) == target:
             return triple
-        if fallback is None and rank is not None:
-            fallback = triple
-    if fallback is None:
-        if len(pool) < 3:
-            raise ValueError("fewer than three distinct wrong orders")
-        fallback = pool[:3]
-    return fallback
+    return None
 
 
 def _fmt(labels) -> str:
@@ -98,6 +90,21 @@ class JsEventLoop:
     meta = META
 
     def generate(self, rng: random.Random) -> Instance:
+        target = rng.randrange(4)            # the answer's centrality rank, uniform per item
+        while True:
+            stmts = self._draw(rng)
+            correct, wrong_models, fillers = self._orders(stmts, rng)
+            triple = _pick_distractors(rng, correct, wrong_models, fillers, target)
+            if triple is not None:
+                break
+        options, key = choice_options(rng, _fmt(correct), [_fmt(x) for x in triple])
+        code = "\n".join(_line(k, lab, d) for k, lab, d in stmts)
+        return Instance(stem_md="В каком порядке буквы появятся в консоли после выполнения скрипта?",
+                        input="choice", key=key, fingerprint=fingerprint_of({"stmts": stmts}),
+                        code={"lang": "javascript", "text": code}, options=options)
+
+    @staticmethod
+    def _draw(rng: random.Random) -> list[tuple[str, str, int]]:
         while True:
             n = rng.randint(4, 6)
             kinds = [rng.choice(KINDS) for _ in range(n)]
@@ -105,9 +112,21 @@ class JsEventLoop:
                 break
         labels = rng.sample(LABELS, n)
         delays = [rng.choice(DELAYS) if k == "timeout" else 0 for k in kinds]
-        stmts = list(zip(kinds, labels, delays, strict=True))
-        params = {"stmts": stmts}
+        return list(zip(kinds, labels, delays, strict=True))
 
+    @staticmethod
+    def _orders(stmts, rng: random.Random):
+        """The true order, the misconception orders, and structured fillers.
+
+        Fillers keep what a junior already knows (sync logs first in program order, microtasks
+        before timers) and differ only in the order inside the microtask or the timer queue.
+        Random permutations were tried and rejected: "sync first" alone then found the answer
+        59 % of the time (ML-1 re-review), so the item measured intern knowledge.
+        """
+        kinds = [k for k, _, _ in stmts]
+        labels = [lab for _, lab, _ in stmts]
+        delays = [d for _, _, d in stmts]
+        n = len(stmts)
         rank = {"sync": 0, "promise": 1, "microtask": 1, "timeout": 2}
         idx = range(n)
         correct = [labels[i] for i in sorted(idx, key=lambda i: (rank[kinds[i]], delays[i], i))]
@@ -118,27 +137,19 @@ class JsEventLoop:
         qm_as_timer = [labels[i] for i in sorted(idx, key=lambda i: (
             {"sync": 0, "promise": 1}.get(kinds[i], 2), delays[i] if kinds[i] == "timeout" else 0, i))]
         micro = [i for i in idx if rank[kinds[i]] == 1]
-        stack = [labels[i] for i in idx if kinds[i] == "sync"] + [labels[i] for i in reversed(micro)] + \
-            [labels[i] for i in sorted((i for i in idx if kinds[i] == "timeout"), key=lambda i: (delays[i], i))]
+        timers = sorted((i for i in idx if kinds[i] == "timeout"), key=lambda i: (delays[i], i))
+        sync = [labels[i] for i in idx if kinds[i] == "sync"]
+        stack = sync + [labels[i] for i in reversed(micro)] + [labels[i] for i in timers]
         timers_by_order = [labels[i] for i in sorted(idx, key=lambda i: (rank[kinds[i]], i))]
         wrong_models = [program, timers_first, async_in_order, qm_as_timer, stack, timers_by_order]
-        sync = [labels[i] for i in idx if kinds[i] == "sync"]
-        rest = [x for x in correct if x not in sync]
         fillers = []
-        for _ in range(24):
-            perm = rest[:]
-            rng.shuffle(perm)
-            fillers.append(sync + perm)
-        for _ in range(24):            # a short async tail has few sync-first orders
-            perm = list(labels)
-            rng.shuffle(perm)
-            fillers.append(perm)
-        distractors = [_fmt(x) for x in _pick_distractors(rng, correct, wrong_models, fillers)]
-        options, key = choice_options(rng, _fmt(correct), distractors)
-        code = "\n".join(_line(k, lab, d) for k, lab, d in stmts)
-        return Instance(stem_md="В каком порядке буквы появятся в консоли после выполнения скрипта?",
-                        input="choice", key=key, fingerprint=fingerprint_of(params),
-                        code={"lang": "javascript", "text": code}, options=options)
+        for _ in range(30):
+            m = [labels[i] for i in micro]
+            t = [labels[i] for i in timers]
+            rng.shuffle(m)
+            rng.shuffle(t)
+            fillers.append(sync + m + t)
+        return correct, wrong_models, fillers
 
     def is_correct(self, key, answer: dict) -> bool:
         return is_choice_correct(key, answer)

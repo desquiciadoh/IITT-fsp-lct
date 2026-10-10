@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-10-10T00:00:00+00:00",
+  "git_sha": "fixture",
+  "synthetic_fixture": true,
+  "assessment": {
+    "simulees": 0,
+    "exact_acc": 0.5,
+    "adjacent_acc": 0.9,
+    "qwk": 0.5,
+    "retest_same_grade": 0.5,
+    "retest_r": 0.5,
+    "median_len": 14,
+    "max_family_exposure": 0.5,
+    "collision_rate": 0.0,
+    "generator_errors": 0,
+    "confusion": [[25, 0, 0, 0], [0, 25, 0, 0], [0, 0, 25, 0], [0, 0, 0, 25]],
+    "tif": {"theta": [-2.0, -1.0, 0.0, 1.0, 2.0], "info": [1.0, 2.0, 3.0, 2.0, 1.0]},
+    "leak_attack": [
+      {"leak_share": 0.1, "static_dtheta": 0.0, "parametric_dtheta": 0.0},
+      {"leak_share": 0.3, "static_dtheta": 0.0, "parametric_dtheta": 0.0},
+      {"leak_share": 0.5, "static_dtheta": 0.0, "parametric_dtheta": 0.0}
+    ]
+  },
+  "matching": {
+    "candidates": 0,
+    "needs": 0,
+    "non_fsp_parity": 1.0,
+    "pool_p95_ms": 0.0,
+    "systems": [
+      {"name": "keyword", "ndcg10": 0.5, "p10": 0.5, "r50": 0.5, "mrr": 0.5},
+      {"name": "bm25", "ndcg10": 0.5, "p10": 0.5, "r50": 0.5, "mrr": 0.5},
+      {"name": "embeddings_only", "ndcg10": 0.5, "p10": 0.5, "r50": 0.5, "mrr": 0.5},
+      {"name": "ours_no_verified", "ndcg10": 0.5, "p10": 0.5, "r50": 0.5, "mrr": 0.5},
+      {"name": "ours", "ndcg10": 0.5, "p10": 0.5, "r50": 0.5, "mrr": 0.5}
+    ]
+  }
+}

@@ -235,12 +235,13 @@ def test_g11_lab_report_endpoint():
     assert 'generated_at' in data
     assert 'git_sha' in data
     assert 'synthetic_fixture' in data
-    assert data.get('synthetic_fixture') is True
+    assert isinstance(data.get('synthetic_fixture'), bool)   # True for the fixture, False for a real run
 
-    assert 'assessment' in data
-    assert 'matching' in data
-    assert data['assessment']['simulees'] == 1000
-    assert data['assessment']['exact_acc'] >= 0.8
+    # The served file is ML's fixture (validation/out/report.fixture.json) until ML-8 writes
+    # report.json; both must satisfy the ValidationReport schema (TASKS.md §1.4). No metric
+    # values are pinned here: the fixture holds neutral placeholders, never invented results.
+    from validation.schema import validate_report
+    assert validate_report(data) == []
     assert len(data['matching']['systems']) >= 2
 
 

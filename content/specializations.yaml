@@ -27,7 +27,7 @@ topics:
   - id: algorithms.code_reading
     name_ru: Чтение кода и логика
     specs: [backend, frontend, ml_data]
-    skills: [algorithms, python]
+    skills: [algorithms]
 
   # ── backend (SQL and Python also serve ML & Data) ──
   - id: sql.aggregation
@@ -67,7 +67,7 @@ topics:
   - id: js.event_loop
     name_ru: "JavaScript: асинхронность и event loop"
     specs: [frontend]
-    skills: [javascript, typescript]
+    skills: [javascript]
   - id: js.core
     name_ru: "JavaScript: язык"
     specs: [frontend]
