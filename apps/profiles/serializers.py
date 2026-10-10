@@ -333,14 +333,25 @@ class ConsentUpdateSerializer(serializers.Serializer):
 class TaxonomySpecializationSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
+    name_ru = serializers.CharField(required=False)
     topics = serializers.ListField(child=serializers.CharField())
 
 
 class TaxonomyGradeSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
+    name_ru = serializers.CharField(required=False)
     descriptor = serializers.CharField()
+    descriptor_ru = serializers.CharField(required=False)
+    theta_cut = serializers.FloatField(required=False)
     rating_cut = serializers.IntegerField()
+
+
+class TaxonomyTopicSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name_ru = serializers.CharField()
+    specs = serializers.ListField(child=serializers.CharField())
+    skills = serializers.ListField(child=serializers.CharField())
 
 
 class TaxonomySkillSerializer(serializers.Serializer):
@@ -358,5 +369,6 @@ class TaxonomyDeclineReasonSerializer(serializers.Serializer):
 class TaxonomySerializer(serializers.Serializer):
     specializations = TaxonomySpecializationSerializer(many=True)
     grades = TaxonomyGradeSerializer(many=True)
+    topics = TaxonomyTopicSerializer(many=True, required=False)
     skills = TaxonomySkillSerializer(many=True)
     decline_reasons = TaxonomyDeclineReasonSerializer(many=True)

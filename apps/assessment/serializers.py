@@ -4,7 +4,7 @@ INVARIANT: ItemViewSerializer NEVER includes the `key` field or any derivative o
 The answer key stays strictly server-side in assessment_items.key.
 """
 
-from core.enums import AssessmentMode, AssessmentStatus, Grade, Specialization
+from core.enums import AssessmentMode, AssessmentStatus, FallbackMode, Grade, Specialization
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -213,7 +213,7 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
 
 
 class FallbackRequestSerializer(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=["instant", "short_test"], default="instant")
+    mode = serializers.ChoiceField(choices=FallbackMode.choices, default=FallbackMode.INSTANT)
 
 
 class LeagueShelfSerializer(serializers.Serializer):

@@ -165,3 +165,19 @@ class Discipline(models.TextChoices):
     INFOSEC = "infosec", "InfoSec"
     ROBOTICS = "robotics", "Robotics"
     UAS = "uas", "UAS"
+
+
+class PositionStatus(models.TextChoices):
+    OPEN = "open", "Open"
+    CLOSED = "closed", "Closed"
+
+
+class FspEventFormat(models.TextChoices):
+    INDIVIDUAL = "individual", "Individual"
+    TEAM = "team", "Team"
+
+
+class FallbackMode(models.TextChoices):
+    INSTANT = "instant", "Instant"
+    SHORT_TEST = "short_test", "Short Test"
+

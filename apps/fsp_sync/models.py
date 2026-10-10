@@ -6,7 +6,7 @@ These affect ranking (Profile Strength) but NEVER determine grades.
 
 import uuid
 
-from core.enums import Discipline, PlacementTier, SportsRank, SyncStatus
+from core.enums import Discipline, FspEventFormat, PlacementTier, SportsRank, SyncStatus
 from django.conf import settings
 from django.db import models
 
@@ -73,8 +73,8 @@ class FSPResult(models.Model):
     stage = models.CharField(max_length=50, blank=True, default="")
     format = models.CharField(
         max_length=20,
-        choices=[("individual", "Individual"), ("team", "Team")],
-        default="individual",
+        choices=FspEventFormat.choices,
+        default=FspEventFormat.INDIVIDUAL,
     )
     team_size = models.IntegerField(null=True, blank=True)
     placement = models.IntegerField()

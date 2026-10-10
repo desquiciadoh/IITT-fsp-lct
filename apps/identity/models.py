@@ -5,6 +5,7 @@ import uuid
 from core.enums import ConsentType, IdentityProvider, UserRole
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.exceptions import PermissionDenied
 from django.db import models
 
 
@@ -136,6 +137,14 @@ class Consent(models.Model):
         return f"{self.user_id} {self.type} {status} v{self.version}"
 
 
+class AuditLogQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise PermissionDenied("AuditLog entries are immutable and cannot be updated.")
+
+    def delete(self):
+        raise PermissionDenied("AuditLog entries are immutable and cannot be deleted.")
+
+
 class AuditLog(models.Model):
     """Immutable audit trail for security-sensitive actions.
 
@@ -156,9 +165,19 @@ class AuditLog(models.Model):
     meta = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
+    objects = AuditLogQuerySet.as_manager()
+
     class Meta:
         db_table = "audit_log"
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return f"{self.action} by {self.actor_id} at {self.created_at}"
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            raise PermissionDenied("AuditLog entries are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionDenied("AuditLog entries are immutable and cannot be deleted.")

@@ -2,7 +2,7 @@
 
 import uuid
 
-from core.enums import Grade, SalaryType, Specialization, TrustLevel, WorkFormat
+from core.enums import Grade, PositionStatus, SalaryType, Specialization, TrustLevel, WorkFormat
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
@@ -138,8 +138,8 @@ class Position(models.Model):
     )
     status = models.CharField(
         max_length=20,
-        choices=[("open", "Open"), ("closed", "Closed")],
-        default="open",
+        choices=PositionStatus.choices,
+        default=PositionStatus.OPEN,
     )
     embedding = VectorField(
         dimensions=1024,

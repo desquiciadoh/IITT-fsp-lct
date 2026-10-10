@@ -15,6 +15,7 @@ from core.enums import (
     SalaryType,
 )
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.utils import timezone
 
@@ -161,6 +162,14 @@ class Offer(models.Model):
         return new_status in OFFER_TRANSITIONS.get(self.status, [])
 
 
+class OfferEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise PermissionDenied("OfferEvent entries are immutable and cannot be updated.")
+
+    def delete(self):
+        raise PermissionDenied("OfferEvent entries are immutable and cannot be deleted.")
+
+
 class OfferEvent(models.Model):
     """Immutable event log for offer status changes."""
 
@@ -180,12 +189,22 @@ class OfferEvent(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    objects = OfferEventQuerySet.as_manager()
+
     class Meta:
         db_table = "offer_events"
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return f"{self.offer_id}: {self.from_status} → {self.to_status}"
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            raise PermissionDenied("OfferEvent entries are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionDenied("OfferEvent entries are immutable and cannot be deleted.")
 
 
 class ContactGrant(models.Model):

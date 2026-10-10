@@ -11,10 +11,10 @@ import os
 import threading
 from pathlib import Path
 
-from authlib.jose import JsonWebKey, jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
+from joserfc import jwk, jwt
 
 KID = "fsp-mock-key-1"
 
@@ -73,7 +73,8 @@ def _get_private_pem() -> str:
 
 def get_jwks() -> dict:
     """Return the JWKS document with the mock public key."""
-    public_jwk = JsonWebKey.import_key(_get_private_pem(), {"kty": "RSA"}).as_dict(is_private=False)
+    key = jwk.RSAKey.import_key(_get_private_pem())
+    public_jwk = key.as_dict(private=False)
     public_jwk.update({"use": "sig", "kid": KID, "alg": "RS256"})
     return {"keys": [public_jwk]}
 
@@ -81,4 +82,5 @@ def get_jwks() -> dict:
 def sign_id_token(payload: dict) -> str:
     """Sign an OIDC id_token using RS256 and the mock private key."""
     header = {"alg": "RS256", "kid": KID, "typ": "JWT"}
-    return jwt.encode(header, payload, _get_private_pem()).decode("utf-8")
+    key = jwk.RSAKey.import_key(_get_private_pem())
+    return jwt.encode(header, payload, key)

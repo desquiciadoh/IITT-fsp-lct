@@ -86,12 +86,18 @@ def test_get_taxonomy_endpoint_reads_yaml_and_registry():
     # Check specializations have topics including registry topics
     backend_spec = next(s for s in data["specializations"] if s["id"] == "backend")
     assert "sql.aggregation" in backend_spec["topics"]
-    assert "complexity" in backend_spec["topics"]
+    assert "algorithms.complexity" in backend_spec["topics"]
 
     # Check grades
     grade_ids = [g["id"] for g in data["grades"]]
     assert "intern" in grade_ids
     assert "senior" in grade_ids
+
+    # Check topics (ML-2)
+    assert "topics" in data
+    topic_ids = [t["id"] for t in data["topics"]]
+    assert "algorithms.complexity" in topic_ids
+    assert "sql.aggregation" in topic_ids
 
     # Check skills
     skill_ids = [s["id"] for s in data["skills"]]

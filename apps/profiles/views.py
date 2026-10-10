@@ -436,26 +436,55 @@ class TaxonomyView(views.APIView):
 
         content_dir = settings.BASE_DIR / "content"
 
-        # 1. Specializations + topics from family registry (ML.md §3 / BE.md N5)
-        specs_file = content_dir / "specializations.yaml"
-        if specs_file.exists():
-            try:
-                with open(specs_file, "r", encoding="utf-8") as f:
-                    specializations = yaml.safe_load(f) or []
-            except Exception as e:
-                logger.warning("Could not read specializations.yaml: %s", e)
-                specializations = []
-        else:
-            specializations = []
+        # 1. Content loading via assessment.engine.content (ML-2 / N5)
+        content = None
+        try:
+            from assessment.engine.content import load_content
 
-        if not specializations:
+            content = load_content()
+        except Exception as e:
+            logger.warning("Could not load content via assessment.engine.content: %s", e)
+
+        if content:
+            specializations = [
+                {
+                    "id": spec_id,
+                    "name": spec_name_ru,
+                    "name_ru": spec_name_ru,
+                    "topics": content.topics_for(spec_id),
+                }
+                for spec_id, spec_name_ru in content.specializations.items()
+            ]
+            grades = [
+                {
+                    "id": g.id,
+                    "name": g.name_ru,
+                    "name_ru": g.name_ru,
+                    "descriptor": g.descriptor_ru,
+                    "descriptor_ru": g.descriptor_ru,
+                    "theta_cut": g.theta_cut,
+                    "rating_cut": g.rating_cut,
+                }
+                for g in content.grades
+            ]
+            topics = [
+                {
+                    "id": t.id,
+                    "name_ru": t.name_ru,
+                    "specs": list(t.specs),
+                    "skills": list(t.skills),
+                }
+                for t in content.topics.values()
+            ]
+        else:
             specializations = [
                 {
                     "id": Specialization.BACKEND,
                     "name": "Backend",
+                    "name_ru": "Backend",
                     "topics": [
+                        "algorithms.complexity",
                         "sql.aggregation",
-                        "complexity",
                         "algorithms",
                         "databases",
                         "concurrency",
@@ -464,16 +493,57 @@ class TaxonomyView(views.APIView):
                 {
                     "id": Specialization.FRONTEND,
                     "name": "Frontend",
+                    "name_ru": "Frontend",
                     "topics": ["js.closure", "javascript", "react", "css_html", "performance"],
                 },
                 {
                     "id": Specialization.ML_DATA,
                     "name": "ML & Data",
+                    "name_ru": "ML & Data",
                     "topics": ["python", "ml_fundamentals", "data_engineering", "math_stats"],
                 },
             ]
+            grades = [
+                {
+                    "id": Grade.INTERN,
+                    "name": "Стажёр",
+                    "name_ru": "Стажёр",
+                    "descriptor": "Стажер / начальные базовые навыки",
+                    "descriptor_ru": "Стажер / начальные базовые навыки",
+                    "theta_cut": -2.0,
+                    "rating_cut": 600,
+                },
+                {
+                    "id": Grade.JUNIOR,
+                    "name": "Junior",
+                    "name_ru": "Junior",
+                    "descriptor": "Младший специалист / базовые практические навыки",
+                    "descriptor_ru": "Младший специалист / базовые практические навыки",
+                    "theta_cut": -1.0,
+                    "rating_cut": 800,
+                },
+                {
+                    "id": Grade.MIDDLE,
+                    "name": "Middle",
+                    "name_ru": "Middle",
+                    "descriptor": "Специалист / самостоятельное решение задач и практический опыт",
+                    "descriptor_ru": "Специалист / самостоятельное решение задач и практический опыт",
+                    "theta_cut": 0.0,
+                    "rating_cut": 1000,
+                },
+                {
+                    "id": Grade.SENIOR,
+                    "name": "Senior",
+                    "name_ru": "Senior",
+                    "descriptor": "Ведущий специалист / глубокая экспертиза и проектирование",
+                    "descriptor_ru": "Ведущий специалист / глубокая экспертиза и проектирование",
+                    "theta_cut": 1.0,
+                    "rating_cut": 1200,
+                },
+            ]
+            topics = []
 
-        # Gather topics dynamically from the family registry
+        # Gather topics dynamically from the family registry if any extra
         spec_topics: dict[str, set[str]] = {}
         try:
             from assessment.families.registry import all_families
@@ -505,46 +575,6 @@ class TaxonomyView(views.APIView):
             registry_topics = spec_topics.get(sid, set())
             merged = existing_topics | registry_topics
             spec_data["topics"] = sorted(merged)
-
-        # 2. Grades
-        grades_file = content_dir / "grades.yaml"
-        if grades_file.exists():
-            try:
-                with open(grades_file, "r", encoding="utf-8") as f:
-                    grades = yaml.safe_load(f) or []
-            except Exception as e:
-                logger.warning("Could not read grades.yaml: %s", e)
-                grades = []
-        else:
-            grades = []
-
-        if not grades:
-            grades = [
-                {
-                    "id": Grade.INTERN,
-                    "name": "Intern",
-                    "descriptor": "Стажер / начальные базовые навыки",
-                    "rating_cut": 800,
-                },
-                {
-                    "id": Grade.JUNIOR,
-                    "name": "Junior",
-                    "descriptor": "Младший специалист / базовые практические навыки",
-                    "rating_cut": 960,
-                },
-                {
-                    "id": Grade.MIDDLE,
-                    "name": "Middle",
-                    "descriptor": "Специалист / самостоятельное решение задач и практический опыт",
-                    "rating_cut": 1120,
-                },
-                {
-                    "id": Grade.SENIOR,
-                    "name": "Senior",
-                    "descriptor": "Ведущий специалист / глубокая экспертиза и проектирование",
-                    "rating_cut": 1300,
-                },
-            ]
 
         # 3. Skills from content/skills.yaml (via loader)
         try:
@@ -593,6 +623,7 @@ class TaxonomyView(views.APIView):
         data = {
             "specializations": specializations,
             "grades": grades,
+            "topics": topics,
             "skills": skills,
             "decline_reasons": decline_reasons,
         }

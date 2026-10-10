@@ -9,10 +9,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from authlib.jose import JsonWebKey, JsonWebToken
 from core.errors import FSPAPIError
 from django.conf import settings
 from django.urls import reverse
+from joserfc import jwk, jwt
+from joserfc.jwt import JWTClaimsRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -150,22 +151,23 @@ def verify_and_decode_id_token(id_token: str, nonce: str | None = None) -> dict:
     endpoints = get_oidc_endpoints()
     if not nonce:
         raise FSPAPIError("invalid_token", "Invalid ID Token", "Missing nonce in session", 400)
-    claims_options = {
-        "iss": {"essential": True, "value": endpoints["issuer"]},
-        "aud": {"essential": True, "value": endpoints["client_id"]},
-        "exp": {"essential": True},
-        "nonce": {"essential": True, "value": nonce},
-    }
     try:
-        key_set = JsonWebKey.import_key_set(_get_jwks())
-        claims = JsonWebToken(["RS256"]).decode(id_token, key_set, claims_options=claims_options)
-        claims.validate(leeway=30)
-        # Explicit check: don't rely on authlib validating custom claims
-        if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
+        key_set = jwk.KeySet.import_key_set(_get_jwks())
+        token = jwt.decode(id_token, key_set, algorithms=["RS256"])
+        claims_registry = JWTClaimsRegistry(
+            iss={"essential": True, "value": endpoints["issuer"]},
+            aud={"essential": True, "value": endpoints["client_id"]},
+            exp={"essential": True},
+            nonce={"essential": True, "value": nonce},
+            leeway=30,
+        )
+        claims_registry.validate(token.claims)
+        # Explicit check: don't rely on authlib/joserfc validating custom claims
+        if not secrets.compare_digest(str(token.claims.get("nonce", "")), nonce):
             raise ValueError("nonce mismatch")
     except FSPAPIError:
         raise
-    except Exception as exc:  # authlib raises several unrelated error types
+    except Exception as exc:  # joserfc raises several unrelated error types
         logger.warning("Rejected FSP ID token: %s", type(exc).__name__)
         raise FSPAPIError(
             "invalid_token",
@@ -173,4 +175,4 @@ def verify_and_decode_id_token(id_token: str, nonce: str | None = None) -> dict:
             "Failed to verify ID token",
             400,
         ) from exc
-    return dict(claims)
+    return dict(token.claims)
