@@ -150,13 +150,13 @@ export function CompanyPage() {
   }
 
   const initialValues: CompanyFormValues = {
-    name: company.name,
-    inn: company.inn ?? '',
-    website: company.website ?? '',
-    email_domain: company.email_domain ?? '',
-    business_domain: company.business_domain ?? '',
-    description: company.description ?? '',
-    contact_email: company.contact_email ?? '',
+    name: company?.name ?? '',
+    inn: company?.inn ?? '',
+    website: company?.website ?? '',
+    email_domain: company?.email_domain ?? '',
+    business_domain: company?.business_domain ?? '',
+    description: company?.description ?? '',
+    contact_email: company?.contact_email ?? '',
   }
 
   return (
@@ -164,7 +164,7 @@ export function CompanyPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Профиль компании</h1>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          Доверие: <TrustBadge level={company.trust_level} showLabel />
+          Доверие: <TrustBadge level={company?.trust_level ?? 'unverified'} showLabel />
         </span>
       </div>
       <Card>

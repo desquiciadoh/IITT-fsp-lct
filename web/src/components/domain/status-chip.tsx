@@ -11,7 +11,10 @@ export type OfferStatus =
   | 'hired'
   | 'closed'
 
-const STATUS: Record<OfferStatus, { label: string; color: string }> = {
+/** Position lifecycle statuses (PositionStatusEnum: open|closed) — FE-09. */
+export type PositionChipStatus = 'open' | 'closed'
+
+const STATUS: Record<OfferStatus | PositionChipStatus, { label: string; color: string }> = {
   sent: { label: 'отправлен', color: 'var(--fsp-status-sent)' },
   viewed: { label: 'просмотрен', color: 'var(--fsp-status-viewed)' },
   accepted: { label: 'принят', color: 'var(--fsp-status-accepted)' },
@@ -21,13 +24,14 @@ const STATUS: Record<OfferStatus, { label: string; color: string }> = {
   interview: { label: 'интервью', color: 'var(--fsp-info)' },
   hired: { label: 'нанят', color: 'var(--fsp-accent)' },
   closed: { label: 'закрыт', color: 'var(--fsp-muted)' },
+  open: { label: 'открыта', color: 'var(--fsp-status-accepted)' },
 }
 
 export function StatusChip({
   status,
   className,
 }: {
-  status: OfferStatus
+  status: OfferStatus | PositionChipStatus
   className?: string
 }) {
   const s = STATUS[status]

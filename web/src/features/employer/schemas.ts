@@ -82,3 +82,37 @@ export type PositionFormInput = Omit<z.input<typeof positionFormSchema>, 'must_s
 export function uniqueSkills(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean))]
 }
+
+/** Narrow free-form taxonomy strings (G3) to the schema's enum values at runtime. */
+const isGrade = (g: string): g is 'intern' | 'junior' | 'middle' | 'senior' =>
+  ['intern', 'junior', 'middle', 'senior'].includes(g)
+const isFormat = (f: string): f is 'office' | 'hybrid' | 'remote' =>
+  ['office', 'hybrid', 'remote'].includes(f)
+const isSpec = (s: string): s is 'backend' | 'frontend' | 'ml_data' =>
+  ['backend', 'frontend', 'ml_data'].includes(s)
+
+/**
+ * Map raw form input (before zod coercion/defaults) onto PositionFormValues.
+ * Taxonomy-driven options are plain strings (G3), so unknown values are
+ * filtered out here; zod validation still guards the required fields.
+ */
+export function toPositionInput(values: PositionFormInput): PositionFormValues {
+  const grades = (values.grades ?? []).filter(isGrade)
+  const workFormats = (values.work_formats ?? []).filter(isFormat)
+  return {
+    title: values.title,
+    specialization: isSpec(values.specialization) ? values.specialization : 'backend',
+    grades,
+    must_skills: uniqueSkills(values.must_skills ?? []),
+    nice_skills: uniqueSkills(values.nice_skills ?? []),
+    work_formats: workFormats,
+    location: values.location ?? '',
+    salary_min: Number(values.salary_min),
+    salary_max: Number(values.salary_max),
+    salary_type: values.salary_type,
+    team_context: values.team_context ?? '',
+    description: values.description ?? '',
+    allow_adjacent: values.allow_adjacent ?? false,
+    is_public: values.is_public ?? true,
+  }
+}

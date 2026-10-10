@@ -10,6 +10,7 @@ import { useTaxonomy } from '@/api/profile'
 import {
   positionFormSchema,
   uniqueSkills,
+  toPositionInput,
   type PositionFormInput,
   type PositionFormValues,
 } from '@/features/employer/schemas'
@@ -90,7 +91,8 @@ export function positionToForm(p: Position): PositionFormInput {
   }
 }
 
-export function toPositionInput(values: PositionFormValues): PositionInput {
+/** Map validated form values onto the API payload (PositionInput). */
+export function toApiPayload(values: PositionFormValues): PositionInput {
   return {
     title: values.title.trim(),
     specialization: values.specialization,
@@ -164,8 +166,8 @@ export function PositionForm({
 
   const mutation = mode === 'create' ? create : update
 
-  const onSubmit = (values: PositionFormValues) => {
-    mutation.mutate(toPositionInput(values))
+  const onSubmit = (values: PositionFormInput) => {
+    mutation.mutate(toApiPayload(toPositionInput(values)))
   }
 
   useEffect(() => {

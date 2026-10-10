@@ -47,7 +47,12 @@ const KNOWN_SKILLS = new Set([
 ])
 
 // Case-insensitive lookup: the taxonomy is lowercase, JD text may not be.
-const skillIn = (word: string) => KNOWN_SKILLS.has(word.toLowerCase())
+// Tokenizer note: `[a-z][a-z.+#-]{2,}` keeps trailing punctuation attached to
+// the last word of a sentence ("redis." / "celery."), so every lookup must go
+// through normSkill() which trims leading/trailing dots and separators.
+// Interior dots are preserved on purpose: "node.js" / "next.js" are taxonomy entries.
+const normSkill = (word: string) => word.toLowerCase().replace(/^[.+#-]+|[.+#-]+$/g, '')
+const skillIn = (word: string) => KNOWN_SKILLS.has(normSkill(word))
 
 /**
  * Remove a section marker from a line without corrupting inflected Russian
@@ -95,7 +100,8 @@ function parseJd(text: string): JdParseResult {
   const scan = (segment: string | undefined, target: string[], exclude?: string[]) => {
     if (!segment) return
     for (const w of segment.toLowerCase().match(/[a-z][a-z.+#-]{2,}/g) ?? []) {
-      if (skillIn(w) && !target.includes(w) && !exclude?.includes(w)) target.push(w)
+      const skill = normSkill(w)
+      if (skillIn(skill) && !target.includes(skill) && !exclude?.includes(skill)) target.push(skill)
     }
   }
   scan(mustSection, must_skills)

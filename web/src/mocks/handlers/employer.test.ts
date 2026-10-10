@@ -34,11 +34,11 @@ async function req<T = unknown>(
   return { status: res.status, body: (await res.json()) as T }
 }
 
-const post = (path: string, body: unknown) =>
-  req(path, { method: 'POST', body: JSON.stringify(body) })
+const post = <T = unknown>(path: string, body: unknown) =>
+  req<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
-const put = (path: string, body: unknown) =>
-  req(path, { method: 'PUT', body: JSON.stringify(body) })
+const put = <T = unknown>(path: string, body: unknown) =>
+  req<T>(path, { method: 'PUT', body: JSON.stringify(body) })
 
 type CompanyWire = {
   id: string
@@ -186,11 +186,6 @@ describe('FE-09 employer mock: positions CRUD', () => {
   it('requires salary_type explicitly (no silent gross default, B15)', async () => {
     await reset()
     await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
-    const { status, body } = await post<ProblemWire>('/api/positions', {
-      ...valid,
-      title: 'No salary type',
-    } as typeof valid & { salary_type?: undefined })
-    void status
     // strip salary_type and retry
     const noType = { ...valid, title: 'No salary type' } as Record<string, unknown>
     delete noType.salary_type
