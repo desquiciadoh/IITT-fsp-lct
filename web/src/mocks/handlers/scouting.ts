@@ -153,6 +153,15 @@ const talentSeed: SeedTalent[] = [
 /** Candidate ids that granted contact access to any company (accepted offers). */
 const grantedContacts = new Set<string>(['t-002'])
 
+/**
+ * FE-11 cross-link seam: the employer offer mock calls this when an offer is
+ * accepted, so `GET /api/talent/{id}` starts returning contacts right away
+ * ("accept → contacts appear on the board" acceptance scenario).
+ */
+export function grantContacts(publicId: string) {
+  grantedContacts.add(publicId)
+}
+
 const shortlists = new Map<string, Set<string>>()
 
 /**
