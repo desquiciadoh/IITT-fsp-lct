@@ -259,6 +259,52 @@ export type StartAssessmentInput = {
   kind?: AssessmentKind
 }
 
+// --- FE-09 · Company & position wizard ---------------------------------------
+
+import type { Company as GeneratedCompany, Position as GeneratedPosition } from '@/api/generated/models'
+
+/** GET/PUT /api/companies/me. `trust_level` is read-only (TrustBadge). */
+export type Company = GeneratedCompany
+/** PUT body: writable subset only (id/trust_level/created_at are readOnly). */
+export type CompanyInput = Pick<
+  Company,
+  'name' | 'inn' | 'website' | 'email_domain' | 'business_domain' | 'description' | 'contact_email'
+>
+
+/** gap G17 — company creation endpoint (`company_required` after BE fix B1). */
+export type CompanyCreateInput = CompanyInput
+
+/** GET/POST/PUT /api/positions[/{id}]. */
+export type Position = GeneratedPosition
+/** POST body: writable subset only (id/company/created_at are readOnly). */
+export type PositionInput = Omit<Position, 'id' | 'company' | 'created_at'>
+
+/**
+ * POST /api/positions/parse → JdParseResult (gap G6; mocked in MSW).
+ * The schema renders the draft enums as loose strings — narrowed here.
+ */
+export type JdBlueprintItem = { topic: string; weight: number }
+export type JdDraft = {
+  title?: string
+  specialization?: Spec
+  grades?: Grade[]
+  must_skills?: string[]
+  nice_skills?: string[]
+  work_formats?: WorkFormat[]
+  location?: string | null
+  salary_min?: number | null
+  salary_max?: number | null
+  salary_type?: SalaryType | ''
+  team_context?: string | null
+  description?: string | null
+}
+export type JdParseResult = {
+  draft: JdDraft
+  unknown_terms?: string[]
+  blueprint?: JdBlueprintItem[]
+  source?: string
+}
+
 /** Integrity capture payload sent with every answer (FE-05). */
 export type AnswerIntegrity = {
   focus_loss: number
