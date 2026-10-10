@@ -38,6 +38,13 @@ def fmt_number(value: float, decimals: int) -> str:
     return f"{round(value, decimals):.{decimals}f}"
 
 
+def rendered_fingerprint(stem: str, code: dict | None, answer: str) -> str:
+    """Hash of what the drawn parameters render to (stem, code, correct answer). Draws a template
+    doesn't use are not parameters of the item, and distractors drawn independently of the
+    parameters (redraw families) do not change the question."""
+    return fingerprint_of({"stem": stem, "code": code, "answer": answer})
+
+
 def decimals_hint(decimals: int) -> str:
     if decimals == 0:
         return "Ответ — целое число."
@@ -70,7 +77,7 @@ class TypedNumberFamily:
         stem, code = self.render(p)
         key = fmt_number(self.solve(p), self.DECIMALS)
         return Instance(stem_md=f"{stem}\n\n{decimals_hint(self.DECIMALS)}", input="number", key=key,
-                        fingerprint=fingerprint_of(p), code=code)
+                        fingerprint=rendered_fingerprint(stem, code, key), code=code)
 
     def is_correct(self, key, answer: dict) -> bool:
         return is_number_correct(key, answer, self.tolerance)
@@ -105,8 +112,8 @@ class ClassificationFamily:
         stem, code = self.render(p)
         others = [x for x in self.LABELS if x != label]
         options, key = choice_options(rng, label, others, k=len(self.LABELS))
-        return Instance(stem_md=stem, input="choice", key=key, fingerprint=fingerprint_of(p), code=code,
-                        options=options)
+        return Instance(stem_md=stem, input="choice", key=key, fingerprint=rendered_fingerprint(stem, code, label),
+                        code=code, options=options)
 
     def is_correct(self, key, answer: dict) -> bool:
         return is_choice_correct(key, answer)
@@ -156,8 +163,8 @@ class RedrawChoiceFamily:
                 values.append(v)
         stem, code = self.render(p)
         options, key = choice_options(rng, correct, values, k=self.K)
-        return Instance(stem_md=stem, input="choice", key=key, fingerprint=fingerprint_of(p), code=code,
-                        options=options)
+        return Instance(stem_md=stem, input="choice", key=key, fingerprint=rendered_fingerprint(stem, code, correct),
+                        code=code, options=options)
 
     def is_correct(self, key, answer: dict) -> bool:
         return is_choice_correct(key, answer)
