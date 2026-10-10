@@ -53,8 +53,11 @@ export const gapHandlers = [
       page: 1,
     })
   }),
+  // G6: JD parse shape ({draft, unknown_terms, blueprint}) is served by the
+  // stateful employerHandlers (employer.ts); this static stub stays only as a
+  // last-resort fallback for environments without the FE-09 mock.
   http.post('*/api/positions/parse', () =>
-    json({ skills: ['python', 'django', 'postgresql'], seniority: 'middle' }),
+    json({ draft: {}, unknown_terms: [], blueprint: [], source: 'mock' }),
   ),
   http.post('*/api/assessments/:id/finish', () =>
     problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),
