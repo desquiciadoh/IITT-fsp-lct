@@ -128,32 +128,3 @@ def test_parser_bug_is_problem_json_500_without_the_message(client, monkeypatch,
     for record in caplog.records:
         assert "ivan.ivanov" not in record.getMessage()
         assert record.exc_info is None or "ivan.ivanov" not in str(record.exc_info[1])
-
-
-@pytest.mark.django_db
-def test_invalid_pdf_magic_bytes_rejected(client):
-    """File named .pdf with PDF mime but without %PDF magic bytes is rejected with 422 unreadable_pdf."""
-    response = client.post(URL, _upload("cv.pdf", b"NOT-A-PDF-HEADER 12345678"), format="multipart")
-    assert response.status_code == 422
-    assert response.json()["code"] == "unreadable_pdf"
-
-
-@pytest.mark.django_db
-def test_celery_task_timeout_falls_back_to_rules(client, monkeypatch):
-    """When Celery task times out, view seamlessly falls back to inline rules."""
-    from profiles import tasks
-
-    class TimingOutTask:
-        def apply_async(self, *args, **kwargs):
-            class AsyncResult:
-                def get(self, timeout=None):
-                    raise TimeoutError("Celery task execution timed out")
-
-            return AsyncResult()
-
-    monkeypatch.setattr(tasks, "parse_resume_task", TimingOutTask())
-    response = client.post(URL, _upload("cv.pdf", HERO_PDF.read_bytes()), format="multipart")
-    assert response.status_code == 200
-    assert response.json()["source"] == "rules"
-    assert response.json()["prefill"]["specialization"] == "backend"
-

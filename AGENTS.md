@@ -12,7 +12,7 @@ plan -> test -> implement -> review -> verify -> remember -> improve
    - Current implementation stack: Django 5.x + Django REST Framework modular monolith, PostgreSQL + pgvector, Celery/Redis-compatible broker.
    - The React + TypeScript SPA, FastAPI migration, and Valkey deployment described in older planning material are not present in this checkout; treat the Django code and `requirements.txt` as authoritative until those components are implemented.
    - Grading & Scoring: Deterministic IRT scoring and parametric question families. LLMs never decide grades directly.
-   - Reverse recruitment: Employers browse ranked Leagues and send salary-first Draft Offers; contacts remain gated until candidate acceptance. Contact gating strictly lives in `outreach/services.py` (`ContactAccessService`; `core/services.py` is a deprecated re-export shim). Denials return 403 and write `AuditLog`.
+   - Reverse recruitment: Employers browse ranked Leagues and send salary-first Draft Offers; contacts remain gated until candidate acceptance.
 
 2. **ECC Workspace Rules & Quality Gates**
    - Coding guidelines and patterns are defined in `.agents/rules/`:

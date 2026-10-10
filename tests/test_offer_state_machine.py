@@ -6,7 +6,6 @@ INVARIANTS:
 3. Optimistic locking: concurrent update with old version raises VersionConflict (409)
 4. Salary constraints: salary_min > 0 and salary_max >= salary_min
 """
-
 import pytest
 from core.enums import OfferStatus, SalaryType, UserRole
 from core.errors import InvalidTransition, VersionConflict
@@ -22,15 +21,15 @@ from outreach.services import OfferService
 @pytest.fixture
 def test_setup(db):
     candidate = User.objects.create_user(
-        email="cand.offers@example.com",
-        password="password123",
+        email='cand.offers@example.com',
+        password='password123',
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
-    company = Company.objects.create(name="Test Company", contact_email="info@test.com")
+    company = Company.objects.create(name='Test Company', contact_email='info@test.com')
     employer = User.objects.create_user(
-        email="emp.offers@example.com",
-        password="password123",
+        email='emp.offers@example.com',
+        password='password123',
         role=UserRole.EMPLOYER,
         email_verified_at=timezone.now(),
     )
@@ -40,6 +39,7 @@ def test_setup(db):
 
 @pytest.mark.django_db
 class TestOfferStateMachine:
+
     def test_valid_lifecycle_transitions(self, test_setup):
         """Test full happy path: SENT -> VIEWED -> ACCEPTED."""
         candidate, company, employer = test_setup
@@ -48,13 +48,13 @@ class TestOfferStateMachine:
             company=company,
             candidate=candidate,
             created_by=employer,
-            title="Python Lead",
-            description="Role details",
+            title='Python Lead',
+            description='Role details',
             salary_min=200000,
             salary_max=300000,
             salary_type=SalaryType.NET,
-            contact_channel="telegram",
-            contact_value="@hr_lead",
+            contact_channel='telegram',
+            contact_value='@hr_lead',
             status=OfferStatus.SENT,
             version=1,
         )
@@ -87,13 +87,13 @@ class TestOfferStateMachine:
             company=company,
             candidate=candidate,
             created_by=employer,
-            title="Backend Dev",
-            description="...",
+            title='Backend Dev',
+            description='...',
             salary_min=180000,
             salary_max=220000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@company.com",
+            contact_channel='email',
+            contact_value='hr@company.com',
             status=OfferStatus.SENT,
             version=1,
         )
@@ -114,13 +114,13 @@ class TestOfferStateMachine:
             company=company,
             candidate=candidate,
             created_by=employer,
-            title="Backend Dev",
-            description="...",
+            title='Backend Dev',
+            description='...',
             salary_min=180000,
             salary_max=220000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@company.com",
+            contact_channel='email',
+            contact_value='hr@company.com',
             status=OfferStatus.DECLINED,
             version=1,
         )
@@ -141,13 +141,13 @@ class TestOfferStateMachine:
             company=company,
             candidate=candidate,
             created_by=employer,
-            title="ML Engineer",
-            description="...",
+            title='ML Engineer',
+            description='...',
             salary_min=250000,
             salary_max=350000,
             salary_type=SalaryType.NET,
-            contact_channel="email",
-            contact_value="hr@company.com",
+            contact_channel='email',
+            contact_value='hr@company.com',
             status=OfferStatus.SENT,
             version=1,
         )
@@ -172,7 +172,6 @@ class TestOfferStateMachine:
     def test_salary_constraints(self, test_setup):
         """DB CheckConstraints enforce salary_min > 0 and salary_max >= salary_min."""
         from django.db import transaction
-
         candidate, company, employer = test_setup
 
         # Invalid: salary_min = 0 (violates salary_min > 0)
@@ -182,13 +181,13 @@ class TestOfferStateMachine:
                     company=company,
                     candidate=candidate,
                     created_by=employer,
-                    title="Invalid Salary Offer",
-                    description="...",
+                    title='Invalid Salary Offer',
+                    description='...',
                     salary_min=0,
                     salary_max=100000,
                     salary_type=SalaryType.GROSS,
-                    contact_channel="email",
-                    contact_value="hr@company.com",
+                    contact_channel='email',
+                    contact_value='hr@company.com',
                 )
 
         # Invalid: salary_max < salary_min (violates salary_max >= salary_min)
@@ -198,11 +197,11 @@ class TestOfferStateMachine:
                     company=company,
                     candidate=candidate,
                     created_by=employer,
-                    title="Invalid Salary Range Offer",
-                    description="...",
+                    title='Invalid Salary Range Offer',
+                    description='...',
                     salary_min=200000,
                     salary_max=150000,
                     salary_type=SalaryType.GROSS,
-                    contact_channel="email",
-                    contact_value="hr@company.com",
+                    contact_channel='email',
+                    contact_value='hr@company.com',
                 )

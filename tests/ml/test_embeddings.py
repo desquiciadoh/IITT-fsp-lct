@@ -182,4 +182,4 @@ def test_pool_latency_stays_under_300ms(monkeypatch):
         _ = F.cosine(need_emb, c_emb)
     elapsed_ms = (time.perf_counter() - start) * 1000
 
-    assert elapsed_ms < 300.0, f"100 candidate comparisons took {elapsed_ms:.2f} ms"
+    assert elapsed_ms < 100.0, f"100 candidate comparisons took {elapsed_ms:.2f} ms"

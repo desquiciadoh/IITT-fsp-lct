@@ -5,7 +5,6 @@ from employers until the candidate explicitly accepts a Draft Offer.
 Any access attempt without an active ContactGrant must raise ContactNotGranted
 and be recorded in AuditLog.
 """
-
 import pytest
 from core.enums import OfferStatus, SalaryType, UserRole
 from core.errors import ContactNotGranted
@@ -20,22 +19,22 @@ from profiles.models import CandidateContact, CandidateProfile, generate_public_
 @pytest.fixture
 def candidate(db):
     user = User.objects.create_user(
-        email="secret.candidate@example.com",
-        password="password123",
+        email='secret.candidate@example.com',
+        password='password123',
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
     CandidateProfile.objects.create(
         user=user,
         public_id=generate_public_id(),
-        full_name="Секретный Кандидат",
+        full_name='Секретный Кандидат',
         open_to_offers=True,
     )
     CandidateContact.objects.create(
         user=user,
-        email="secret.candidate@example.com",
-        phone="+7 (999) 000-00-00",
-        telegram="@secret_dev",
+        email='secret.candidate@example.com',
+        phone='+7 (999) 000-00-00',
+        telegram='@secret_dev',
     )
     return user
 
@@ -43,12 +42,12 @@ def candidate(db):
 @pytest.fixture
 def employer_company(db):
     company = Company.objects.create(
-        name="Tech Corp",
-        contact_email="hr@techcorp.com",
+        name='Tech Corp',
+        contact_email='hr@techcorp.com',
     )
     employer_user = User.objects.create_user(
-        email="recruiter@techcorp.com",
-        password="password123",
+        email='recruiter@techcorp.com',
+        password='password123',
         role=UserRole.EMPLOYER,
         email_verified_at=timezone.now(),
     )
@@ -58,6 +57,7 @@ def employer_company(db):
 
 @pytest.mark.django_db
 class TestContactGating:
+
     def test_no_contacts_without_offer(self, candidate, employer_company):
         """Employer cannot read contacts when no offer exists."""
         company, employer_user = employer_company
@@ -72,7 +72,7 @@ class TestContactGating:
         # Verify denied access is logged in AuditLog
         audit = AuditLog.objects.filter(
             actor_id=employer_user.id,
-            action="contact_access_denied",
+            action='contact_access_denied',
             target_id=str(candidate.id),
         ).first()
         assert audit is not None, "Failed contact access must be logged in AuditLog!"
@@ -84,13 +84,13 @@ class TestContactGating:
             company=company,
             candidate=candidate,
             created_by=employer_user,
-            title="Junior Backend",
-            description="Offer details",
+            title='Junior Backend',
+            description='Offer details',
             salary_min=150000,
             salary_max=200000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@techcorp.com",
+            contact_channel='email',
+            contact_value='hr@techcorp.com',
             status=OfferStatus.SENT,
         )
 
@@ -108,13 +108,13 @@ class TestContactGating:
             company=company,
             candidate=candidate,
             created_by=employer_user,
-            title="Junior Backend",
-            description="Offer details",
+            title='Junior Backend',
+            description='Offer details',
             salary_min=150000,
             salary_max=200000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@techcorp.com",
+            contact_channel='email',
+            contact_value='hr@techcorp.com',
             status=OfferStatus.SENT,
         )
 
@@ -139,13 +139,13 @@ class TestContactGating:
             company=company,
             candidate=candidate,
             created_by=employer_user,
-            title="Junior Backend",
-            description="Offer details",
+            title='Junior Backend',
+            description='Offer details',
             salary_min=150000,
             salary_max=200000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@techcorp.com",
+            contact_channel='email',
+            contact_value='hr@techcorp.com',
             status=OfferStatus.SENT,
         )
 
@@ -174,14 +174,14 @@ class TestContactGating:
             candidate_id=candidate.id,
             actor_id=employer_user.id,
         )
-        assert contacts.email == "secret.candidate@example.com"
-        assert contacts.phone == "+7 (999) 000-00-00"
-        assert contacts.telegram == "@secret_dev"
+        assert contacts.email == 'secret.candidate@example.com'
+        assert contacts.phone == '+7 (999) 000-00-00'
+        assert contacts.telegram == '@secret_dev'
 
         # Verify access granted is logged in AuditLog
         assert AuditLog.objects.filter(
             actor_id=employer_user.id,
-            action="contact_access_granted",
+            action='contact_access_granted',
             target_id=str(candidate.id),
         ).exists()
 
@@ -192,13 +192,13 @@ class TestContactGating:
             company=company,
             candidate=candidate,
             created_by=employer_user,
-            title="Junior Backend",
-            description="Offer details",
+            title='Junior Backend',
+            description='Offer details',
             salary_min=150000,
             salary_max=200000,
             salary_type=SalaryType.GROSS,
-            contact_channel="email",
-            contact_value="hr@techcorp.com",
+            contact_channel='email',
+            contact_value='hr@techcorp.com',
             status=OfferStatus.SENT,
         )
 
@@ -213,7 +213,7 @@ class TestContactGating:
             new_status=OfferStatus.DECLINED,
             expected_version=offer.version + 1,
             actor_id=candidate.id,
-            decline_reason="salary",
+            decline_reason='salary',
         )
 
         with pytest.raises(ContactNotGranted):

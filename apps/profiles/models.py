@@ -1,8 +1,6 @@
 """Profiles app models: CandidateProfile, CandidateContact, Skill, CandidateSkill."""
-
 import uuid
 
-from core.crypto import EncryptedCharField
 from core.enums import (
     EvidenceSource,
     Grade,
@@ -13,22 +11,11 @@ from core.enums import (
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
-from pgvector.django import HnswIndex, VectorField
 
 
-def generate_public_id(max_retries: int = 10) -> str:
-    """Generate a public ID in the format C-XXXXXXXX (8 hex uppercase chars).
-
-    Retries on collision if the database table is available.
-    """
-    for _ in range(max_retries):
-        pid = f"C-{uuid.uuid4().hex[:8].upper()}"
-        try:
-            if not CandidateProfile.objects.filter(public_id=pid).exists():
-                return pid
-        except Exception:
-            return pid
-    return f"C-{uuid.uuid4().hex[:8].upper()}"
+def generate_public_id() -> str:
+    """Generate a public ID in the format C-XXXXXX (hex uppercase)."""
+    return f'C-{uuid.uuid4().hex[:6].upper()}'
 
 
 class CandidateProfile(models.Model):
@@ -45,7 +32,7 @@ class CandidateProfile(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         primary_key=True,
-        related_name="candidate_profile",
+        related_name='candidate_profile',
     )
     public_id = models.CharField(
         max_length=10,
@@ -53,27 +40,24 @@ class CandidateProfile(models.Model):
         default=generate_public_id,
         db_index=True,
     )
-    full_name = models.CharField(max_length=255, blank=True, default="")
-    city = models.CharField(max_length=100, blank=True, default="")
-    timezone = models.CharField(max_length=50, blank=True, default="")
+    full_name = models.CharField(max_length=255, blank=True, default='')
+    city = models.CharField(max_length=100, blank=True, default='')
+    timezone = models.CharField(max_length=50, blank=True, default='')
 
     specialization = models.CharField(
         max_length=20,
         choices=Specialization.choices,
         blank=True,
-        default="",
+        default='',
     )
     claimed_grade = models.CharField(
         max_length=20,
         choices=Grade.choices,
         blank=True,
-        default="",
+        default='',
     )
     years_experience = models.DecimalField(
-        max_digits=4,
-        decimal_places=1,
-        null=True,
-        blank=True,
+        max_digits=4, decimal_places=1, null=True, blank=True,
     )
     roles = ArrayField(
         models.CharField(max_length=100),
@@ -93,96 +77,39 @@ class CandidateProfile(models.Model):
         max_length=10,
         choices=SalaryType.choices,
         blank=True,
-        default="",
+        default='',
     )
     salary_floor = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="Private minimum salary; offers below trigger a warning",
+        help_text='Private minimum salary; offers below trigger a warning',
     )
 
     # Visibility controls
     open_to_offers = models.BooleanField(default=True)
     blind_mode = models.BooleanField(
         default=False,
-        help_text="Hide name and photo until offer acceptance",
+        help_text='Hide name and photo until offer acceptance',
     )
     blocked_company_ids = ArrayField(
         models.UUIDField(),
         default=list,
         blank=True,
-        help_text="Companies hidden from seeing this profile",
+        help_text='Companies hidden from seeing this profile',
     )
 
-    about = models.TextField(blank=True, default="")
-    experience_text = models.TextField(blank=True, default="")
-    completeness = models.SmallIntegerField(default=0, help_text="Profile completeness 0-100")
-    unknown_skills = ArrayField(
-        models.CharField(max_length=100),
-        default=list,
-        blank=True,
-        help_text="Skills submitted by candidate that could not be mapped to canonical taxonomy",
-    )
-    embedding = VectorField(
-        dimensions=1024,
-        null=True,
-        blank=True,
-        help_text="1024-dim dense embedding (USER-bge-m3) for semantic matching",
-    )
+    about = models.TextField(blank=True, default='')
+    experience_text = models.TextField(blank=True, default='')
+    completeness = models.SmallIntegerField(default=0, help_text='Profile completeness 0-100')
 
     last_active_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "candidate_profiles"
-        indexes = [
-            HnswIndex(
-                name="candidate_profile_emb_hnsw",
-                fields=["embedding"],
-                m=16,
-                ef_construction=64,
-                opclasses=["vector_cosine_ops"],
-            ),
-        ]
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(salary_min__isnull=True) | models.Q(salary_min__gt=0),
-                name="chk_candidate_salary_min_positive",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(salary_min__isnull=True)
-                | models.Q(salary_max__isnull=True)
-                | models.Q(salary_max__gte=models.F("salary_min")),
-                name="chk_candidate_salary_max_gte_min",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(salary_type="") | models.Q(salary_type__in=["gross", "net"]),
-                name="chk_candidate_salary_type_valid",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(salary_floor__isnull=True) | models.Q(salary_floor__gt=0),
-                name="chk_candidate_salary_floor_positive",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(salary_floor__isnull=True)
-                | models.Q(salary_min__isnull=True)
-                | models.Q(salary_floor__lte=models.F("salary_min")),
-                name="chk_candidate_salary_floor_lte_min",
-            ),
-        ]
-
-    def save(self, *args, **kwargs):
-        if not self.public_id:
-            self.public_id = generate_public_id()
-        elif (
-            self._state.adding
-            and CandidateProfile.objects.filter(public_id=self.public_id).exists()
-        ):
-            self.public_id = generate_public_id()
-        super().save(*args, **kwargs)
+        db_table = 'candidate_profiles'
 
     def __str__(self) -> str:
-        return f"{self.public_id} ({self.full_name})"
+        return f'{self.public_id} ({self.full_name})'
 
 
 class CandidateContact(models.Model):
@@ -191,24 +118,23 @@ class CandidateContact(models.Model):
     INVARIANT: This table is NEVER queried directly by employer-facing views.
     Access is only through the ContactAccess service, which requires an
     active ContactGrant and logs every access to AuditLog.
-    All contact details are encrypted at rest with AES/Fernet.
     """
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         primary_key=True,
-        related_name="candidate_contacts",
+        related_name='candidate_contacts',
     )
-    email = EncryptedCharField(blank=True, default="")
-    phone = EncryptedCharField(blank=True, default="")
-    telegram = EncryptedCharField(blank=True, default="")
+    email = models.EmailField(blank=True, default='')
+    phone = models.CharField(max_length=30, blank=True, default='')
+    telegram = models.CharField(max_length=100, blank=True, default='')
 
     class Meta:
-        db_table = "candidate_contacts"
+        db_table = 'candidate_contacts'
 
     def __str__(self) -> str:
-        return f"Contacts for {self.user_id}"
+        return f'Contacts for {self.user_id}'
 
 
 class Skill(models.Model):
@@ -225,7 +151,7 @@ class Skill(models.Model):
         default=list,
         blank=True,
     )
-    topic = models.CharField(max_length=100, blank=True, default="")
+    topic = models.CharField(max_length=100, blank=True, default='')
     related = ArrayField(
         models.CharField(max_length=100),
         default=list,
@@ -233,7 +159,7 @@ class Skill(models.Model):
     )
 
     class Meta:
-        db_table = "skills"
+        db_table = 'skills'
 
     def __str__(self) -> str:
         return self.name
@@ -249,12 +175,12 @@ class CandidateSkill(models.Model):
     candidate = models.ForeignKey(
         CandidateProfile,
         on_delete=models.CASCADE,
-        related_name="skills",
+        related_name='skills',
     )
     skill = models.ForeignKey(
         Skill,
         on_delete=models.CASCADE,
-        related_name="candidate_skills",
+        related_name='candidate_skills',
     )
     source = models.CharField(
         max_length=20,
@@ -262,21 +188,21 @@ class CandidateSkill(models.Model):
     )
     level = models.FloatField(
         default=0.0,
-        help_text="Skill level 0.0-1.0",
+        help_text='Skill level 0.0-1.0',
     )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "candidate_skills"
+        db_table = 'candidate_skills'
         constraints = [
             models.UniqueConstraint(
-                fields=["candidate", "skill", "source"],
-                name="uq_candidate_skill_source",
+                fields=['candidate', 'skill', 'source'],
+                name='uq_candidate_skill_source',
             ),
         ]
         indexes = [
-            models.Index(fields=["skill"], name="idx_candidate_skills_skill"),
+            models.Index(fields=['skill'], name='idx_candidate_skills_skill'),
         ]
 
     def __str__(self) -> str:
-        return f"{self.candidate_id} / {self.skill_id} ({self.source})"
+        return f'{self.candidate_id} / {self.skill_id} ({self.source})'

@@ -518,7 +518,7 @@ The longest chain is content plus the CAT engine: AI-01 → AI-02 → AI-04, and
 Kickoff order. **Day 1:** BE runs F-01 → F-02 → F-03 (persona login by evening). AI publishes the F-07 signatures by lunch so BE can import them. FE starts F-06. PD starts PD-01, PD-02 and PD-03. **Day 2:** F-04, F-05 and F-08; FE-01 and FE-02 against stubs; AI-02 and AI-01 v0.
 
 - [x] **F-01** · P0 · S · BE: **Repo bootstrap.** Django 5.x + DRF modular monolith under `apps/`, requirements.txt, pytest, CI configs.
-- [x] **F-02** · P0 · S · BE: **Compose, Caddy, Makefile, `.env.example`** per §1.2. (Done: compose stack, deploy/Caddyfile, Makefile, and complete .env.example).
+- [ ] **F-02** · P0 · S · BE: **Compose, Caddy, Makefile, `.env.example`** per §1.2.
 - [x] **F-03** · P0 · M · BE: **API skeleton.** App settings, PostgreSQL connection, RFC 7807 problem+json handler (`core/errors.py`), Argon2 cookie sessions, SSE endpoint (`/api/events`), and `POST /api/demo/persona`.
 - [x] **F-04** · P0 · M · BE: **Schema v1.** Enums (`core/enums.py`) and all P0 tables in Django migrations, models across 6 apps, CheckConstraints for salaries, indexes.
 - [x] **F-05** · P0 · M · BE: **Contract & OpenAPI.** Full OpenAPI 3.0 schema at `docs/openapi.json` generated via drf-spectacular (`/api/docs/` Swagger UI, `/api/schema/`).
@@ -569,17 +569,17 @@ Owns persistence, the API, the state machines, auth, events and deployment. It w
   - Answer key secret exclusion test.
   - Grade immutability from FSP test.
   (Done: 18/18 tests passing in `tests/`, including candidate/employer RBAC, offer ownership scoping, and authenticated demo time travel).
-- [x] **BE-15** · P0 · S: **Staging & CD.** VPS/staging configuration (`deploy/Caddyfile`, `deploy/docker-compose.staging.yml`, `deploy/backup.sh`, `deploy/deploy.sh`) with HTTPS, static files serving, SSE streaming proxy, nightly `pg_dump` backups, and passing `python manage.py check --deploy`.
+- [ ] **BE-15** · P0 · S: **Staging & CD.**
 - [x] **BE-16** · P0 · S: **API docs.** OpenAPI 3.0 schema at `docs/openapi.json` generated via drf-spectacular (`/api/docs/` Swagger UI, `/api/schema/`). (Done: exported and validated).
 
 **P1**
-- [x] **BE-17** · P1 · M: **Vacancies & applications.** Publish a position, public list, apply (creates a contact grant), statuses and events. Deps: BE-07, BE-14. (Done: implemented in `apps/matching/` and tested in `tests/test_vacancies_applications.py`).
-- [x] **BE-18** · P1 · M: **Micro-tasks.** CRUD, weekly drop cron, auto-graded or open submissions, employer rating, prefilling an offer from a submission, activity evidence. Deps: BE-05, BE-10. (Done: implemented in `apps/matching/` and tested in `tests/test_micro_tasks.py`).
-- [x] **BE-19** · P1 · M: **Anti-fraud basics.** Weekly credits refunded on accept (429 `no_credits`), salary sanity checks (max/min ≤ 2; band vs league expectations), corporate-domain badge, INN checksum, offer rate limits. Deps: BE-09. (Done: implemented in `apps/matching/antifraud.py` and tested in `tests/test_antifraud.py`).
-- [x] **BE-20** · P1 · S: **Candidate controls & Need Health.** Contact revocation, the below-floor warning, decline analytics at `GET /positions/{id}/health`, and the acceptance-likelihood field. Deps: BE-09, AI-12. (Done: tested in `tests/test_candidate_controls_and_need_health.py`).
-- [x] **BE-21** · P1 · S: **Data protection extras.** Contacts encrypted at rest; per-employer PDF watermark. Deps: BE-03, BE-04. (Done: tested in `tests/test_data_protection_extras.py`).
-- [x] **BE-22** · P1 · S: **Lab endpoints.** `GET /lab/report` from the real file, `GET /lab/twins?position_id=`, and `GET /lab/families` (exposure, drift flags). Deps: AI-10, AI-13, AI-14. (Done: tested in `tests/test_lab_endpoints.py`).
-- [x] **BE-23** · P1 · S: **Load test.** A Locust run with 50 users across login, pool, offers and the test; the p95 table goes into the docs. Deps: BE-15. (Done: benchmarked in `tests/test_locust_load.py` and documented in `docs/BACKEND.md`).
+- [ ] **BE-17** · P1 · M: **Vacancies & applications.** Publish a position, public list, apply (creates a contact grant), statuses and events. Deps: BE-07, BE-14.
+- [ ] **BE-18** · P1 · M: **Micro-tasks.** CRUD, weekly drop cron, auto-graded or open submissions, employer rating, prefilling an offer from a submission, activity evidence. Deps: BE-05, BE-10.
+- [ ] **BE-19** · P1 · M: **Anti-fraud basics.** Weekly credits refunded on accept (429 `no_credits`), salary sanity checks (max/min ≤ 2; band vs league expectations), corporate-domain badge, INN checksum, offer rate limits. Deps: BE-09.
+- [ ] **BE-20** · P1 · S: **Candidate controls & Need Health.** Contact revocation, the below-floor warning, decline analytics at `GET /positions/{id}/health`, and the acceptance-likelihood field. Deps: BE-09, AI-12.
+- [ ] **BE-21** · P1 · S: **Data protection extras.** Contacts encrypted at rest; per-employer PDF watermark. Deps: BE-03, BE-04.
+- [ ] **BE-22** · P1 · S: **Lab endpoints.** `GET /lab/report` from the real file, `GET /lab/twins?position_id=`, and `GET /lab/families` (exposure, drift flags). Deps: AI-10, AI-13, AI-14.
+- [ ] **BE-23** · P1 · S: **Load test.** A Locust run with 50 users across login, pool, offers and the test; the p95 table goes into the docs. Deps: BE-15.
 
 ### 2.6 UI/Frontend (FE)
 

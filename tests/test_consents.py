@@ -1,14 +1,5 @@
 import pytest
-from assessment.models import LeagueMembership
-from core.enums import (
-    ConsentType,
-    Grade,
-    LeagueStatus,
-    OfferStatus,
-    SalaryType,
-    Specialization,
-    UserRole,
-)
+from core.enums import ConsentType, OfferStatus, SalaryType, UserRole
 from django.utils import timezone
 from identity.models import Consent, User
 from matching.models import Company, CompanyMember
@@ -21,15 +12,15 @@ from rest_framework.test import APIClient
 @pytest.fixture
 def candidate_user(db):
     user = User.objects.create_user(
-        email="consent.candidate@example.com",
-        password="password123",
+        email='consent.candidate@example.com',
+        password='password123',
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
     CandidateProfile.objects.create(
         user=user,
         public_id=generate_public_id(),
-        full_name="Consent Candidate",
+        full_name='Consent Candidate',
         open_to_offers=True,
     )
     Consent.objects.create(
@@ -42,27 +33,20 @@ def candidate_user(db):
         type=ConsentType.PUBLICATION,
         granted=True,
     )
-    LeagueMembership.objects.create(
-        candidate=user,
-        specialization=Specialization.BACKEND,
-        grade=Grade.MIDDLE,
-        status=LeagueStatus.CONFIRMED,
-        confirmed_at=timezone.now(),
-    )
     return user
 
 
 @pytest.fixture
 def employer_with_company(db):
     employer = User.objects.create_user(
-        email="consent.employer@example.com",
-        password="password123",
+        email='consent.employer@example.com',
+        password='password123',
         role=UserRole.EMPLOYER,
         email_verified_at=timezone.now(),
     )
     company = Company.objects.create(
-        name="Consent Company",
-        contact_email="hr@consent.com",
+        name='Consent Company',
+        contact_email='hr@consent.com',
     )
     CompanyMember.objects.create(company=company, user=employer)
     return employer, company
@@ -74,20 +58,20 @@ def test_consents_get_and_put(candidate_user):
     client.force_authenticate(candidate_user)
 
     # GET consents
-    res = client.get("/api/candidates/me/consents")
+    res = client.get('/api/candidates/me/consents')
     assert res.status_code == 200
-    assert res.data["publication"] is True
-    assert res.data["processing"] is True
+    assert res.data['publication'] is True
+    assert res.data['processing'] is True
 
     # PUT consents with boolean
-    res = client.put("/api/candidates/me/consents", {"fsp_sync": True}, format="json")
+    res = client.put('/api/candidates/me/consents', {'fsp_sync': True}, format='json')
     assert res.status_code == 200
-    assert res.data["fsp_sync"] is True
+    assert res.data['fsp_sync'] is True
 
     # PUT consents with string "false" - must parse to False (B20)
-    res = client.put("/api/candidates/me/consents", {"fsp_sync": "false"}, format="json")
+    res = client.put('/api/candidates/me/consents', {'fsp_sync': 'false'}, format='json')
     assert res.status_code == 200
-    assert res.data["fsp_sync"] is False
+    assert res.data['fsp_sync'] is False
 
 
 @pytest.mark.django_db
@@ -96,14 +80,12 @@ def test_employer_cannot_manage_consents(employer_with_company):
     client = APIClient()
     client.force_authenticate(employer)
 
-    res = client.put("/api/candidates/me/consents", {"publication": True}, format="json")
+    res = client.put('/api/candidates/me/consents', {'publication': True}, format='json')
     assert res.status_code == 403
 
 
 @pytest.mark.django_db
-def test_publication_consent_revocation_withdraws_pending_offers(
-    candidate_user, employer_with_company
-):
+def test_publication_consent_revocation_withdraws_pending_offers(candidate_user, employer_with_company):
     employer, company = employer_with_company
 
     # Create a pending offer (SENT)
@@ -111,13 +93,13 @@ def test_publication_consent_revocation_withdraws_pending_offers(
         company=company,
         candidate=candidate_user,
         created_by=employer,
-        title="Backend Dev",
-        description="Work with us",
+        title='Backend Dev',
+        description='Work with us',
         salary_min=150000,
         salary_max=200000,
         salary_type=SalaryType.GROSS,
-        contact_channel="email",
-        contact_value="hr@consent.com",
+        contact_channel='email',
+        contact_value='hr@consent.com',
         status=OfferStatus.SENT,
     )
     # Create an offer in VIEWED status
@@ -125,13 +107,13 @@ def test_publication_consent_revocation_withdraws_pending_offers(
         company=company,
         candidate=candidate_user,
         created_by=employer,
-        title="Senior Dev",
-        description="Senior role",
+        title='Senior Dev',
+        description='Senior role',
         salary_min=250000,
         salary_max=300000,
         salary_type=SalaryType.GROSS,
-        contact_channel="email",
-        contact_value="hr@consent.com",
+        contact_channel='email',
+        contact_value='hr@consent.com',
         status=OfferStatus.VIEWED,
     )
 
@@ -139,9 +121,9 @@ def test_publication_consent_revocation_withdraws_pending_offers(
     client.force_authenticate(candidate_user)
 
     # Revoke publication consent
-    res = client.put("/api/candidates/me/consents", {"publication": False}, format="json")
+    res = client.put('/api/candidates/me/consents', {'publication': False}, format='json')
     assert res.status_code == 200
-    assert res.data["publication"] is False
+    assert res.data['publication'] is False
 
     offer_sent.refresh_from_db()
     offer_viewed.refresh_from_db()
@@ -160,7 +142,7 @@ def test_publication_consent_revocation_hides_from_pool(candidate_user, employer
     client.force_authenticate(candidate_user)
 
     # Revoke publication consent
-    res = client.put("/api/candidates/me/consents", {"publication": False}, format="json")
+    res = client.put('/api/candidates/me/consents', {'publication': False}, format='json')
     assert res.status_code == 200
 
     # Candidate should no longer be visible

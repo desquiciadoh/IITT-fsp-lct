@@ -1,5 +1,4 @@
 """Outreach service: Offer state machine with optimistic locking."""
-
 from __future__ import annotations
 
 import logging
@@ -33,7 +32,6 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ContactInfo:
     """Contact information returned to an authorized employer."""
-
     full_name: str
     email: str
     phone: str
@@ -78,47 +76,44 @@ class ContactAccessService:
             # Log the failed access attempt
             AuditLog.objects.create(
                 actor_id=actor_id,
-                action="contact_access_denied",
-                target_type="CandidateContact",
+                action='contact_access_denied',
+                target_type='CandidateContact',
                 target_id=str(candidate_id),
                 meta={
-                    "company_id": str(company_id),
-                    "reason": "no_active_grant",
+                    'company_id': str(company_id),
+                    'reason': 'no_active_grant',
                 },
             )
             logger.warning(
-                "Contact access denied: company=%s candidate=%s actor=%s",
-                company_id,
-                candidate_id,
-                actor_id,
+                'Contact access denied: company=%s candidate=%s actor=%s',
+                company_id, candidate_id, actor_id,
             )
             raise ContactNotGranted()
 
         # Log the successful access
         AuditLog.objects.create(
             actor_id=actor_id,
-            action="contact_access_granted",
-            target_type="CandidateContact",
+            action='contact_access_granted',
+            target_type='CandidateContact',
             target_id=str(candidate_id),
             meta={
-                "company_id": str(company_id),
-                "grant_id": str(grant.id),
+                'company_id': str(company_id),
+                'grant_id': str(grant.id),
             },
         )
 
         try:
             contacts = CandidateContact.objects.get(user_id=candidate_id)
         except CandidateContact.DoesNotExist:
-            return ContactInfo(full_name="", email="", phone="", telegram="")
+            return ContactInfo(full_name='', email='', phone='', telegram='')
 
         # Get full name from profile
         from profiles.models import CandidateProfile
-
         try:
             profile = CandidateProfile.objects.get(user_id=candidate_id)
             full_name = profile.full_name
         except CandidateProfile.DoesNotExist:
-            full_name = ""
+            full_name = ''
 
         return ContactInfo(
             full_name=full_name,
@@ -151,20 +146,20 @@ class ContactAccessService:
             source=source,
             source_id=source_id,
             defaults={
-                "candidate_id": candidate_id,
-                "company_id": company_id,
+                'candidate_id': candidate_id,
+                'company_id': company_id,
             },
         )
         if created:
             AuditLog.objects.create(
                 actor_id=candidate_id,
-                action="contact_grant_created",
-                target_type="ContactGrant",
+                action='contact_grant_created',
+                target_type='ContactGrant',
                 target_id=str(grant.id),
                 meta={
-                    "company_id": str(company_id),
-                    "source": source,
-                    "source_id": str(source_id),
+                    'company_id': str(company_id),
+                    'source': source,
+                    'source_id': str(source_id),
                 },
             )
         return grant
@@ -181,13 +176,13 @@ class ContactAccessService:
         ).first()
         if grant:
             grant.revoked_at = timezone.now()
-            grant.save(update_fields=["revoked_at"])
+            grant.save(update_fields=['revoked_at'])
             AuditLog.objects.create(
                 actor_id=actor_id,
-                action="contact_grant_revoked",
-                target_type="ContactGrant",
+                action='contact_grant_revoked',
+                target_type='ContactGrant',
                 target_id=str(grant_id),
-                meta={"company_id": str(grant.company_id)},
+                meta={'company_id': str(grant.company_id)},
             )
 
 
@@ -207,8 +202,8 @@ class OfferService:
         new_status: str,
         expected_version: int,
         actor_id: uuid.UUID,
-        decline_reason: str = "",
-        decline_comment: str = "",
+        decline_reason: str = '',
+        decline_comment: str = '',
     ) -> Offer:
         """Transition an offer to a new status with optimistic locking.
 
@@ -234,8 +229,7 @@ class OfferService:
             offer = Offer.objects.select_for_update().filter(id=offer_id).first()
             if offer is None:
                 from django.http import Http404
-
-                raise Http404("Offer not found")
+                raise Http404('Offer not found')
 
             if offer.version != expected_version:
                 raise VersionConflict()
@@ -248,11 +242,7 @@ class OfferService:
             )
             if not expired:
                 return OfferService._apply_transition(
-                    offer,
-                    new_status,
-                    actor_id,
-                    decline_reason,
-                    decline_comment,
+                    offer, new_status, actor_id, decline_reason, decline_comment,
                 )
             OfferService._expire_locked(offer, actor_id, now)
         raise OfferExpired()
@@ -262,7 +252,7 @@ class OfferService:
         """Mark a locked sent/viewed offer EXPIRED with event, audit and domain event."""
         from_status = offer.status
         offer.status = OfferStatus.EXPIRED
-        offer.version = F("version") + 1
+        offer.version = F('version') + 1
         offer.updated_at = now
         offer.save()
         offer.refresh_from_db()
@@ -274,25 +264,22 @@ class OfferService:
         )
         AuditLog.objects.create(
             actor_id=actor_id,
-            action="offer_expired",
-            target_type="Offer",
+            action='offer_expired',
+            target_type='Offer',
             target_id=str(offer.id),
             meta={
-                "new_status": OfferStatus.EXPIRED,
-                "version": offer.version,
-                "lazy": True,
+                'new_status': OfferStatus.EXPIRED,
+                'version': offer.version,
+                'lazy': True,
             },
         )
-        publish_domain_event(
-            "offer.updated",
-            {
-                "offer_id": str(offer.id),
-                "status": OfferStatus.EXPIRED,
-                "candidate_id": str(offer.candidate_id),
-                "company_id": str(offer.company_id),
-                "version": offer.version,
-            },
-        )
+        publish_domain_event('offer.updated', {
+            'offer_id': str(offer.id),
+            'status': OfferStatus.EXPIRED,
+            'candidate_id': str(offer.candidate_id),
+            'company_id': str(offer.company_id),
+            'version': offer.version,
+        })
 
     @staticmethod
     def _apply_transition(
@@ -309,7 +296,7 @@ class OfferService:
 
         from_status = offer.status
         offer.status = new_status
-        offer.version = F("version") + 1
+        offer.version = F('version') + 1
         offer.updated_at = timezone.now()
         if new_status == OfferStatus.DECLINED:
             offer.decline_reason = decline_reason
@@ -325,7 +312,7 @@ class OfferService:
             actor_id=actor_id,
         )
 
-        # Auto-create ContactGrant on acceptance and refund position credit (Task BE-19)
+        # Auto-create ContactGrant on acceptance
         if new_status == OfferStatus.ACCEPTED:
             ContactAccessService.create_grant(
                 candidate_id=offer.candidate_id,
@@ -333,32 +320,26 @@ class OfferService:
                 source=ContactGrantSource.OFFER,
                 source_id=offer.id,
             )
-            if offer.position_id:
-                from matching.antifraud import refund_position_credit
-                refund_position_credit(offer.position_id, offer.created_at)
 
         # Audit log
         AuditLog.objects.create(
             actor_id=actor_id,
-            action=f"offer_{new_status}",
-            target_type="Offer",
+            action=f'offer_{new_status}',
+            target_type='Offer',
             target_id=str(offer_id),
             meta={
-                "new_status": new_status,
-                "version": offer.version,
+                'new_status': new_status,
+                'version': offer.version,
             },
         )
 
-        publish_domain_event(
-            "offer.updated",
-            {
-                "offer_id": str(offer.id),
-                "status": new_status,
-                "candidate_id": str(offer.candidate_id),
-                "company_id": str(offer.company_id),
-                "version": offer.version,
-            },
-        )
+        publish_domain_event('offer.updated', {
+            'offer_id': str(offer.id),
+            'status': new_status,
+            'candidate_id': str(offer.candidate_id),
+            'company_id': str(offer.company_id),
+            'version': offer.version,
+        })
 
         return offer
 
@@ -388,7 +369,7 @@ class OfferService:
 
         # Verify candidate exists
         try:
-            profile = CandidateProfile.objects.select_related("user").get(user_id=candidate_id)
+            profile = CandidateProfile.objects.select_related('user').get(user_id=candidate_id)
         except CandidateProfile.DoesNotExist:
             raise CandidateNotReachable()
 
@@ -396,20 +377,13 @@ class OfferService:
         if not company or not is_candidate_visible_to_company(profile, company):
             raise CandidateNotReachable()
 
-        # Anti-fraud: salary sanity checks (Task BE-19)
-        from matching.antifraud import consume_position_credit, validate_salary_ratio
-        validate_salary_ratio(salary_min, salary_max)
-
         # Compute why_you and match_snapshot server-side from scorer, ignoring client input
         if position_id:
             pos = Position.objects.filter(id=position_id, company_id=company_id).first()
             if pos:
-                # Anti-fraud: check and consume weekly outreach credit (5 credits/week, Task BE-19)
-                consume_position_credit(pos)
-
                 score_data = calculate_match_score(profile, pos)
-                why_you = score_data.get("reasons", [])
-                match_snapshot = score_data.get("components", {})
+                why_you = score_data.get('reasons', [])
+                match_snapshot = score_data.get('components', {})
             else:
                 why_you = []
                 match_snapshot = {}
@@ -418,11 +392,6 @@ class OfferService:
             match_snapshot = {}
 
         expires_at = timezone.now() + timedelta(days=expires_in_days)
-
-        # Candidate controls (BE-20): below-floor private flag
-        below_floor = bool(
-            profile.salary_floor is not None and salary_max < profile.salary_floor
-        )
 
         offer = Offer.objects.create(
             company_id=company_id,
@@ -438,27 +407,23 @@ class OfferService:
             contact_value=contact_value,
             why_you=why_you,
             match_snapshot=match_snapshot,
-            below_floor=below_floor,
             expires_at=expires_at,
         )
 
         OfferEvent.objects.create(
             offer=offer,
-            from_status="",
+            from_status='',
             to_status=OfferStatus.SENT,
             actor_id=created_by_id,
         )
 
-        publish_domain_event(
-            "offer.created",
-            {
-                "offer_id": str(offer.id),
-                "candidate_id": str(offer.candidate_id),
-                "company_id": str(offer.company_id),
-                "title": offer.title,
-                "status": offer.status,
-            },
-        )
+        publish_domain_event('offer.created', {
+            'offer_id': str(offer.id),
+            'candidate_id': str(offer.candidate_id),
+            'company_id': str(offer.company_id),
+            'title': offer.title,
+            'status': offer.status,
+        })
 
         return offer
 
@@ -472,12 +437,27 @@ class OfferService:
         )
         count = 0
         for offer in expired_offers:
-            try:
-                with transaction.atomic():
-                    offer_locked = Offer.objects.select_for_update().filter(id=offer.id).first()
-                    if offer_locked and offer_locked.can_transition_to(OfferStatus.EXPIRED):
-                        OfferService._expire_locked(offer_locked, None, now)
-                        count += 1
-            except Exception:
-                logger.exception("Failed to expire offer %s", offer.id)
+            with transaction.atomic():
+                offer_locked = Offer.objects.select_for_update().filter(id=offer.id).first()
+                if offer_locked and offer_locked.can_transition_to(OfferStatus.EXPIRED):
+                    from_status = offer_locked.status
+                    offer_locked.status = OfferStatus.EXPIRED
+                    offer_locked.version = F('version') + 1
+                    offer_locked.updated_at = now
+                    offer_locked.save()
+                    offer_locked.refresh_from_db()
+                    OfferEvent.objects.create(
+                        offer=offer_locked,
+                        from_status=from_status,
+                        to_status=OfferStatus.EXPIRED,
+                        actor_id=None,
+                    )
+                    publish_domain_event('offer.updated', {
+                        'offer_id': str(offer_locked.id),
+                        'status': OfferStatus.EXPIRED,
+                        'candidate_id': str(offer_locked.candidate_id),
+                        'company_id': str(offer_locked.company_id),
+                        'version': offer_locked.version,
+                    })
+                    count += 1
         return count

@@ -1,10 +1,8 @@
 """Outreach app serializers."""
-
 from core.enums import ContactChannel, DeclineReason, SalaryType
 from core.errors import ContactNotGranted
 from drf_spectacular.utils import extend_schema_field
 from matching.serializers import CompanySerializer, TalentShortSerializer
-from matching.services import compute_acceptance_likelihood
 from rest_framework import serializers
 
 from outreach.models import Offer
@@ -30,62 +28,48 @@ class OfferSerializer(serializers.ModelSerializer):
     why_you = serializers.JSONField(read_only=True)
     talent = serializers.SerializerMethodField()
     decline = serializers.SerializerMethodField()
-    below_floor = serializers.SerializerMethodField()
-    acceptance_likelihood = serializers.SerializerMethodField()
 
     class Meta:
         model = Offer
         fields = [
-            "id",
-            "company",
-            "position",
-            "candidate_public_id",
-            "talent",
-            "title",
-            "description",
-            "salary_min",
-            "salary_max",
-            "salary_type",
-            "currency",
-            "contact_channel",
-            "contact_value",
-            "status",
-            "decline_reason",
-            "decline_comment",
-            "decline",
-            "why_you",
-            "below_floor",
-            "acceptance_likelihood",
-            "version",
-            "candidate_contacts",
-            "expires_at",
-            "created_at",
-            "updated_at",
+            'id',
+            'company',
+            'position',
+            'candidate_public_id',
+            'talent',
+            'title',
+            'description',
+            'salary_min',
+            'salary_max',
+            'salary_type',
+            'currency',
+            'contact_channel',
+            'contact_value',
+            'status',
+            'decline_reason',
+            'decline_comment',
+            'decline',
+            'why_you',
+            'version',
+            'candidate_contacts',
+            'expires_at',
+            'created_at',
+            'updated_at',
         ]
-        read_only_fields = ["id", "status", "version", "expires_at", "created_at", "updated_at"]
+        read_only_fields = ['id', 'status', 'version', 'expires_at', 'created_at', 'updated_at']
 
     def validate(self, attrs):
-        salary_min = (
-            attrs["salary_min"]
-            if "salary_min" in attrs
-            else (self.instance.salary_min if self.instance else None)
+        salary_min = attrs['salary_min'] if 'salary_min' in attrs else (
+            self.instance.salary_min if self.instance else None
         )
-        salary_max = (
-            attrs["salary_max"]
-            if "salary_max" in attrs
-            else (self.instance.salary_max if self.instance else None)
+        salary_max = attrs['salary_max'] if 'salary_max' in attrs else (
+            self.instance.salary_max if self.instance else None
         )
 
         if salary_min is not None and salary_min <= 0:
-            raise serializers.ValidationError({"salary_min": "salary_min must be greater than 0."})
+            raise serializers.ValidationError({'salary_min': 'salary_min must be greater than 0.'})
         if salary_min is not None and salary_max is not None and salary_max < salary_min:
-            raise serializers.ValidationError(
-                {"salary_max": "salary_max must be greater than or equal to salary_min."}
-            )
-        if salary_min is not None and salary_max is not None and salary_max > 2 * salary_min:
-            raise serializers.ValidationError(
-                {"salary_max": "salary_max / salary_min ratio cannot exceed 2.0."}
-            )
+            raise serializers.ValidationError({'salary_max': 'salary_max must be greater than or equal to salary_min.'})
         return attrs
 
     @extend_schema_field(TalentShortSerializer)
@@ -100,35 +84,15 @@ class OfferSerializer(serializers.ModelSerializer):
     def get_decline(self, obj):
         if obj.decline_reason or obj.decline_comment:
             return {
-                "reason": obj.decline_reason,
-                "comment": obj.decline_comment,
+                'reason': obj.decline_reason,
+                'comment': obj.decline_comment,
             }
         return None
-
-    @extend_schema_field(serializers.CharField())
-    def get_acceptance_likelihood(self, obj) -> str:
-        profile = getattr(obj.candidate, "candidate_profile", None)
-        if not profile:
-            return "medium"
-        pos_formats = (
-            list(obj.position.work_formats)
-            if obj.position and obj.position.work_formats
-            else None
-        )
-        return compute_acceptance_likelihood(
-            profile,
-            salary_max=obj.salary_max,
-            work_formats=pos_formats,
-        )
-
-    @extend_schema_field(serializers.BooleanField())
-    def get_below_floor(self, obj) -> bool:
-        return bool(obj.below_floor)
 
     @extend_schema_field(CandidateContactsDisplaySerializer)
     def get_candidate_contacts(self, obj):
         # Contacts are returned ONLY if user has active grant
-        request = self.context.get("request")
+        request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return None
 
@@ -136,14 +100,11 @@ class OfferSerializer(serializers.ModelSerializer):
         if request.user.id == obj.candidate_id:
             try:
                 c = obj.candidate.candidate_contacts
-                return {"email": c.email, "phone": c.phone, "telegram": c.telegram}
+                return {'email': c.email, 'phone': c.phone, 'telegram': c.telegram}
             except Exception:
-                return {"email": obj.candidate.email}
+                return {'email': obj.candidate.email}
 
         # If employer is viewing: check if contact grant exists (independent of offer status)
-        if not ContactAccessService.has_active_grant(obj.company_id, obj.candidate_id):
-            return None
-
         try:
             contacts = ContactAccessService.get_contacts(
                 company_id=obj.company_id,
@@ -151,10 +112,10 @@ class OfferSerializer(serializers.ModelSerializer):
                 actor_id=request.user.id,
             )
             return {
-                "full_name": contacts.full_name,
-                "email": contacts.email,
-                "phone": contacts.phone,
-                "telegram": contacts.telegram,
+                'full_name': contacts.full_name,
+                'email': contacts.email,
+                'phone': contacts.phone,
+                'telegram': contacts.telegram,
             }
         except ContactNotGranted:
             return None
@@ -163,8 +124,8 @@ class OfferSerializer(serializers.ModelSerializer):
 class CreateOfferSerializer(serializers.Serializer):
     candidate_public_id = serializers.CharField(required=True)
     position = serializers.UUIDField(required=False, allow_null=True)
-    title = serializers.CharField(max_length=255, required=False, default="Draft Offer")
-    description = serializers.CharField(required=False, allow_blank=True, default="")
+    title = serializers.CharField(max_length=255, required=False, default='Draft Offer')
+    description = serializers.CharField(required=False, allow_blank=True, default='')
     salary_min = serializers.IntegerField(min_value=1, required=True)
     salary_max = serializers.IntegerField(min_value=1, required=True)
     salary_type = serializers.ChoiceField(choices=SalaryType.choices, required=True)
@@ -172,22 +133,15 @@ class CreateOfferSerializer(serializers.Serializer):
     contact_value = serializers.CharField(max_length=255, required=True)
 
     def validate(self, attrs):
-        if attrs["salary_min"] <= 0:
-            raise serializers.ValidationError({"salary_min": "salary_min must be greater than 0."})
-        if attrs["salary_max"] < attrs["salary_min"]:
-            raise serializers.ValidationError(
-                {"salary_max": "salary_max must be greater than or equal to salary_min."}
-            )
-        if attrs["salary_max"] > 2 * attrs["salary_min"]:
-            raise serializers.ValidationError(
-                {"salary_max": "salary_max / salary_min ratio cannot exceed 2.0."}
-            )
+        if attrs['salary_min'] <= 0:
+            raise serializers.ValidationError({'salary_min': 'salary_min must be greater than 0.'})
+        if attrs['salary_max'] < attrs['salary_min']:
+            raise serializers.ValidationError({'salary_max': 'salary_max must be greater than or equal to salary_min.'})
         return attrs
 
 
 class OfferActionSerializer(serializers.Serializer):
     version = serializers.IntegerField(required=True)
-    reason = serializers.ChoiceField(
-        choices=DeclineReason.choices, required=False, allow_blank=True
-    )
-    comment = serializers.CharField(required=False, allow_blank=True, default="")
+    reason = serializers.ChoiceField(choices=DeclineReason.choices, required=False, allow_blank=True)
+    comment = serializers.CharField(required=False, allow_blank=True, default='')
+

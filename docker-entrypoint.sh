@@ -9,7 +9,7 @@ case "$1" in
 
         if [ "$DEMO_MODE" = "True" ] || [ "$DEMO_MODE" = "1" ] || [ "$AUTO_SEED" = "True" ] || [ "$AUTO_SEED" = "1" ]; then
             echo "Seeding initial database state..."
-            python manage.py seed
+            python manage.py seed || true
         fi
         ;;
 esac

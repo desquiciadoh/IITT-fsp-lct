@@ -29,3 +29,9 @@ ignore = [
     "B008",  # do not perform function calls in argument defaults
     "B904",  # raise ... from err
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

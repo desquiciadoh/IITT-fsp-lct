@@ -5,9 +5,7 @@ EXCLUSIVELY by the adaptive qualification assessment (CAT).
 FSP achievements (sports ranks, tournament wins) influence Profile Strength
 and ranking within the League, but CANNOT change or elevate a candidate's Grade.
 """
-
 from datetime import date
-from unittest.mock import patch
 
 import pytest
 from assessment.models import LeagueMembership
@@ -29,8 +27,8 @@ from identity.models import User
 @pytest.fixture
 def junior_candidate(db):
     user = User.objects.create_user(
-        email="junior.champ@example.com",
-        password="password123",
+        email='junior.champ@example.com',
+        password='password123',
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
@@ -43,7 +41,6 @@ def junior_candidate(db):
         theta=-0.1,
         rating=980,
         strength=50.0,
-        base_strength=50.0,
         confirmed_at=timezone.now(),
     )
     return user, lm
@@ -51,6 +48,7 @@ def junior_candidate(db):
 
 @pytest.mark.django_db
 class TestGradeImmutability:
+
     def test_fsp_achievements_boost_strength_not_grade(self, junior_candidate):
         """FSP Master of Sports and 1st place award increases strength, but Grade stays Junior."""
         user, league_membership = junior_candidate
@@ -62,13 +60,13 @@ class TestGradeImmutability:
         # Candidate links FSP ID with top achievements: MS rank + 1st place
         FSPLink.objects.create(
             candidate=user,
-            participant_id="FSP-999999",
+            participant_id='FSP-999999',
             sports_rank=SportsRank.MS,
         )
         FSPResult.objects.create(
             candidate=user,
-            event_id="NATIONAL-GOLD-2025",
-            event_name="Чемпионат России по СП (Золото)",
+            event_id='NATIONAL-GOLD-2025',
+            event_name='Чемпионат России по СП (Золото)',
             discipline=Discipline.ALGORITHMIC,
             date=date(2025, 11, 20),
             placement=1,
@@ -76,24 +74,8 @@ class TestGradeImmutability:
             participants_total=300,
         )
 
-        mock_data = {
-            "sports_rank": SportsRank.MS,
-            "results": [
-                {
-                    "event_id": "NATIONAL-GOLD-2025",
-                    "event_name": "Чемпионат России по СП (Золото)",
-                    "discipline": Discipline.ALGORITHMIC,
-                    "date": date(2025, 11, 20),
-                    "placement": 1,
-                    "tier": PlacementTier.WINNER,
-                    "participants_total": 300,
-                }
-            ],
-        }
-
         # Trigger sync/recalculate
-        with patch("fsp_sync.services.get_registry_data", return_value=mock_data):
-            sync_candidate_fsp_data(user, "FSP-999999")
+        sync_candidate_fsp_data(user, 'FSP-999999')
 
         league_membership.refresh_from_db()
 
@@ -110,8 +92,8 @@ class TestGradeImmutability:
     def test_unconfirmed_grade_stays_unconfirmed_with_fsp(self, db):
         """Candidate who failed CAT test remains UNCONFIRMED even with FSP achievements."""
         user = User.objects.create_user(
-            email="unconfirmed.fsp@example.com",
-            password="password123",
+            email='unconfirmed.fsp@example.com',
+            password='password123',
             role=UserRole.CANDIDATE,
             email_verified_at=timezone.now(),
         )
@@ -126,7 +108,7 @@ class TestGradeImmutability:
         )
 
         # Link FSP achievements
-        sync_candidate_fsp_data(user, "FSP-000123")
+        sync_candidate_fsp_data(user, 'FSP-000123')
 
         lm.refresh_from_db()
 
@@ -140,13 +122,13 @@ class TestGradeImmutability:
 
         FSPLink.objects.create(
             candidate=user,
-            participant_id="FSP-999999",
+            participant_id='FSP-999999',
             sports_rank=SportsRank.MS,
         )
         FSPResult.objects.create(
             candidate=user,
-            event_id="NATIONAL-GOLD-2025",
-            event_name="Чемпионат России по СП (Золото)",
+            event_id='NATIONAL-GOLD-2025',
+            event_name='Чемпионат России по СП (Золото)',
             discipline=Discipline.ALGORITHMIC,
             date=date(2025, 11, 20),
             placement=1,
@@ -154,31 +136,15 @@ class TestGradeImmutability:
             participants_total=300,
         )
 
-        mock_data = {
-            "sports_rank": SportsRank.MS,
-            "results": [
-                {
-                    "event_id": "NATIONAL-GOLD-2025",
-                    "event_name": "Чемпионат России по СП (Золото)",
-                    "discipline": Discipline.ALGORITHMIC,
-                    "date": date(2025, 11, 20),
-                    "placement": 1,
-                    "tier": PlacementTier.WINNER,
-                    "participants_total": 300,
-                }
-            ],
-        }
+        # First sync
+        sync_candidate_fsp_data(user, 'FSP-999999')
+        league_membership.refresh_from_db()
+        first_sync_strength = league_membership.strength
+        assert first_sync_strength == 55.0  # 50.0 base + 5.0 boost
 
-        with patch("fsp_sync.services.get_registry_data", return_value=mock_data):
-            # First sync
-            sync_candidate_fsp_data(user, "FSP-999999")
-            league_membership.refresh_from_db()
-            first_sync_strength = league_membership.strength
-            assert first_sync_strength == 55.0  # 50.0 base + 5.0 boost
-
-            # Second sync
-            sync_candidate_fsp_data(user, "FSP-999999")
-            league_membership.refresh_from_db()
-            assert league_membership.strength == first_sync_strength, (
-                "FSP sync must be idempotent: multiple syncs must not inflate profile strength!"
-            )
+        # Second sync
+        sync_candidate_fsp_data(user, 'FSP-999999')
+        league_membership.refresh_from_db()
+        assert league_membership.strength == first_sync_strength, (
+            "FSP sync must be idempotent: multiple syncs must not inflate profile strength!"
+        )

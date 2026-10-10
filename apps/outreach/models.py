@@ -3,7 +3,6 @@
 Implements the reverse-contact protocol: employers send salary-first
 Draft Offers, contacts unlock only on candidate acceptance.
 """
-
 import uuid
 from datetime import timedelta
 
@@ -15,7 +14,6 @@ from core.enums import (
     SalaryType,
 )
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.utils import timezone
 
@@ -31,10 +29,10 @@ OFFER_TRANSITIONS: dict[str, list[str]] = {
     OfferStatus.ACCEPTED: [OfferStatus.INTERVIEW, OfferStatus.CLOSED],
     OfferStatus.INTERVIEW: [OfferStatus.HIRED, OfferStatus.CLOSED],
     OfferStatus.DECLINED: [],  # Terminal
-    OfferStatus.EXPIRED: [],  # Terminal
-    OfferStatus.WITHDRAWN: [],  # Terminal
-    OfferStatus.HIRED: [],  # Terminal
-    OfferStatus.CLOSED: [],  # Terminal
+    OfferStatus.EXPIRED: [],   # Terminal
+    OfferStatus.WITHDRAWN: [], # Terminal
+    OfferStatus.HIRED: [],     # Terminal
+    OfferStatus.CLOSED: [],    # Terminal
 }
 
 
@@ -50,27 +48,27 @@ class Offer(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
-        "matching.Company",
+        'matching.Company',
         on_delete=models.CASCADE,
-        related_name="offers",
+        related_name='offers',
     )
     position = models.ForeignKey(
-        "matching.Position",
+        'matching.Position',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="offers",
+        related_name='offers',
     )
     candidate = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="received_offers",
+        related_name='received_offers',
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="sent_offers",
+        related_name='sent_offers',
     )
 
     title = models.CharField(max_length=255)
@@ -80,7 +78,7 @@ class Offer(models.Model):
     salary_min = models.PositiveIntegerField()
     salary_max = models.PositiveIntegerField()
     salary_type = models.CharField(max_length=10, choices=SalaryType.choices)
-    currency = models.CharField(max_length=3, default="RUB")
+    currency = models.CharField(max_length=3, default='RUB')
 
     contact_channel = models.CharField(max_length=20, choices=ContactChannel.choices)
     contact_value = models.CharField(max_length=255)
@@ -94,69 +92,59 @@ class Offer(models.Model):
         max_length=20,
         choices=DeclineReason.choices,
         blank=True,
-        default="",
+        default='',
     )
-    decline_comment = models.TextField(blank=True, default="")
+    decline_comment = models.TextField(blank=True, default='')
 
     # Matching context snapshot (frozen at offer creation)
     why_you = models.JSONField(
         default=list,
         blank=True,
-        help_text="Reason chips explaining why the candidate was selected",
+        help_text='Reason chips explaining why the candidate was selected',
     )
     match_snapshot = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Frozen match score components at offer creation time",
-    )
-
-    # Anti-fraud and candidate controls
-    below_floor = models.BooleanField(
-        default=False,
-        help_text="True if the offer salary_max is below the candidate's private floor",
+        help_text='Frozen match score components at offer creation time',
     )
 
     # Optimistic locking
     version = models.IntegerField(
         default=1,
-        help_text="Incremented on every status change for optimistic locking",
+        help_text='Incremented on every status change for optimistic locking',
     )
 
     expires_at = models.DateTimeField(
-        help_text="Auto-expire after 14 days by default",
+        help_text='Auto-expire after 14 days by default',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "offers"
+        db_table = 'offers'
         indexes = [
             models.Index(
-                fields=["candidate", "status"],
-                name="idx_offers_candidate_status",
+                fields=['candidate', 'status'],
+                name='idx_offers_candidate_status',
             ),
             models.Index(
-                fields=["company", "status"],
-                name="idx_offers_company_status",
+                fields=['company', 'status'],
+                name='idx_offers_company_status',
             ),
         ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(salary_min__gt=0),
-                name="chk_offer_salary_min_positive",
+                name='chk_offer_salary_min_positive',
             ),
             models.CheckConstraint(
-                condition=models.Q(salary_max__gte=models.F("salary_min")),
-                name="chk_offer_salary_max_gte_min",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(salary_type__in=["gross", "net"]),
-                name="chk_offer_salary_type_valid",
+                condition=models.Q(salary_max__gte=models.F('salary_min')),
+                name='chk_offer_salary_max_gte_min',
             ),
         ]
 
     def __str__(self) -> str:
-        return f"Offer {self.id}: {self.title} ({self.status})"
+        return f'Offer {self.id}: {self.title} ({self.status})'
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
@@ -168,14 +156,6 @@ class Offer(models.Model):
         return new_status in OFFER_TRANSITIONS.get(self.status, [])
 
 
-class OfferEventQuerySet(models.QuerySet):
-    def update(self, **kwargs):
-        raise PermissionDenied("OfferEvent entries are immutable and cannot be updated.")
-
-    def delete(self):
-        raise PermissionDenied("OfferEvent entries are immutable and cannot be deleted.")
-
-
 class OfferEvent(models.Model):
     """Immutable event log for offer status changes."""
 
@@ -183,7 +163,7 @@ class OfferEvent(models.Model):
     offer = models.ForeignKey(
         Offer,
         on_delete=models.CASCADE,
-        related_name="events",
+        related_name='events',
     )
     from_status = models.CharField(max_length=20, choices=OfferStatus.choices)
     to_status = models.CharField(max_length=20, choices=OfferStatus.choices)
@@ -191,26 +171,16 @@ class OfferEvent(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="+",
+        related_name='+',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
-    objects = OfferEventQuerySet.as_manager()
-
     class Meta:
-        db_table = "offer_events"
-        ordering = ["-created_at"]
+        db_table = 'offer_events'
+        ordering = ['-created_at']
 
     def __str__(self) -> str:
-        return f"{self.offer_id}: {self.from_status} → {self.to_status}"
-
-    def save(self, *args, **kwargs):
-        if self.pk and not self._state.adding:
-            raise PermissionDenied("OfferEvent entries are immutable and cannot be updated.")
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        raise PermissionDenied("OfferEvent entries are immutable and cannot be deleted.")
+        return f'{self.offer_id}: {self.from_status} → {self.to_status}'
 
 
 class ContactGrant(models.Model):
@@ -225,34 +195,34 @@ class ContactGrant(models.Model):
     candidate = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="contact_grants",
+        related_name='contact_grants',
     )
     company = models.ForeignKey(
-        "matching.Company",
+        'matching.Company',
         on_delete=models.CASCADE,
-        related_name="contact_grants",
+        related_name='contact_grants',
     )
     source = models.CharField(max_length=20, choices=ContactGrantSource.choices)
-    source_id = models.UUIDField(help_text="ID of the offer or application that created this grant")
+    source_id = models.UUIDField(help_text='ID of the offer or application that created this grant')
     granted_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Set when candidate revokes contact access",
+        help_text='Set when candidate revokes contact access',
     )
 
     class Meta:
-        db_table = "contact_grants"
+        db_table = 'contact_grants'
         constraints = [
             models.UniqueConstraint(
-                fields=["source", "source_id"],
-                name="uq_contact_grant_source",
+                fields=['source', 'source_id'],
+                name='uq_contact_grant_source',
             ),
         ]
 
     def __str__(self) -> str:
-        status = "revoked" if self.revoked_at else "active"
-        return f"Grant {self.id} ({status})"
+        status = 'revoked' if self.revoked_at else 'active'
+        return f'Grant {self.id} ({status})'
 
     @property
     def is_active(self) -> bool:
