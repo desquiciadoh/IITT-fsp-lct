@@ -1,9 +1,9 @@
 """Match score over DTOs (ML-4; ARCHITECTURE §2.6).
 
 score = Σ_k value_k · weight_k, with weights rescaled to Σ = 100 (D4), so 0 <= score <= 100.
-Candidates whose grade is not confirmed by a test are ranked ×0.75: their effective weights
-are multiplied by 0.75, so Σ contribution still equals the score (invariant 7) and the chip
-says why. Every component emits at least one Russian reason chip; `gaps` lists the
+Candidates whose grade is not confirmed by a test are ranked ×0.75 (invariant 4), once: their
+effective weights are multiplied by 0.75, so Σ contribution still equals the score
+(invariant 7) and the chip says why. GradeFit does not penalise them again (D13). Every component emits at least one Russian reason chip; `gaps` lists the
 must-have skills the candidate has no direct evidence for (display names).
 score_pool scores every candidate it gets (BE applies the hard filters in SQL; the
 reference is passes_hard_filters) and sorts by score desc, then public_id.
