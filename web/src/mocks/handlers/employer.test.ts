@@ -18,6 +18,11 @@ const server = setupServer(...employerHandlers)
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterAll(() => server.close())
 
+// The mock is stateful (single company, shared positions list). Scenarios run
+// in order within each describe; the reset endpoint lets a suite seed itself
+// independently of what previous suites left behind.
+const reset = () => fetch(`${BASE}/api/_mock/employer/reset`, { method: 'POST' })
+
 async function req<T = unknown>(
   path: string,
   init?: RequestInit,
@@ -97,6 +102,8 @@ describe('FE-09 employer mock: company (gap G17)', () => {
   })
 
   it('PUT updates writable fields but keeps id/trust_level immutable', async () => {
+    await reset()
+    await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
     const updated = await put<CompanyWire>('/api/companies/me', {
       name: 'Ромашка 2',
       description: 'Финтех',
@@ -153,6 +160,8 @@ describe('FE-09 employer mock: positions CRUD', () => {
   }
 
   it('rejects salary_min = 0 with the salary_invalid dict (BE.md B15)', async () => {
+    await reset()
+    await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
     const { status, body } = await post<ProblemWire>('/api/positions', {
       ...valid,
       title: 'Zero',
@@ -163,6 +172,8 @@ describe('FE-09 employer mock: positions CRUD', () => {
   })
 
   it('rejects salary_max < salary_min', async () => {
+    await reset()
+    await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
     const { status, body } = await post<ProblemWire>('/api/positions', {
       ...valid,
       title: 'Inverted',
@@ -173,6 +184,8 @@ describe('FE-09 employer mock: positions CRUD', () => {
   })
 
   it('requires salary_type explicitly (no silent gross default, B15)', async () => {
+    await reset()
+    await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
     const { status, body } = await post<ProblemWire>('/api/positions', {
       ...valid,
       title: 'No salary type',
@@ -187,6 +200,8 @@ describe('FE-09 employer mock: positions CRUD', () => {
   })
 
   it('saves a valid position, lists it, fetches and edits it', async () => {
+    await reset()
+    await post('/api/companies', { name: 'Ромашка', inn: '1234567890' })
     const created = await post<{ id: string }>('/api/positions', valid)
     expect(created.status).toBe(201)
     const id = created.body.id

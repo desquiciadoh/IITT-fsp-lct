@@ -49,6 +49,17 @@ const KNOWN_SKILLS = new Set([
 // Case-insensitive lookup: the taxonomy is lowercase, JD text may not be.
 const skillIn = (word: string) => KNOWN_SKILLS.has(word.toLowerCase())
 
+/**
+ * Remove a section marker from a line without corrupting inflected Russian
+ * words: `line.replace(/обязател/i, ' ')` used to cut "Обязательны:" into
+ * "ьны:", which then leaked as a fake unknown term. Instead, blank every
+ * character the marker matched plus the following label tail up to the first
+ * separator (`:` or whitespace), e.g. "Обязательны: python" → "  python".
+ */
+function stripMarker(line: string, marker: RegExp): string {
+  return line.replace(new RegExp(marker.source + '[^\\s:]*[:\\s]?', 'i'), ' ')
+}
+
 const SPEC_HINTS: Array<[RegExp, NonNullable<JdParseResult['draft']['specialization']>]> = [
   [/front|react|typescript|vue|angular/i, 'frontend'],
   [/ml|data.?scien|pytorch|pandas|аналитик данных/i, 'ml_data'],
@@ -72,9 +83,9 @@ function parseJd(text: string): JdParseResult {
   let niceSection: string | undefined
   for (const line of text.split('\n')) {
     if (NICE_MARKER.test(line)) {
-      niceSection = (niceSection ?? '') + ' ' + line.replace(NICE_MARKER, ' ')
+      niceSection = (niceSection ?? '') + ' ' + stripMarker(line, NICE_MARKER)
     } else if (MUST_MARKER.test(line)) {
-      mustSection = (mustSection ?? '') + ' ' + line.replace(MUST_MARKER, ' ')
+      mustSection = (mustSection ?? '') + ' ' + stripMarker(line, MUST_MARKER)
     } else if (niceSection !== undefined) {
       niceSection += ' ' + line
     } else if (mustSection !== undefined) {
