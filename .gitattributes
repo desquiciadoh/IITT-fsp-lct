@@ -1,1 +1,5 @@
 *.sh text eol=lf
+# ML data files are hashed byte-for-byte (seed_data/full/manifest.json); keep LF on every OS.
+seed_data/full/** text eol=lf
+validation/data/** text eol=lf
+validation/out/*.json text eol=lf

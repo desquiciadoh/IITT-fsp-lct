@@ -1,2 +1,12 @@
-{"id": "c1000000-0000-0000-0000-000000000001", "name": "Ozon FinTech", "inn": "7704217370", "website": "https://ozon.ru", "email_domain": "ozon-mock.ru", "business_domain": "E-commerce & FinTech", "description": "High-load banking and e-commerce services.", "contact_email": "hr@ozon-mock.ru", "trust_level": "verified", "members": [{"email": "lead@ozon-mock.ru"}]}
-{"id": "c1000000-0000-0000-0000-000000000002", "name": "VK Infrastructure", "inn": "7743001840", "website": "https://vk.company", "email_domain": "vk-mock.ru", "business_domain": "Social & Cloud", "description": "Social network core distributed engines.", "contact_email": "recruiter@vk-mock.ru", "trust_level": "verified", "members": [{"email": "techlead@vk-mock.ru"}]}
+{"budget_factor": 0.959, "company_id": "CO-01", "domain": "polar-code.example", "name": "Полярный код", "trust_level": "verified"}
+{"budget_factor": 0.868, "company_id": "CO-02", "domain": "sever-sys.example", "name": "Северные системы", "trust_level": "domain"}
+{"budget_factor": 0.926, "company_id": "CO-03", "domain": "technograd.example", "name": "ТехноГрад", "trust_level": "domain"}
+{"budget_factor": 0.929, "company_id": "CO-04", "domain": "kvant-soft.example", "name": "Квант Софт", "trust_level": "verified"}
+{"budget_factor": 0.867, "company_id": "CO-05", "domain": "baikal-data.example", "name": "Байкал Дата", "trust_level": "domain"}
+{"budget_factor": 1.148, "company_id": "CO-06", "domain": "volga-fintech.example", "name": "Волга Финтех", "trust_level": "domain"}
+{"budget_factor": 1.193, "company_id": "CO-07", "domain": "ural-cloud.example", "name": "Уральский облачный", "trust_level": "verified"}
+{"budget_factor": 0.968, "company_id": "CO-08", "domain": "nevsky-product.example", "name": "Невский продукт", "trust_level": "domain"}
+{"budget_factor": 1.138, "company_id": "CO-09", "domain": "sibir-ai.example", "name": "Сибирь ИИ", "trust_level": "domain"}
+{"budget_factor": 1.058, "company_id": "CO-10", "domain": "kremen-tech.example", "name": "Кремень Тех", "trust_level": "verified"}
+{"budget_factor": 1.134, "company_id": "CO-11", "domain": "oka-lab.example", "name": "Лаборатория Ока", "trust_level": "domain"}
+{"budget_factor": 0.999, "company_id": "CO-12", "domain": "amur-log.example", "name": "Амур Логистика", "trust_level": "domain"}
