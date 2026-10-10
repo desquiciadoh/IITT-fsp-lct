@@ -6,6 +6,7 @@ from core.enums import Grade, SalaryType, Specialization, TrustLevel, WorkFormat
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from pgvector.django import HnswIndex, VectorField
 
 
 class Company(models.Model):
@@ -140,10 +141,25 @@ class Position(models.Model):
         choices=[("open", "Open"), ("closed", "Closed")],
         default="open",
     )
+    embedding = VectorField(
+        dimensions=1024,
+        null=True,
+        blank=True,
+        help_text="1024-dim dense embedding (USER-bge-m3) for semantic matching",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "positions"
+        indexes = [
+            HnswIndex(
+                name="position_embedding_hnsw",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(salary_min__gt=0),

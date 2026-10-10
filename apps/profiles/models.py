@@ -12,6 +12,7 @@ from core.enums import (
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from pgvector.django import HnswIndex, VectorField
 
 
 def generate_public_id(max_retries: int = 10) -> str:
@@ -121,12 +122,27 @@ class CandidateProfile(models.Model):
         blank=True,
         help_text="Skills submitted by candidate that could not be mapped to canonical taxonomy",
     )
+    embedding = VectorField(
+        dimensions=1024,
+        null=True,
+        blank=True,
+        help_text="1024-dim dense embedding (USER-bge-m3) for semantic matching",
+    )
 
     last_active_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "candidate_profiles"
+        indexes = [
+            HnswIndex(
+                name="candidate_profile_emb_hnsw",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(salary_min__isnull=True) | models.Q(salary_min__gt=0),
