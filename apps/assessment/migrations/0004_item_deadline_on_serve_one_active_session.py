@@ -27,6 +27,15 @@ def expire_duplicate_in_progress(apps, schema_editor):
         Session.objects.filter(id__in=stale_ids).update(status='expired', finished_at=timezone.now())
 
 
+def backfill_null_deadlines(apps, schema_editor):
+    """Backfill NULL deadline_at with served_at (or now) before reverting to NOT NULL on rollback."""
+    AssessmentItem = apps.get_model('assessment', 'AssessmentItem')
+    from django.utils import timezone
+
+    AssessmentItem.objects.filter(deadline_at__isnull=True).update(deadline_at=models.F('served_at'))
+    AssessmentItem.objects.filter(deadline_at__isnull=True).update(deadline_at=timezone.now())
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -43,6 +52,7 @@ class Migration(migrations.Migration):
                 null=True,
             ),
         ),
+        migrations.RunPython(migrations.RunPython.noop, reverse_code=backfill_null_deadlines),
         migrations.RunPython(expire_duplicate_in_progress, migrations.RunPython.noop),
         migrations.AddConstraint(
             model_name='assessmentsession',

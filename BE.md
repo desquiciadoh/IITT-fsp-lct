@@ -122,25 +122,25 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
 ### 3.1 Rework from the PR #2 review: do these first
 
 **Security and privacy**
-- [ ] **R1. Throttles are configured but not attached.**
+- [x] **R1. Throttles are configured but not attached.**
   - Set `throttle_scope`: `login` on `LoginView`, `register` on `RegisterView`, and `fsp_sync` on `FSPLinkView` and `FSPSyncTaskTriggerView`.
   - Set `offers` on `OfferListCreateView` for POST only (override `get_throttles`).
   - Set `resume` on `ResumeParseView`; `PositionParseView` gets its own `jd_parse`.
   - Add `CACHES` = `RedisCache(REDIS_URL)` so limits are shared across workers, and set `NUM_PROXIES` from env.
   - Test: the (N+1)-th login gets 429 with `Retry-After`.
-- [ ] **R2. Secrets.**
+- [x] **R2. Secrets.**
   - `ITEM_SEED_SECRET` fails fast when `DEBUG=False`, as `SECRET_KEY` does. Remove the fallback in `assessment/services.py`.
   - Remove the `SECRET_KEY` and `ITEM_SEED_SECRET` defaults from `docker-compose.yml` (use `env_file`).
   - Add `OIDC_INTERNAL_URL` and `FSP_MOCK_PRIVATE_KEY_PEM` to `.env.example`.
   - Add a system check that warns when `DEMO_MODE and not DEBUG`. In DEMO_MODE the mock IdP lets anyone log in as any FSP participant, so a demo host must never hold real users.
-- [ ] **R3. Admin leaks.**
+- [x] **R3. Admin leaks.**
   - `AssessmentItemAdmin`: exclude `key`, `fingerprint` and `seed`; no add or change.
   - Unregister the `CandidateContact` admin.
   - `LeagueMembership`, `AssessmentSession`, `AuditLog`, `OfferEvent` and `ContactGrant` admins become read-only.
-- [ ] **R4. Contact reads.**
+- [x] **R4. Contact reads.**
   - Talent card: catch only `ContactNotGranted`, not `Exception`.
   - `OfferSerializer.get_candidate_contacts`: call `has_active_grant()` first and `get_contacts()` only when granted. Today `GET /offers` writes N false-denial `AuditLog` rows.
-- [ ] **R5. Visibility.**
+- [x] **R5. Visibility.**
   - One rule in `profiles/selectors.py`, shared by the queryset and `is_candidate_visible_to_company`:
     - the latest publication consent is granted
     - `open_to_offers` is set
@@ -150,74 +150,74 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
     - ordering is `order_by(..., 'id')`
   - Shortlist `PUT` and `POST /offers` return the same 404 for invisible and nonexistent candidates.
   - Test: after revoking publication consent, the candidate is gone from pool, search, card, shortlist and offer.
-- [ ] **R6. Login CSRF.** DRF doesn't CSRF-check anonymous `login`, `register` or `demo/persona`; add `@method_decorator(csrf_protect)`. Test with `APIClient(enforce_csrf_checks=True)`.
-- [ ] **R7. PDF.** Return 503 on `ImportError` too, not HTML named `.pdf`. Add a malicious-skill test (`<img src="file:///etc/passwd">`, `http://169.254.169.254/`).
-- [ ] **R8. No internal UUIDs in employer-facing payloads.**
+- [x] **R6. Login CSRF.** DRF doesn't CSRF-check anonymous `login`, `register` or `demo/persona`; add `@method_decorator(csrf_protect)`. Test with `APIClient(enforce_csrf_checks=True)`.
+- [x] **R7. PDF.** Return 503 on `ImportError` too, not HTML named `.pdf`. Add a malicious-skill test (`<img src="file:///etc/passwd">`, `http://169.254.169.254/`).
+- [x] **R8. No internal UUIDs in employer-facing payloads.**
   - Talent-card assessment IDs and the `candidate_id` in SSE events sent to employers become `public_id`.
   - Non-blind `display_name` shows `full_name`: confirm with product.
 
 **Assessment and data integrity**
-- [ ] **R9. A failed promotion or abandon overwrites a confirmed grade** (`finalize_assessment`).
+- [x] **R9. A failed promotion or abandon overwrites a confirmed grade** (`finalize_assessment`).
   - If the league is CONFIRMED at grade G, a failed higher claim keeps G and CONFIRMED. The attempt is stored on the session only.
   - Clear `confirmed_at` whenever the status becomes unconfirmed.
   - `/verify` never returns `valid: true` for unconfirmed.
-- [ ] **R10.** An unconfirmed session stores `result_grade = claimed_grade`. Store the scorer's achieved grade instead, and show `decision` next to it on the talent card.
-- [ ] **R11. Abandon and stale rules (ARCHITECTURE §2.5).**
+- [x] **R10.** An unconfirmed session stores `result_grade = claimed_grade`. Store the scorer's achieved grade instead, and show `decision` next to it on the talent card.
+- [x] **R11. Abandon and stale rules (ARCHITECTURE §2.5).**
   - `/finish` and the stale-session sweep count as an attempt (finalize unconfirmed plus cooldown) only if at least 50% of items were answered. Otherwise the session becomes `ABANDONED`/`EXPIRED` with no cooldown.
   - Use `AssessmentStatus.ABANDONED`.
   - `EligibilityView` checks in-progress sessions per specialization.
-- [ ] **R12. Request validation.**
+- [x] **R12. Request validation.**
   - `StartAssessmentSerializer`: required fields, and `mode` from `AssessmentMode.choices` (today `'trial'` doesn't match `'express'`).
   - `AnswerRequestSerializer.validate()` requires `option_id` or `value`.
   - The short-test session gets `kind=FALLBACK, counts_as_attempt=False`.
   - The instant-fallback membership `get_or_create` derives `base_strength` from θ, as `finalize_assessment` does.
-- [ ] **R13.** `GET /assessments` shows `evidence[].correct` while a session is in progress. Show it only when finished.
-- [ ] **R14. FSP sync (`fsp_sync/services.py`).**
+- [x] **R13.** `GET /assessments` shows `evidence[].correct` while a session is in progress. Show it only when finished.
+- [x] **R14. FSP sync (`fsp_sync/services.py`).**
   - Wrap `sync_fsp_data` in `atomic`.
   - On a registry miss, set `sync_status` to `NOT_FOUND`/`FAILED` and keep the old results.
   - Delete results the registry no longer returns.
   - Replace the `base==0 and strength>0` backfill with a one-off data migration, and delete the tautological grade check.
   - `sync_all_fsp_profiles`: `autoretry_for`, `logger.exception` with the IDs, return `{ok, failed}`. Either put it in `CELERY_BEAT_SCHEDULE` or delete it.
-- [ ] **R15. Offers.**
+- [x] **R15. Offers.**
   - `expire_offers` reuses `OfferService._expire_locked` (for the `AuditLog`) and isolates per-row failures.
   - Consent revoke (`profiles/views.py`): catch `InvalidTransition`, `OfferExpired` and `VersionConflict` explicitly. Retry `VersionConflict` once with a fresh version. Use `logger.exception`.
   - Document 409 `offer_expired` in `extend_schema`.
   - `CooldownActive` sends `Retry-After`.
-- [ ] **R16. Salary (invariant 5, B15).**
+- [x] **R16. Salary (invariant 5, B15).**
   - `salary_invalid` for every salary error on position create/update and on offer create.
   - Add a DB `CheckConstraint` `salary_type IN ('gross','net')` on Position and Offer.
   - API tests: `salary_min=0` gives 422 on create and on update.
-- [ ] **R17. Demo.**
+- [x] **R17. Demo.**
   - Time travel only for `is_demo` users, and it sets the offset (no `+=`).
   - `/demo/reset` restores the persona's seeded data, not just the clock.
-- [ ] **R18.** Pool and search take `page >= 1` and `1 <= size <= 100` through a serializer; anything else is 422 (`size=0` is a 500 today).
-- [ ] **R19.** `public_id` has at least 8 hex characters, with retry on collision. Every `LeagueMembership` `.first()` filters by specialization or relies on `Meta.ordering`.
-- [ ] **R20. Companies.**
+- [x] **R18.** Pool and search take `page >= 1` and `1 <= size <= 100` through a serializer; anything else is 422 (`size=0` is a 500 today).
+- [x] **R19.** `public_id` has at least 8 hex characters, with retry on collision. Every `LeagueMembership` `.first()` filters by specialization or relies on `Meta.ordering`.
+- [x] **R20. Companies.**
   - `UniqueConstraint` on `CompanyMember.user`, since the `exists()` check races.
   - `GET /api/companies` requires `search` of at least 2 characters and is paginated.
   - Handle the admin branch of `GET /offers` explicitly.
-- [ ] **R21. No fake data.**
+- [x] **R21. No fake data.**
   - A corrupt `report.json` gives a logged 500 `report_unreadable`, never hard-coded metrics.
   - The resume stub returns `source='stub'` with empty skills until AI's `parse_resume` lands.
-- [ ] **R22. Small fixes.**
+- [x] **R22. Small fixes.**
   - `EventStreamRenderer` renders error dicts as JSON.
   - Concurrent first FSP logins for the same participant give `IntegrityError` → 409, not 500.
   - Reversing migration `assessment/0004` breaks once items have `deadline_at = NULL`: backfill in the reverse function, or document it as irreversible.
 
 **Infra and CI**
-- [ ] **R23. Compose is broken.**
+- [x] **R23. Compose is broken.**
   - `worker`, `worker-llm` and `beat` crash because `ALLOWED_HOSTS` is missing. Share one env anchor `x-backend-env: &backend-env` across all Python services.
   - The local stack is HTTP-only. `api` already has `SECURE_SSL_REDIRECT=False` (needed for the IdP self-call); move it into the shared env. Make `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` env-configurable, otherwise the browser drops cookies and login fails.
   - Decouple HSTS and `SECURE_PROXY_SSL_HEADER` from the redirect flag.
   - Remove `seed || true` from the entrypoint.
   - Add `.gitattributes` with `*.sh text eol=lf`.
   - Done means: `docker compose up --build`, then log in with FSP ID in a browser.
-- [ ] **R24. SSE transport.**
+- [x] **R24. SSE transport.**
   - Add a Redis subscriber on channel `fsp_events`, so events from other workers and from Celery arrive.
   - Serve `/api/events` from an ASGI worker (uvicorn) or a separate service, so streams don't pin sync gunicorn workers.
   - Send a keepalive every 15 s.
   - If this isn't done by the demo, return 501 and FE keeps polling.
-- [ ] **R25. CI.**
+- [x] **R25. CI.**
   - Run on every PR and push.
   - `pytest --cov=apps --cov-fail-under=75`.
   - OpenAPI drift check: regenerate, then `git diff --exit-code docs/openapi.json`.
@@ -225,18 +225,18 @@ Each task gets a failing test first, then the fix. Tick a box when its PR is mer
   - One pytest config with `testpaths=["tests"]`.
   - Add `LOGGING` (console, INFO).
   - Fix the 6 drf-spectacular warnings (`ENUM_NAME_OVERRIDES`, duplicate operationIds).
-- [ ] **R26. Missing tests:**
+- [x] **R26. Missing tests:**
   - wsgi import smoke
   - `role=admin` register gives 400
   - persona: off outside DEMO_MODE, unknown persona gives 422, non-demo user is rejected
   - two employers with the same email local part
   - `company_required` gives 403
   - invisible talent card gives 404, plus an `AuditLog` row
-- [ ] **Docs.** AGENTS.md, ARCHITECTURE.md and the README must say that contact gating lives in `outreach/services.py`. Add the new error codes to the README catalog.
+- [x] **Docs.** AGENTS.md, ARCHITECTURE.md and the README must say that contact gating lives in `outreach/services.py`. Add the new error codes to the README catalog.
 
 ### 3.2 Remaining backend work: after 3.1
 
-- [ ] **N1. Pool and search rewrite** in `matching/services.py` + `selectors.py`.
+- [x] **N1. Pool and search rewrite** in `matching/services.py` + `selectors.py`.
   - SQL hard filters: specialization, grade adjacency, `work_formats`, `salary_max`.
   - One batched query (`select_related`/`prefetch_related`), turned into DTO dicts and passed to the scorer.
   - Pagination and facets in SQL.

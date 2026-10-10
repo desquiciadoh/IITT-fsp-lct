@@ -50,9 +50,9 @@
 | **`apps.profiles`** | `CandidateProfile` с публичным ID `C-XXXXXX`, изолированная таблица контактов `CandidateContact`, таксономия навыков `Skill`, генерация защищенного PDF «Карточка игрока» (WeasyPrint) с QR-кодом верификации (`/api/verify/<public_id>`), эвристический парсинг PDF-резюме. |
 | **`apps.assessment`** | Сессии адаптивного тестирования `AssessmentSession`, тестовые вопросы `AssessmentItem`, parametric item families (`engine.py`), расчет IRT-метрик ($\theta$, SE, rating), членство в Лигах `LeagueMembership`, кулдауны пересдач. |
 | **`apps.matching`** | Профили компаний `Company`, вакансии и потребности `Position`, шортлисты `Shortlist`. Прозрачный взвешенный скоринг с карточками причин `ReasonChips` (`verified_by_test`, `verified_by_fsp`, `declared`). Поиск талантов без утечки внутренних PK. |
-| **`apps.outreach`** | Жизненный цикл драфт-офферов `Offer` (`sent` $\to$ `viewed` $\to$ `accepted` / `declined` / `withdrawn`), оптимистичные блокировки через версионирование (`version int`, 409 при конфликтах), автоматическая выдача `ContactGrant`, SSE-стриминг событий (`/api/events`). |
+| **`apps.outreach`** | Жизненный цикл драфт-офферов `Offer` (`sent` $\to$ `viewed` $\to$ `accepted` / `declined` / `withdrawn`), оптимистичные блокировки через версионирование (`version int`, 409 при конфликтах), сервис гейтинга контактов `ContactAccessService` (`services.py`), автоматическая выдача `ContactGrant`, SSE-стриминг событий (`/api/events`). |
 | **`apps.fsp_sync`** | Модели связки `FSPLink` и верифицированных турниров `FSPResult`, защита от повторной привязки чужого FSP ID, фоновые задачи Celery для синхронизации с реестром ФСП. |
-| **`apps.core`** | Единые перечисления (`enums.py`), сервис гейтинга контактов (`services.py`), обработчик ошибок RFC 7807 problem+json (`errors.py`), пагинация (`pagination.py`), команда загрузки стенда `seed`. |
+| **`apps.core`** | Единые перечисления (`enums.py`), обработчик ошибок RFC 7807 problem+json (`errors.py`), пагинация (`pagination.py`), команда загрузки стенда `seed` (сервис `core.services` является deprecated shim для `apps.outreach.services`). |
 
 ---
 
@@ -181,6 +181,10 @@ pytest -v
 * `company_required` (403) — действие доступно только представителю зарегистрированной компании.
 * `version_conflict` (409) — конфликт оптимистичной блокировки при параллельном обновлении оффера.
 * `invalid_transition` (409) — недопустимый переход статуса в машине состояний оффера.
+* `invalid_role` (400) — попытка зарегистрировать пользователя с недопустимой ролью (например, `admin`).
+* `forbidden` (403) — доступ запрещен (включая попытку переключения демо-персоны обычным пользователем).
+* `not_found` (404) — запрашиваемый ресурс не найден (включая попытку просмотра скрытой карточки кандидата с фиксацией в `AuditLog`).
+* `report_unreadable` (500) — файл отчета о тестировании поврежден или не читается.
 * `cooldown_active` (429) — активен кулдаун на повторное прохождение тестирования.
 * `item_not_current` (409) — ответ на устаревший или уже отправленный вопрос тестирования.
 * `fsp_id_already_linked` (409) — FSP ID уже привязан к другой учетной записи платформы.

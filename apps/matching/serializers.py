@@ -1,4 +1,6 @@
 """Matching app serializers."""
+
+from core.pagination import PaginationQuerySerializer
 from drf_spectacular.utils import extend_schema_field
 from profiles.models import CandidateProfile
 from rest_framework import serializers
@@ -6,68 +8,78 @@ from rest_framework import serializers
 from matching.models import Company, Position
 
 
+class CompanySearchQuerySerializer(PaginationQuerySerializer):
+    search = serializers.CharField(min_length=2, required=True, trim_whitespace=True)
+
+
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'id',
-            'name',
-            'inn',
-            'website',
-            'email_domain',
-            'business_domain',
-            'description',
-            'contact_email',
-            'trust_level',
-            'created_at',
+            "id",
+            "name",
+            "inn",
+            "website",
+            "email_domain",
+            "business_domain",
+            "description",
+            "contact_email",
+            "trust_level",
+            "created_at",
         ]
-        read_only_fields = ['id', 'trust_level', 'created_at']
+        read_only_fields = ["id", "trust_level", "created_at"]
 
 
 class CompanyMinimalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
-        fields = ['id', 'name']
+        fields = ["id", "name"]
 
 
 class PositionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Position
         fields = [
-            'id',
-            'company',
-            'title',
-            'specialization',
-            'grades',
-            'must_skills',
-            'nice_skills',
-            'work_formats',
-            'location',
-            'salary_min',
-            'salary_max',
-            'salary_type',
-            'team_context',
-            'description',
-            'allow_adjacent',
-            'is_public',
-            'status',
-            'created_at',
+            "id",
+            "company",
+            "title",
+            "specialization",
+            "grades",
+            "must_skills",
+            "nice_skills",
+            "work_formats",
+            "location",
+            "salary_min",
+            "salary_max",
+            "salary_type",
+            "team_context",
+            "description",
+            "allow_adjacent",
+            "is_public",
+            "status",
+            "created_at",
         ]
         # company comes from the caller's membership, never from input (B9)
-        read_only_fields = ['id', 'company', 'created_at']
+        read_only_fields = ["id", "company", "created_at"]
 
     def validate(self, attrs):
-        salary_min = attrs['salary_min'] if 'salary_min' in attrs else (
-            self.instance.salary_min if self.instance else None
+        salary_min = (
+            attrs["salary_min"]
+            if "salary_min" in attrs
+            else (self.instance.salary_min if self.instance else None)
         )
-        salary_max = attrs['salary_max'] if 'salary_max' in attrs else (
-            self.instance.salary_max if self.instance else None
+        salary_max = (
+            attrs["salary_max"]
+            if "salary_max" in attrs
+            else (self.instance.salary_max if self.instance else None)
         )
 
         if salary_min is not None and salary_min <= 0:
-            raise serializers.ValidationError({'salary_min': 'salary_min must be greater than 0.'})
+            raise serializers.ValidationError({"salary_min": "salary_min must be greater than 0."})
         if salary_min is not None and salary_max is not None and salary_max < salary_min:
-            raise serializers.ValidationError({'salary_max': 'salary_max must be greater than or equal to salary_min.'})
+            raise serializers.ValidationError(
+                {"salary_max": "salary_max must be greater than or equal to salary_min."}
+            )
         return attrs
 
 
@@ -102,66 +114,107 @@ class TalentShortSerializer(serializers.ModelSerializer):
     class Meta:
         model = CandidateProfile
         fields = [
-            'public_id',
-            'display_name',
-            'city',
-            'work_formats',
-            'salary_min',
-            'salary_max',
-            'salary_type',
-            'league',
-            'fsp',
-            'skills',
-            'verified_topics',
-            'last_active_at',
+            "public_id",
+            "display_name",
+            "city",
+            "work_formats",
+            "salary_min",
+            "salary_max",
+            "salary_type",
+            "league",
+            "fsp",
+            "skills",
+            "verified_topics",
+            "last_active_at",
         ]
 
     @extend_schema_field(serializers.CharField())
     def get_display_name(self, obj):
         if obj.blind_mode:
-            return f'Кандидат {obj.public_id}'
-        return obj.full_name or f'Кандидат {obj.public_id}'
+            return f"Кандидат {obj.public_id}"
+        return obj.full_name or f"Кандидат {obj.public_id}"
 
     @extend_schema_field(TalentLeagueSerializer)
     def get_league(self, obj):
-        lm = obj.user.league_memberships.first()
+        user = obj.user
+        if (
+            hasattr(user, "_prefetched_objects_cache")
+            and "league_memberships" in user._prefetched_objects_cache
+        ):
+            memberships = list(user.league_memberships.all())
+            if obj.specialization:
+                matching = [lm for lm in memberships if lm.specialization == obj.specialization]
+                lm = matching[0] if matching else (memberships[0] if memberships else None)
+            else:
+                lm = memberships[0] if memberships else None
+        else:
+            qs = user.league_memberships.all()
+            if obj.specialization:
+                qs = qs.filter(specialization=obj.specialization)
+            lm = qs.first()
+
         if lm:
             return {
-                'specialization': lm.specialization,
-                'grade': lm.grade,
-                'status': lm.status,
-                'rating': lm.rating,
-                'percentile': lm.percentile,
-                'strength': lm.strength,
+                "specialization": lm.specialization,
+                "grade": lm.grade,
+                "status": lm.status,
+                "rating": lm.rating,
+                "percentile": lm.percentile,
+                "strength": lm.strength,
             }
         return None
 
     @extend_schema_field(TalentFSPSerializer)
     def get_fsp(self, obj):
-        has_link = hasattr(obj.user, 'fsp_link')
-        results_count = obj.user.fsp_results.count()
+        user = obj.user
+        fsp_link = getattr(user, "fsp_link", None)
+        has_link = fsp_link is not None
+        if (
+            hasattr(user, "_prefetched_objects_cache")
+            and "fsp_results" in user._prefetched_objects_cache
+        ):
+            results_count = len(user.fsp_results.all())
+        else:
+            results_count = user.fsp_results.count()
+
         return {
-            'linked': has_link,
-            'results_count': results_count,
-            'sports_rank': obj.user.fsp_link.sports_rank if has_link else None,
+            "linked": has_link,
+            "results_count": results_count,
+            "sports_rank": fsp_link.sports_rank if has_link and fsp_link else None,
         }
 
     @extend_schema_field(TalentSkillSerializer(many=True))
     def get_skills(self, obj):
+        if (
+            hasattr(obj, "_prefetched_objects_cache")
+            and "skills" in obj._prefetched_objects_cache
+        ):
+            skills_qs = obj.skills.all()
+        else:
+            skills_qs = obj.skills.select_related("skill").all()
+
         return [
-            {'id': cs.skill_id, 'name': cs.skill.name, 'source': cs.source}
-            for cs in obj.skills.select_related('skill').all()[:8]
+            {"id": cs.skill_id, "name": cs.skill.name, "source": cs.source}
+            for cs in skills_qs[:8]
         ]
 
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_verified_topics(self, obj):
+        if getattr(obj, "_verified_topics", None) is not None:
+            return obj._verified_topics
+
         from assessment.models import AssessmentItem
         from core.enums import AssessmentStatus
-        topics = list(AssessmentItem.objects.filter(
-            assessment__candidate=obj.user,
-            assessment__status=AssessmentStatus.FINISHED,
-            correct=True,
-        ).values_list('family__topic', flat=True).distinct())
+
+        topics = list(
+            AssessmentItem.objects.filter(
+                assessment__candidate=obj.user,
+                assessment__status=AssessmentStatus.FINISHED,
+                correct=True,
+            )
+            .values_list("family__topic", flat=True)
+            .distinct()
+        )
         return [t for t in topics if t]
 
 
@@ -170,26 +223,32 @@ class JdParseRequestSerializer(serializers.Serializer):
     raw_text = serializers.CharField(min_length=10, required=False)
 
     def validate(self, attrs):
-        text = attrs.get('text') or attrs.get('raw_text')
+        text = attrs.get("text") or attrs.get("raw_text")
         if not text:
-            raise serializers.ValidationError({'text': 'This field is required.'})
-        attrs['text'] = text
+            raise serializers.ValidationError({"text": "This field is required."})
+        attrs["text"] = text
         return attrs
 
 
 class JdDraftSerializer(serializers.Serializer):
-    title = serializers.CharField(required=False, allow_blank=True, default='')
-    specialization = serializers.CharField(required=False, allow_blank=True, default='backend')
+    title = serializers.CharField(required=False, allow_blank=True, default="")
+    specialization = serializers.CharField(required=False, allow_blank=True, default="backend")
     grades = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     must_skills = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     nice_skills = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-    work_formats = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-    location = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    work_formats = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    location = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
     salary_min = serializers.IntegerField(required=False, allow_null=True, default=None)
     salary_max = serializers.IntegerField(required=False, allow_null=True, default=None)
-    salary_type = serializers.CharField(required=False, allow_blank=True, default='gross')
-    team_context = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
-    description = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    salary_type = serializers.CharField(required=False, allow_blank=True, default="gross")
+    team_context = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=""
+    )
+    description = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default=""
+    )
 
 
 class JdParseBlueprintItemSerializer(serializers.Serializer):
@@ -201,5 +260,4 @@ class JdParseResultSerializer(serializers.Serializer):
     draft = JdDraftSerializer()
     unknown_terms = serializers.ListField(child=serializers.CharField(), default=list)
     blueprint = JdParseBlueprintItemSerializer(many=True, default=list)
-    source = serializers.CharField(default='rules')
-
+    source = serializers.CharField(default="rules")

@@ -17,6 +17,7 @@ qrcode>=8.0
 pypdf>=5.0
 python-dotenv>=1.0
 gunicorn>=22.0
+uvicorn>=0.30
 # Testing
 pytest>=8.0
 pytest-django>=4.9

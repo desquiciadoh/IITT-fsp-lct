@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-10-10T12:00:00Z",
+  "git_sha": "dev-synthetic",
+  "synthetic_fixture": true,
+  "assessment": {
+    "simulees": 1000,
+    "exact_acc": 0.84,
+    "adjacent_acc": 0.98,
+    "qwk": 0.89,
+    "retest_same_grade": 0.88,
+    "retest_r": 0.92,
+    "median_len": 12.0,
+    "max_family_exposure": 0.15,
+    "collision_rate": 0.002,
+    "generator_errors": 0,
+    "confusion": [
+      [230, 20, 0, 0],
+      [15, 240, 25, 0],
+      [0, 18, 220, 12],
+      [0, 0, 15, 205]
+    ],
+    "tif": {
+      "theta": [-2.0, -1.0, 0.0, 1.0, 2.0],
+      "info": [1.5, 3.2, 4.8, 3.5, 1.8]
+    },
+    "leak_attack": [
+      {"leak_share": 0.0, "static_dtheta": 0.0, "parametric_dtheta": 0.0},
+      {"leak_share": 0.2, "static_dtheta": 0.45, "parametric_dtheta": 0.05},
+      {"leak_share": 0.5, "static_dtheta": 1.1, "parametric_dtheta": 0.12}
+    ]
+  },
+  "matching": {
+    "candidates": 500,
+    "needs": 50,
+    "non_fsp_parity": 0.96,
+    "pool_p95_ms": 35.0,
+    "systems": [
+      {"name": "production", "ndcg10": 0.89, "p10": 0.82, "r50": 0.91, "mrr": 0.85},
+      {"name": "baseline_bm25", "ndcg10": 0.65, "p10": 0.58, "r50": 0.7, "mrr": 0.62}
+    ]
+  }
+}

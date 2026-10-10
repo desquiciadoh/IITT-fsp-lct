@@ -3,7 +3,8 @@
 INVARIANT: ItemViewSerializer NEVER includes the `key` field or any derivative of it.
 The answer key stays strictly server-side in assessment_items.key.
 """
-from core.enums import Grade, Specialization
+
+from core.enums import AssessmentMode, AssessmentStatus, Grade, Specialization
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -11,9 +12,9 @@ from assessment.models import AssessmentItem, AssessmentSession, LeagueMembershi
 
 
 class StartAssessmentSerializer(serializers.Serializer):
-    specialization = serializers.ChoiceField(choices=Specialization.choices, default=Specialization.BACKEND)
-    claimed_grade = serializers.ChoiceField(choices=Grade.choices, default=Grade.MIDDLE)
-    mode = serializers.ChoiceField(choices=['full', 'trial'], default='full')
+    specialization = serializers.ChoiceField(choices=Specialization.choices, required=True)
+    claimed_grade = serializers.ChoiceField(choices=Grade.choices, required=True)
+    mode = serializers.ChoiceField(choices=AssessmentMode.choices, default=AssessmentMode.FULL)
 
 
 class ItemViewSerializer(serializers.ModelSerializer):
@@ -21,12 +22,13 @@ class ItemViewSerializer(serializers.ModelSerializer):
 
     SECURITY INVARIANT: The 'key' field MUST NEVER be included in this serializer!
     """
-    item_id = serializers.UUIDField(source='id', read_only=True)
-    stem_md = serializers.CharField(source='view.stem_md', read_only=True)
-    code = serializers.JSONField(source='view.code', read_only=True)
-    options = serializers.JSONField(source='view.options', read_only=True)
-    input_type = serializers.CharField(source='view.input_type', read_only=True)
-    time_limit_s = serializers.IntegerField(source='view.time_limit_s', read_only=True)
+
+    item_id = serializers.UUIDField(source="id", read_only=True)
+    stem_md = serializers.CharField(source="view.stem_md", read_only=True)
+    code = serializers.JSONField(source="view.code", read_only=True)
+    options = serializers.JSONField(source="view.options", read_only=True)
+    input_type = serializers.CharField(source="view.input_type", read_only=True)
+    time_limit_s = serializers.IntegerField(source="view.time_limit_s", read_only=True)
     max_items = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
     format = serializers.SerializerMethodField()
@@ -34,18 +36,18 @@ class ItemViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssessmentItem
         fields = [
-            'item_id',
-            'seq',
-            'max_items',
-            'level',
-            'format',
-            'stem_md',
-            'code',
-            'options',
-            'input_type',
-            'time_limit_s',
-            'deadline_at',
-            'served_at',
+            "item_id",
+            "seq",
+            "max_items",
+            "level",
+            "format",
+            "stem_md",
+            "code",
+            "options",
+            "input_type",
+            "time_limit_s",
+            "deadline_at",
+            "served_at",
         ]
         # Notice: 'key' is NOT in fields!
 
@@ -59,7 +61,7 @@ class ItemViewSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.CharField())
     def get_format(self, obj):
-        return getattr(obj.family, 'format', 'concept_mcq') if obj.family else 'concept_mcq'
+        return getattr(obj.family, "format", "concept_mcq") if obj.family else "concept_mcq"
 
 
 class AssessmentSessionSerializer(serializers.ModelSerializer):
@@ -68,27 +70,27 @@ class AssessmentSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssessmentSession
         fields = [
-            'id',
-            'specialization',
-            'claimed_grade',
-            'kind',
-            'mode',
-            'status',
-            'current',
-            'theta',
-            'se',
-            'rating',
-            'result_grade',
-            'decision',
-            'promotion_unlocked',
-            'started_at',
-            'finished_at',
+            "id",
+            "specialization",
+            "claimed_grade",
+            "kind",
+            "mode",
+            "status",
+            "current",
+            "theta",
+            "se",
+            "rating",
+            "result_grade",
+            "decision",
+            "promotion_unlocked",
+            "started_at",
+            "finished_at",
         ]
 
     @extend_schema_field(ItemViewSerializer)
     def get_current(self, obj):
         # Current unanswered item
-        item = obj.items.filter(answered_at__isnull=True).order_by('seq').first()
+        item = obj.items.filter(answered_at__isnull=True).order_by("seq").first()
         if item:
             return ItemViewSerializer(item).data
         return None
@@ -100,6 +102,13 @@ class AnswerRequestSerializer(serializers.Serializer):
     value = serializers.CharField(required=False, allow_blank=True)
     integrity = serializers.JSONField(required=False)
 
+    def validate(self, attrs):
+        option_id = attrs.get("option_id")
+        value = attrs.get("value")
+        if not option_id and not value:
+            raise serializers.ValidationError("Either option_id or value is required.")
+        return attrs
+
 
 class AssessmentTopicSerializer(serializers.Serializer):
     topic = serializers.CharField()
@@ -109,7 +118,7 @@ class AssessmentTopicSerializer(serializers.Serializer):
 class AssessmentEvidenceSerializer(serializers.Serializer):
     seq = serializers.IntegerField()
     level = serializers.CharField()
-    correct = serializers.BooleanField()
+    correct = serializers.BooleanField(required=False, allow_null=True)
 
 
 class AssessmentFallbackSerializer(serializers.Serializer):
@@ -127,26 +136,26 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssessmentSession
         fields = [
-            'id',
-            'kind',
-            'specialization',
-            'claimed_grade',
-            'mode',
-            'status',
-            'theta',
-            'se',
-            'rating',
-            'rating_ci',
-            'result_grade',
-            'decision',
-            'promotion_unlocked',
-            'counts_as_attempt',
-            'fallback',
-            'topics',
-            'evidence',
-            'next_attempt_at',
-            'started_at',
-            'finished_at',
+            "id",
+            "kind",
+            "specialization",
+            "claimed_grade",
+            "mode",
+            "status",
+            "theta",
+            "se",
+            "rating",
+            "rating_ci",
+            "result_grade",
+            "decision",
+            "promotion_unlocked",
+            "counts_as_attempt",
+            "fallback",
+            "topics",
+            "evidence",
+            "next_attempt_at",
+            "started_at",
+            "finished_at",
         ]
 
     @extend_schema_field(serializers.IntegerField())
@@ -158,8 +167,8 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
     @extend_schema_field(AssessmentTopicSerializer(many=True))
     def get_topics(self, obj):
         topics_map = {}
-        for it in obj.items.select_related('family').all():
-            topic_name = it.family.topic if it.family else 'general'
+        for it in obj.items.select_related("family").all():
+            topic_name = it.family.topic if it.family else "general"
             if topic_name not in topics_map:
                 topics_map[topic_name] = []
             topics_map[topic_name].append(bool(it.correct))
@@ -167,25 +176,31 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
         result = []
         for topic, results in topics_map.items():
             acc = sum(results) / len(results) if results else 0
-            lvl = 'strong' if acc >= 0.7 else ('moderate' if acc >= 0.4 else 'limited')
-            result.append({'topic': topic, 'level': lvl})
+            lvl = "strong" if acc >= 0.7 else ("moderate" if acc >= 0.4 else "limited")
+            result.append({"topic": topic, "level": lvl})
         return result
 
     @extend_schema_field(AssessmentEvidenceSerializer(many=True))
     def get_evidence(self, obj):
-        return [
-            {
-                'seq': it.seq,
-                'level': obj.claimed_grade,
-                'correct': bool(it.correct),
+        is_finished = obj.status == AssessmentStatus.FINISHED
+        evidence = []
+        for it in obj.items.order_by("seq"):
+            item_data = {
+                "seq": it.seq,
+                "level": obj.claimed_grade,
             }
-            for it in obj.items.order_by('seq')
-        ]
+            if is_finished:
+                item_data["correct"] = bool(it.correct)
+            evidence.append(item_data)
+        return evidence
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_next_attempt_at(self, obj):
         from assessment.models import LeagueMembership
-        lm = LeagueMembership.objects.filter(candidate=obj.candidate, specialization=obj.specialization).first()
+
+        lm = LeagueMembership.objects.filter(
+            candidate=obj.candidate, specialization=obj.specialization
+        ).first()
         if lm and lm.next_attempt_at:
             return lm.next_attempt_at.isoformat()
         return None
@@ -193,11 +208,12 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
     @extend_schema_field(AssessmentFallbackSerializer(allow_null=True))
     def get_fallback(self, obj):
         from assessment.services import AssessmentService
+
         return AssessmentService.fallback_offer(obj)
 
 
 class FallbackRequestSerializer(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=['instant', 'short_test'], default='instant')
+    mode = serializers.ChoiceField(choices=["instant", "short_test"], default="instant")
 
 
 class LeagueShelfSerializer(serializers.Serializer):
@@ -263,15 +279,15 @@ class LeagueMembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeagueMembership
         fields = [
-            'specialization',
-            'grade',
-            'status',
-            'theta',
-            'se',
-            'rating',
-            'percentile',
-            'strength',
-            'confirmed_at',
-            'next_attempt_at',
-            'next_promotion_at',
+            "specialization",
+            "grade",
+            "status",
+            "theta",
+            "se",
+            "rating",
+            "percentile",
+            "strength",
+            "confirmed_at",
+            "next_attempt_at",
+            "next_promotion_at",
         ]

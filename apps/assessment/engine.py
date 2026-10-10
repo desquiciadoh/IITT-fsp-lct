@@ -6,6 +6,7 @@ CRITICAL INVARIANTS:
 2. The correct answer (key) is kept server-side only in assessment_items.key
    and is NEVER serialized in any client-facing response.
 """
+
 import hashlib
 import random
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ class BaseItemFamily:
 
 # --- Concrete Parametric Families ---
 
+
 class BackendSqlAggregationFamily(BaseItemFamily):
     family_id = "be.sql.group_having.v1"
     topic = "sql.aggregation"
@@ -54,7 +56,7 @@ class BackendSqlAggregationFamily(BaseItemFamily):
     def generate(self, seed: str) -> ItemInstance:
         rng = random.Random(seed)
         threshold = rng.choice([2, 3, 4, 5])
-        dept_names = rng.sample(['Engineering', 'Marketing', 'Sales', 'HR', 'Support'], 3)
+        dept_names = rng.sample(["Engineering", "Marketing", "Sales", "HR", "Support"], 3)
 
         # Problem setup
         sql_query = f"""SELECT department, COUNT(*) as cnt, AVG(salary) as avg_sal
@@ -73,25 +75,29 @@ ORDER BY cnt DESC;"""
         correct_count = len(matching_depts)
 
         options = [
-            {'id': 'opt_a', 'text_md': f"{correct_count} отдела(ов)"},
-            {'id': 'opt_b', 'text_md': f"{correct_count + 1} отдела(ов)"},
-            {'id': 'opt_c', 'text_md': f"{max(0, correct_count - 1)} отдела(ов)"},
-            {'id': 'opt_d', 'text_md': "0 отделов"},
+            {"id": "opt_a", "text_md": f"{correct_count} отдела(ов)"},
+            {"id": "opt_b", "text_md": f"{correct_count + 1} отдела(ов)"},
+            {"id": "opt_c", "text_md": f"{max(0, correct_count - 1)} отдела(ов)"},
+            {"id": "opt_d", "text_md": "0 отделов"},
         ]
         # Shuffle options deterministically
         rng.shuffle(options)
-        correct_opt_id = [opt['id'] for opt in options if opt['text_md'] == f"{correct_count} отдела(ов)"][0]
+        correct_opt_id = [
+            opt["id"] for opt in options if opt["text_md"] == f"{correct_count} отдела(ов)"
+        ][0]
 
         stem = f"В базе данных компании есть таблица `employees`. Какое количество отделов вернет следующий запрос, если отделы имеют численность {', '.join(f'{k}: {v}' for k, v in dept_counts.items())}?"
 
         return ItemInstance(
             family_id=self.family_id,
             stem_md=stem,
-            code={'lang': 'sql', 'text': sql_query},
+            code={"lang": "sql", "text": sql_query},
             options=options,
-            input_type='choice',
+            input_type="choice",
             key=correct_opt_id,
-            fingerprint=hashlib.sha256(f"{threshold}_{correct_count}_{seed}".encode()).hexdigest()[:16],
+            fingerprint=hashlib.sha256(f"{threshold}_{correct_count}_{seed}".encode()).hexdigest()[
+                :16
+            ],
             time_limit_s=self.time_limit_s,
         )
 
@@ -106,9 +112,9 @@ class BackendPythonComplexityFamily(BaseItemFamily):
     def generate(self, seed: str) -> ItemInstance:
         rng = random.Random(seed)
         step = rng.choice([2, 3])
-        loops = rng.choice(['single', 'nested_halving'])
+        loops = rng.choice(["single", "nested_halving"])
 
-        if loops == 'nested_halving':
+        if loops == "nested_halving":
             code = f"""def solve(n):
     res = 0
     for i in range(n):
@@ -129,20 +135,20 @@ class BackendPythonComplexityFamily(BaseItemFamily):
             expected = "O(log n)"
 
         options = [
-            {'id': 'opt_1', 'text_md': expected},
-            {'id': 'opt_2', 'text_md': 'O(n)'},
-            {'id': 'opt_3', 'text_md': 'O(n^2)'},
-            {'id': 'opt_4', 'text_md': 'O(1)'},
+            {"id": "opt_1", "text_md": expected},
+            {"id": "opt_2", "text_md": "O(n)"},
+            {"id": "opt_3", "text_md": "O(n^2)"},
+            {"id": "opt_4", "text_md": "O(1)"},
         ]
         rng.shuffle(options)
-        correct_opt_id = [opt['id'] for opt in options if opt['text_md'] == expected][0]
+        correct_opt_id = [opt["id"] for opt in options if opt["text_md"] == expected][0]
 
         return ItemInstance(
             family_id=self.family_id,
             stem_md="Определите асимптотическую временную сложность следующего алгоритма в худшем случае:",
-            code={'lang': 'python', 'text': code},
+            code={"lang": "python", "text": code},
             options=options,
-            input_type='choice',
+            input_type="choice",
             key=correct_opt_id,
             fingerprint=hashlib.sha256(f"{loops}_{step}_{seed}".encode()).hexdigest()[:16],
             time_limit_s=self.time_limit_s,
@@ -166,20 +172,20 @@ console.log({val});"""
         expected = f"1, {val}, 3, 2"
 
         options = [
-            {'id': 'o1', 'text_md': expected},
-            {'id': 'o2', 'text_md': f"1, {val}, 2, 3"},
-            {'id': 'o3', 'text_md': f"1, 2, 3, {val}"},
-            {'id': 'o4', 'text_md': f"3, 1, {val}, 2"},
+            {"id": "o1", "text_md": expected},
+            {"id": "o2", "text_md": f"1, {val}, 2, 3"},
+            {"id": "o3", "text_md": f"1, 2, 3, {val}"},
+            {"id": "o4", "text_md": f"3, 1, {val}, 2"},
         ]
         rng.shuffle(options)
-        correct_id = [o['id'] for o in options if o['text_md'] == expected][0]
+        correct_id = [o["id"] for o in options if o["text_md"] == expected][0]
 
         return ItemInstance(
             family_id=self.family_id,
             stem_md="Что будет выведено в консоль браузера в результате выполнения скрипта?",
-            code={'lang': 'javascript', 'text': code},
+            code={"lang": "javascript", "text": code},
             options=options,
-            input_type='choice',
+            input_type="choice",
             key=correct_id,
             fingerprint=hashlib.sha256(f"{val}_{seed}".encode()).hexdigest()[:16],
             time_limit_s=self.time_limit_s,
@@ -219,14 +225,14 @@ def score_assessment(items_data: list[dict]) -> tuple[float, float, int, str, st
 
     # Simple robust EAP approximation:
     # theta = sum((correct - c) * b) / sum(a) ...
-    correct_count = sum(1 for item in items_data if item.get('correct'))
+    correct_count = sum(1 for item in items_data if item.get("correct"))
     total_count = len(items_data)
     pct = correct_count / total_count if total_count > 0 else 0
 
     # Theta mapped from accuracy and average difficulty
-    avg_b = sum(item.get('b', 0.5) for item in items_data) / total_count
+    avg_b = sum(item.get("b", 0.5) for item in items_data) / total_count
     theta = round(avg_b + (pct - 0.5) * 2.0, 2)
-    se = round(max(0.2, 1.0 / (total_count ** 0.5)), 2)
+    se = round(max(0.2, 1.0 / (total_count**0.5)), 2)
     rating = int(1000 + 200 * theta)
 
     # Determine grade based on theta cutoffs
