@@ -21,6 +21,9 @@ export function EmployerDashboardPage() {
         <h1 className="text-lg font-semibold">Кабинет работодателя</h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild>
+            <Link to="/employer/offers">Офферы</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
             <Link to="/employer/company">Компания</Link>
           </Button>
           <Button size="sm" asChild>
