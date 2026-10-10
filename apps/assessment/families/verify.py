@@ -38,7 +38,7 @@ from .kit import norm_text
 from .registry import all_families, make_rng
 
 VERIFY_SECRET = b"fsp-draft-verify-harness"
-CODE_LANGS = ("python", "javascript", "sql")
+CODE_LANGS = ("python", "javascript", "typescript", "sql", "css", "html", "http")
 MAX_COLLISION_RATE = 0.001
 MIN_ENTROPY_BITS = 1.0
 MIN_N = 100            # below this the position and guessing statistics are too noisy to gate on
@@ -138,7 +138,7 @@ def _check_instance(fam: ItemFamily, inst: Instance) -> list[str]:
         errs.append(f"render: input {inst.input!r}")
     if inst.code is not None and (set(inst.code) != {"lang", "text"} or inst.code["lang"] not in CODE_LANGS
                                   or not inst.code["text"].strip()):
-        errs.append(f"render: bad code block {inst.code!r:.80}")
+        errs.append(f"render: bad code block (lang={(inst.code or {}).get('lang')!r})")
     if len(inst.fingerprint) != 64:
         errs.append("fingerprint: not a sha256 hex digest")
 
@@ -253,8 +253,11 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
     if checked < n:
         rep.errors.append(f"coverage: only {checked} of {n} instances were fully checked")
     if fps:
-        rep.collision_rate = (len(fps) - len(set(fps))) / len(fps)
-        if rep.collision_rate > MAX_COLLISION_RATE:
+        duplicates = len(fps) - len(set(fps))
+        rep.collision_rate = duplicates / len(fps)
+        # 0.1 % of the sample, but never less than one duplicate: below n = 1000 a single
+        # coincidence would otherwise fail a family whose rate is fine (ARCHITECTURE §5.3 is per 1000).
+        if duplicates > max(1, int(MAX_COLLISION_RATE * len(fps))):
             rep.errors.append(f"collisions: {rep.collision_rate:.2%} > {MAX_COLLISION_RATE:.1%}")
     rep.entropy_bits = entropy_bits(answers)
     rep.distinct_answers = len(set(answers))
