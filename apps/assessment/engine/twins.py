@@ -1,36 +1,35 @@
-"""Test Twins & Screening Blueprints generator (ML-12, AI-14; ARCHITECTURE §2.12).
+"""Test Twins: a screening blueprint and two parallel forms (ML-12, AI-14; ARCHITECTURE §2.12).
 
-Turns a job description / hiring position into a calibrated screening blueprint and generates
-two parallel, equivalent test instances (Test Twins):
-  - Both twins follow the EXACT SAME topic quotas from the position blueprint;
-  - Both twins share the SAME difficulty profile calibrated to the target grade;
-  - Both twins contain 100% UNIQUE parametric instances (zero answer leaks, zero fingerprint collision);
-  - Neither twin leaks the answer key in client-facing views.
+A position's skills become a blueprint (`blueprint_for`), the blueprint becomes n topic slots, and
+each slot gets one family. Both twins use the SAME family in each slot, generated from different
+seeds: isomorphic instances with identical a, b, c and time limit, so the two forms have the same
+topic profile and the same test information function by construction, while no instance (and so
+no answer) is shared. Within a topic the slots rotate over its families, best information at the
+target grade's θ first, so one family does not fill a whole topic.
 
-Pure engine module: no Django, no ORM, no core.enums.
+The instances are generated with the caller's secret (`make_rng`); a constant secret in the code
+would let anyone regenerate them and their keys. Keys and fingerprints never leave this module:
+`to_dict()` returns the candidate views only.
+
+Pure: no Django, no ORM, no core.enums.
 """
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
-import math
+from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
 
 from ..families.base import GRADES, SPECS, FamilyMeta, Grade, Spec
 from ..families.registry import active_metas, all_families, make_rng
 from .blueprint import blueprint_for
 from .content import Content, load_content
+from .irt import information
 from .policy import band_of
 
-TWINS_SECRET = b"fsp-draft-test-twins"
-
-TARGET_THETAS: dict[str, float] = {
-    "intern": -1.5,
-    "junior": -0.5,
-    "middle": 0.5,
-    "senior": 1.5,
-}
+TIF_GRID = np.linspace(-3.0, 3.0, 25)
+MAX_FINGERPRINT_RETRIES = 20
 
 
 @dataclass(frozen=True)
@@ -45,42 +44,41 @@ class TwinItem:
     b: float
     c: float
     time_limit_s: int
-    fingerprint: str
+    fingerprint: str                    # server-side only, never in to_dict()
     view: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"seq": self.seq, "topic": self.topic, "topic_ru": self.topic_ru, "level": self.level,
+                "family_id": self.family_id, "format": self.format, "a": self.a, "b": self.b, "c": self.c,
+                "time_limit_s": self.time_limit_s, "view": self.view}
 
 
 @dataclass(frozen=True)
 class TwinTest:
     name: str
     items: list[TwinItem]
-    mean_difficulty: float
-    mean_discrimination: float
-    total_duration_s: int
+
+    @property
+    def mean_difficulty(self) -> float:
+        return float(np.mean([it.b for it in self.items]))
+
+    @property
+    def mean_discrimination(self) -> float:
+        return float(np.mean([it.a for it in self.items]))
+
+    @property
+    def total_duration_s(self) -> int:
+        return sum(it.time_limit_s for it in self.items)
+
+    def tif(self) -> np.ndarray:
+        return sum((information(TIF_GRID, it.a, it.b, it.c) for it in self.items), np.zeros_like(TIF_GRID))
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "total_items": len(self.items),
-            "mean_difficulty": round(self.mean_difficulty, 3),
-            "mean_discrimination": round(self.mean_discrimination, 3),
-            "total_duration_s": self.total_duration_s,
-            "items": [
-                {
-                    "seq": it.seq,
-                    "topic": it.topic,
-                    "topic_ru": it.topic_ru,
-                    "level": it.level,
-                    "family_id": it.family_id,
-                    "format": it.format,
-                    "a": it.a,
-                    "b": it.b,
-                    "c": it.c,
-                    "time_limit_s": it.time_limit_s,
-                    "view": it.view,
-                }
-                for it in self.items
-            ],
-        }
+        return {"name": self.name, "total_items": len(self.items),
+                "mean_difficulty": round(self.mean_difficulty, 3),
+                "mean_discrimination": round(self.mean_discrimination, 3),
+                "total_duration_s": self.total_duration_s,
+                "items": [it.to_dict() for it in self.items]}
 
 
 @dataclass(frozen=True)
@@ -88,21 +86,20 @@ class TwinsComparison:
     difficulty_diff: float
     discrimination_diff: float
     duration_diff: int
+    tif_max_abs_diff: float
     identical_fingerprints: int
     topic_match: bool
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "difficulty_diff": round(self.difficulty_diff, 3),
-            "discrimination_diff": round(self.discrimination_diff, 3),
-            "duration_diff": self.duration_diff,
-            "identical_fingerprints": self.identical_fingerprints,
-            "topic_match": self.topic_match,
-        }
+        return {"difficulty_diff": round(self.difficulty_diff, 3),
+                "discrimination_diff": round(self.discrimination_diff, 3),
+                "duration_diff": self.duration_diff, "tif_max_abs_diff": round(self.tif_max_abs_diff, 4),
+                "identical_fingerprints": self.identical_fingerprints, "topic_match": self.topic_match}
 
 
 @dataclass(frozen=True)
 class TestTwinsResult:
+    __test__ = False                    # not a pytest class
     spec: Spec
     target_grade: Grade
     blueprint: list[dict[str, Any]]
@@ -111,202 +108,85 @@ class TestTwinsResult:
     comparison: TwinsComparison
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "specialization": self.spec,
-            "target_grade": self.target_grade,
-            "blueprint": self.blueprint,
-            "twin_a": self.twin_a.to_dict(),
-            "twin_b": self.twin_b.to_dict(),
-            "comparison": self.comparison.to_dict(),
-        }
+        return {"specialization": self.spec, "target_grade": self.target_grade, "blueprint": self.blueprint,
+                "twin_a": self.twin_a.to_dict(), "twin_b": self.twin_b.to_dict(),
+                "comparison": self.comparison.to_dict()}
 
 
-def _allocate_slots(blueprint: list[tuple[str, float]], n_items: int) -> list[str]:
-    """Allocate n_items integer slots across blueprint topics preserving proportions."""
-    if not blueprint or n_items <= 0:
+def allocate_slots(blueprint: Sequence[tuple[str, float]], n_items: int) -> list[str]:
+    """n_items topic slots by largest remainder (Hamilton): floor(w·n) each, the rest to the largest
+    fractional parts, ties by topic id. Slots are listed in blueprint order."""
+    if n_items <= 0 or not blueprint:
         return []
-
-    # Initial floor allocation
-    raw = [(t, w * n_items) for t, w in blueprint]
-    allocated = {t: int(math.floor(r)) for t, r in raw}
-    remainder = n_items - sum(allocated.values())
-
-    # Sort topics by fractional deficit
-    ranked_by_frac = sorted(raw, key=lambda tr: (tr[1] - math.floor(tr[1])), reverse=True)
-    for i in range(remainder):
-        t_top = ranked_by_frac[i % len(ranked_by_frac)][0]
-        allocated[t_top] += 1
-
-    slots: list[str] = []
-    for t, _ in blueprint:
-        cnt = allocated.get(t, 0)
-        slots.extend([t] * cnt)
-
-    return slots[:n_items]
+    raw = {t: w * n_items for t, w in blueprint}
+    count = {t: int(np.floor(r)) for t, r in raw.items()}
+    rest = n_items - sum(count.values())
+    for t in sorted(raw, key=lambda t: (-(raw[t] - count[t]), t))[:rest]:
+        count[t] += 1
+    return [t for t, _ in blueprint for _ in range(count[t])]
 
 
-def create_test_twins(
-    spec: Spec,
-    skills: Sequence[str],
-    target_grade: Grade = "middle",
-    n_items: int = 8,
-    seed: int = 2026,
-    content: Content | None = None,
-) -> TestTwinsResult:
-    """Generate two parallel, equivalent screening tests for a skill specification."""
+def create_test_twins(spec: Spec, skills: Sequence[str], secret: bytes | str, target_grade: Grade = "middle",
+                      n_items: int = 8, seed: int | str = 0, content: Content | None = None) -> TestTwinsResult:
+    """Two parallel forms for a screening test of `n_items` slots. `secret` is the server's item
+    secret (never a constant); `seed` distinguishes requests (e.g. the position id)."""
     if spec not in SPECS:
         raise ValueError(f"unknown specialization: {spec!r}")
     if target_grade not in GRADES:
         raise ValueError(f"unknown grade: {target_grade!r}")
-
+    if not 1 <= n_items <= 40:
+        raise ValueError(f"n_items must be in 1..40, got {n_items}")
     content = content or load_content()
-    fam_registry = all_families()
-    pool = active_metas(spec)
-    if not pool:
-        raise ValueError(f"no active families for spec {spec}")
+    registry = all_families()
+    by_topic: dict[str, list[FamilyMeta]] = {}
+    for m in active_metas(spec):
+        by_topic.setdefault(m.topic, []).append(m)
 
-    # 1. Compute screening blueprint
-    bp = blueprint_for(spec, list(skills), content=content)
-    slots = _allocate_slots(bp, n_items)
-
-    target_th = TARGET_THETAS.get(target_grade, 0.0)
-
-    # Families by topic for this spec
-    fam_by_topic: dict[str, list[FamilyMeta]] = {}
-    for m in pool:
-        fam_by_topic.setdefault(m.topic, []).append(m)
-
+    blueprint = blueprint_for(spec, list(skills), content=content)
+    slots = allocate_slots(blueprint, n_items)
+    theta = next(g.start_theta for g in content.grades if g.id == target_grade)
+    used: dict[str, int] = {}
     items_a: list[TwinItem] = []
     items_b: list[TwinItem] = []
-
     for seq, topic in enumerate(slots, start=1):
-        cands = fam_by_topic.get(topic, pool)
-        # Sort candidate families by proximity to target difficulty
-        sorted_cands = sorted(cands, key=lambda m: (abs(m.b - target_th), m.id))
+        fams = by_topic.get(topic)
+        if not fams:
+            raise ValueError(f"no active family for topic {topic!r} in {spec}")
+        ranked = sorted(fams, key=lambda m: (-float(information(theta, m.a, m.b, m.c)), m.id))
+        meta = ranked[used.get(topic, 0) % len(ranked)]
+        used[topic] = used.get(topic, 0) + 1
+        fam = registry[meta.id]
+        inst_a = fam.generate(make_rng(secret, f"twins|{seed}|{spec}|A", meta.id, seq))
+        for retry in range(MAX_FINGERPRINT_RETRIES):
+            inst_b = fam.generate(make_rng(secret, f"twins|{seed}|{spec}|B", meta.id, seq * 100 + retry))
+            if inst_b.fingerprint != inst_a.fingerprint:
+                break
+        topic_ru = content.topics[topic].name_ru
+        for items, inst in ((items_a, inst_a), (items_b, inst_b)):
+            items.append(TwinItem(seq=seq, topic=topic, topic_ru=topic_ru, level=band_of(meta.b, content),
+                                  family_id=meta.id, format=meta.format, a=meta.a, b=meta.b, c=meta.c,
+                                  time_limit_s=meta.time_limit_s, fingerprint=inst.fingerprint, view=inst.view()))
 
-        meta_a = sorted_cands[0]
-        # For Twin B, prefer a different family with the same topic if available
-        meta_b = sorted_cands[1] if len(sorted_cands) > 1 else meta_a
-
-        fam_a = fam_registry[meta_a.id]
-        fam_b = fam_registry[meta_b.id]
-
-        # Generate Twin A instance
-        rng_a = make_rng(TWINS_SECRET, f"twin_a|{seed}|{spec}", meta_a.id, seq)
-        inst_a = fam_a.generate(rng_a)
-
-        # Generate Twin B instance with independent seed
-        rng_b = make_rng(TWINS_SECRET, f"twin_b|{seed}|{spec}", meta_b.id, seq)
-        inst_b = fam_b.generate(rng_b)
-
-        topic_def = content.topics.get(topic)
-        topic_ru = topic_def.name_ru if topic_def else topic
-
-        items_a.append(
-            TwinItem(
-                seq=seq,
-                topic=topic,
-                topic_ru=topic_ru,
-                level=band_of(meta_a.b, content),
-                family_id=meta_a.id,
-                format=meta_a.format,
-                a=meta_a.a,
-                b=meta_a.b,
-                c=meta_a.c,
-                time_limit_s=meta_a.time_limit_s,
-                fingerprint=inst_a.fingerprint,
-                view=inst_a.view(),
-            )
-        )
-
-        items_b.append(
-            TwinItem(
-                seq=seq,
-                topic=topic,
-                topic_ru=topic_ru,
-                level=band_of(meta_b.b, content),
-                family_id=meta_b.id,
-                format=meta_b.format,
-                a=meta_b.a,
-                b=meta_b.b,
-                c=meta_b.c,
-                time_limit_s=meta_b.time_limit_s,
-                fingerprint=inst_b.fingerprint,
-                view=inst_b.view(),
-            )
-        )
-
-    # Metrics
-    mean_b_a = sum(it.b for it in items_a) / len(items_a)
-    mean_b_b = sum(it.b for it in items_b) / len(items_b)
-    mean_a_a = sum(it.a for it in items_a) / len(items_a)
-    mean_a_b = sum(it.a for it in items_b) / len(items_b)
-    dur_a = sum(it.time_limit_s for it in items_a)
-    dur_b = sum(it.time_limit_s for it in items_b)
-
-    twin_a = TwinTest(
-        name="Вариант А (Twin 1)",
-        items=items_a,
-        mean_difficulty=mean_b_a,
-        mean_discrimination=mean_a_a,
-        total_duration_s=dur_a,
-    )
-
-    twin_b = TwinTest(
-        name="Вариант Б (Twin 2)",
-        items=items_b,
-        mean_difficulty=mean_b_b,
-        mean_discrimination=mean_a_b,
-        total_duration_s=dur_b,
-    )
-
-    fps_a = {it.fingerprint for it in items_a}
-    fps_b = {it.fingerprint for it in items_b}
-    identical_fps = len(fps_a & fps_b)
-
-    topics_match = [it.topic for it in items_a] == [it.topic for it in items_b]
-
+    twin_a = TwinTest("Вариант А", items_a)
+    twin_b = TwinTest("Вариант Б", items_b)
     comparison = TwinsComparison(
-        difficulty_diff=abs(mean_b_a - mean_b_b),
-        discrimination_diff=abs(mean_a_a - mean_a_b),
-        duration_diff=abs(dur_a - dur_b),
-        identical_fingerprints=identical_fps,
-        topic_match=topics_match,
+        difficulty_diff=abs(twin_a.mean_difficulty - twin_b.mean_difficulty),
+        discrimination_diff=abs(twin_a.mean_discrimination - twin_b.mean_discrimination),
+        duration_diff=abs(twin_a.total_duration_s - twin_b.total_duration_s),
+        tif_max_abs_diff=float(np.max(np.abs(twin_a.tif() - twin_b.tif()))),
+        identical_fingerprints=len({i.fingerprint for i in items_a} & {i.fingerprint for i in items_b}),
+        topic_match=[registry[i.family_id].meta.topic for i in items_a]
+        == [registry[i.family_id].meta.topic for i in items_b] == slots,
     )
-
-    bp_serialized = [
-        {
-            "topic": t,
-            "name_ru": content.topics[t].name_ru if t in content.topics else t,
-            "weight": w,
-            "items_allocated": slots.count(t),
-        }
-        for t, w in bp
-    ]
-
-    return TestTwinsResult(
-        spec=spec,
-        target_grade=target_grade,
-        blueprint=bp_serialized,
-        twin_a=twin_a,
-        twin_b=twin_b,
-        comparison=comparison,
-    )
+    bp = [{"topic": t, "name_ru": content.topics[t].name_ru, "weight": w, "items_allocated": slots.count(t)}
+          for t, w in blueprint]
+    return TestTwinsResult(spec=spec, target_grade=target_grade, blueprint=bp, twin_a=twin_a, twin_b=twin_b,
+                           comparison=comparison)
 
 
-def generate_twins_for_position(pos: dict[str, Any], n_items: int = 8, seed: int = 2026) -> TestTwinsResult:
-    """Create test twins given a position dictionary or position input."""
-    spec = pos.get("specialization", "backend")
-    grades = pos.get("grades", ["middle"])
-    target_grade = grades[0] if grades else "middle"
-    must = pos.get("must_skills", [])
-    nice = pos.get("nice_skills", [])
-    skills = list(dict.fromkeys(must + nice))
-
-    return create_test_twins(
-        spec=spec,
-        skills=skills,
-        target_grade=target_grade,
-        n_items=n_items,
-        seed=seed,
-    )
+def generate_twins_for_position(pos: dict[str, Any], secret: bytes | str, n_items: int = 8) -> TestTwinsResult:
+    """Twins for a position dict (specialization, grades, must_skills, nice_skills, position_id)."""
+    grades = list(pos.get("grades") or ["middle"])
+    skills = list(dict.fromkeys([*pos.get("must_skills", ()), *pos.get("nice_skills", ())]))
+    return create_test_twins(spec=pos.get("specialization", "backend"), skills=skills, secret=secret,
+                             target_grade=grades[0], n_items=n_items, seed=pos.get("position_id", 0))

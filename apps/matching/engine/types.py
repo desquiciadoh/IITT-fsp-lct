@@ -62,6 +62,7 @@ class CandidateCtx:
     last_active_at: datetime.datetime | None
     embedding: tuple[float, ...] | None = None              # P1 (ML-9)
     microtask_dates: tuple[datetime.date, ...] = ()        # accepted micro-tasks, for activity
+    embedding_model: str | None = None                      # embeddings.active_model_id() of `embedding`
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class NeedCtx:
     salary_max: int
     salary_type: SalaryType
     embedding: tuple[float, ...] | None = None
+    embedding_model: str | None = None
 
 
 @dataclass(frozen=True)

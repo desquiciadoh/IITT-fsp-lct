@@ -1,303 +1,264 @@
-"""Assessment simulation suite (ML-8, AI-10 part 2; ARCHITECTURE §2.12).
+"""Assessment simulation (ML-8, AI-10 part 2; ARCHITECTURE §2.12, targets §5.3). Pure: no Django.
 
-Simulates test-takers on the production CAT engine with perturbed item parameters to mimic
-imperfect calibration. Evaluates:
-  - Exact and adjacent accuracy against true latent ability θ;
-  - Confusion matrix and Quadratic Weighted Kappa (QWK);
-  - Retest reliability (same-grade agreement and Pearson r across independent sessions);
-  - Test Information Function (TIF) curve;
-  - Median test length and maximum family exposure;
-  - Instance collisions and generator error rate;
-  - Leak attack comparison: static item bank vs parametric families under 10%, 30%, 50% leak.
+Simulees with θ ~ N(0, 1) take the production `IrtCatEngine`; they answer with the *true* item
+parameters (the authored ones perturbed once per seed, `simulate.perturbed_params`), so the engine
+is not tested against its own assumptions. The response model is unidimensional here: grade
+accuracy is about θ (the synthetic world adds skill exposure, see synth.py). Measured:
 
-Pure: no Django.
+- exact / adjacent grade accuracy, the confusion matrix (rows: band of θ, columns: result grade), QWK;
+- retest: a second independent session (same claim, no excluded families) per simulee of a subset,
+  same-grade share and Pearson r of θ̂;
+- median length, the share of sessions ending at the 20-item cap, and the maximum family
+  exposure per specialisation (share of that spec's sessions that served the family);
+- the engine's mean test information function over administered items;
+- collision rate and generator errors from the verify harness on every family (n per family);
+- the leak attack (see `leak_attack`);
+- recovery of item parameters by the ML-11 recalibration (fixed-θ MAP) from simulated responses.
 """
 from __future__ import annotations
 
-import argparse
+import math
+import random
+import statistics
 from collections import Counter
 from collections.abc import Sequence
-import json
-import math
-from pathlib import Path
-import random
-import sys
 from typing import Any
 
 import numpy as np
-
 from assessment.engine.cat import IrtCatEngine
 from assessment.engine.content import Content, load_content
 from assessment.engine.irt import information
+from assessment.engine.monitor import recalibrate_family
 from assessment.engine.policy import band_of
+from assessment.families import verify as harness
 from assessment.families.base import GRADES, SPECS, FamilyMeta
-from assessment.families.registry import active_metas
-from validation.simulate import perturbed_params, run_session
+from assessment.families.registry import active_metas, all_families, make_rng
 
-ROOT = Path(__file__).resolve().parents[1]
+from validation.simulate import SECRET, TrueParams, p_correct, perturbed_params, run_session
+
 SPEC_SHARE = {"backend": 0.45, "frontend": 0.35, "ml_data": 0.20}
-TIF_THETA_GRID = [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+TIF_THETA_GRID = [round(-3.0 + 0.5 * i, 1) for i in range(13)]
 LEAK_SHARES = (0.1, 0.3, 0.5)
+MAX_ITEMS = 20
 
+
+# ── metrics ────────────────────────────────────────────────────────────────
 
 def quadratic_weighted_kappa(y_true: Sequence[int], y_pred: Sequence[int], n_classes: int = 4) -> float:
-    """Quadratic Weighted Kappa (QWK) in [-1, 1]."""
+    """Cohen's kappa with quadratic weights (i − j)² / (k − 1)²."""
     if len(y_true) != len(y_pred):
         raise ValueError("y_true and y_pred must have equal length")
-    n = len(y_true)
-    if n == 0:
-        return 1.0
-
-    C = np.zeros((n_classes, n_classes), dtype=float)
-    for t, p in zip(y_true, y_pred):
-        C[int(t), int(p)] += 1.0
-
-    W = np.zeros((n_classes, n_classes), dtype=float)
-    denom_w = float((n_classes - 1) ** 2) if n_classes > 1 else 1.0
-    for i in range(n_classes):
-        for j in range(n_classes):
-            W[i, j] = float((i - j) ** 2) / denom_w
-
-    O = C / n
-    row_sum = O.sum(axis=1, keepdims=True)
-    col_sum = O.sum(axis=0, keepdims=True)
-    E = row_sum @ col_sum
-
-    num = float((W * O).sum())
-    den = float((W * E).sum())
-    if den == 0.0:
-        return 1.0
-    return float(np.clip(1.0 - (num / den), -1.0, 1.0))
+    if not y_true:
+        raise ValueError("QWK of an empty sample is undefined")
+    obs = np.zeros((n_classes, n_classes))
+    for t, p in zip(y_true, y_pred, strict=True):
+        obs[t, p] += 1
+    obs /= obs.sum()
+    exp = np.outer(obs.sum(axis=1), obs.sum(axis=0))
+    idx = np.arange(n_classes)
+    w = (idx[:, None] - idx[None, :]) ** 2 / (n_classes - 1) ** 2
+    den = float((w * exp).sum())
+    return 1.0 - float((w * obs).sum()) / den if den else 1.0
 
 
 def pearson_r(x: Sequence[float], y: Sequence[float]) -> float:
-    """Pearson correlation coefficient r in [-1, 1]."""
-    if len(x) != len(y):
-        raise ValueError("x and y must have equal length")
-    xa = np.asarray(x, dtype=float)
-    ya = np.asarray(y, dtype=float)
-    if len(xa) < 2:
-        return 0.0
-    xm = xa - xa.mean()
-    ym = ya - ya.mean()
-    sx = np.sqrt(np.sum(xm ** 2))
-    sy = np.sqrt(np.sum(ym ** 2))
-    if sx == 0.0 or sy == 0.0:
-        return 0.0
-    return float(np.clip(np.sum(xm * ym) / (sx * sy), -1.0, 1.0))
+    if len(x) != len(y) or len(x) < 2:
+        raise ValueError("pearson_r needs two equal-length samples of size >= 2")
+    return float(np.corrcoef(np.asarray(x, float), np.asarray(y, float))[0, 1])
 
 
-def run_leak_attack(
-    engine: IrtCatEngine,
-    pool: list[FamilyMeta],
-    true_params: dict[str, Any],
-    spec: str,
-    n_simulees: int = 200,
-    seed: int = 2026,
-) -> list[dict[str, float]]:
-    """Compare cheaters holding 10%, 30%, 50% leaked items: static bank vs parametric families."""
-    rng = random.Random(f"leak-attack|{seed}")
-    all_fam_ids = sorted(m.id for m in pool)
-    metas_by_id = {m.id: m for m in pool}
-    rows: list[dict[str, float]] = []
+# ── grade accuracy, retest, length, exposure, TIF ─────────────────────────
 
-    # Pre-draw test-takers
-    simulees = []
-    for i in range(n_simulees):
-        theta = rng.gauss(0.0, 1.0)
-        simulees.append((f"cheater_{i}", theta))
-
-    for share in LEAK_SHARES:
-        k = max(1, int(round(share * len(all_fam_ids))))
-        leaked_set = set(rng.sample(all_fam_ids, k))
-
-        static_diffs: list[float] = []
-        param_diffs: list[float] = []
-
-        for sid, theta in simulees:
-            # 1. Honest session
-            honest_out = run_session(
-                engine, pool, true_params, spec, "middle", theta, f"h_{share}_{sid}"
-            )
-            honest_theta = honest_out.result.theta
-
-            # 2. Static bank attack: cheater has 100% correct answer for leaked items
-            def static_override(meta, p):
-                return True if meta.id in leaked_set else None
-
-            static_out = run_session(
-                engine, pool, true_params, spec, "middle", theta, f"st_{share}_{sid}",
-                answer_override=static_override
-            )
-            static_diffs.append(static_out.result.theta - honest_theta)
-
-            # 3. Parametric bank attack: cheater submits memorized key from old instance.
-            # Because parameters and options are redrawn, success rate is at best chance c (or 0 for numeric)
-            r_cheat = random.Random(f"cheat_{share}_{sid}")
-
-            def param_override(meta, p):
-                if meta.id in leaked_set:
-                    # Cheater submits old answer: correct only with guessing probability c
-                    return r_cheat.random() < meta.c
-                return None
-
-            param_out = run_session(
-                engine, pool, true_params, spec, "middle", theta, f"pr_{share}_{sid}",
-                answer_override=param_override
-            )
-            param_diffs.append(param_out.result.theta - honest_theta)
-
-        rows.append({
-            "leak_share": float(share),
-            "static_dtheta": round(float(np.mean(static_diffs)), 4),
-            "parametric_dtheta": round(float(np.mean(param_diffs)), 4),
-        })
-
-    return rows
-
-
-def run_assessment_simulation(
-    n_simulees: int = 10000,
-    seed: int = 2026,
-    retest_n: int | None = None,
-    leak_n: int = 300,
-    content: Content | None = None,
-) -> dict[str, Any]:
-    """Run full assessment Monte Carlo simulation."""
-    content = content or load_content()
-    pools = {spec: active_metas(spec) for spec in SPECS}
-    all_metas = {m.id: m for spec in SPECS for m in pools[spec]}
-    true_params = perturbed_params(list(all_metas.values()), seed=seed)
-    engine = IrtCatEngine()
-
-    rng = random.Random(seed)
-    retest_count = retest_n if retest_n is not None else min(2500, n_simulees)
-
-    true_grades_idx: list[int] = []
-    res_grades_idx: list[int] = []
-    exact_count = 0
-    adjacent_count = 0
-    confusion = [[0 for _ in range(4)] for _ in range(4)]
-    session_lengths: list[int] = []
-    administered_families: list[str] = []
-
-    # TIF accumulator
-    tif_grid = np.asarray(TIF_THETA_GRID, dtype=float)
-    tif_sum = np.zeros_like(tif_grid)
-
-    # Retest accumulators
-    retest_thetas_1: list[float] = []
-    retest_thetas_2: list[float] = []
-    retest_same_grade_count = 0
-
-    for i in range(n_simulees):
+def _simulees(n: int, seed: int, content: Content):
+    rng = random.Random(f"simulees|{seed}")
+    out = []
+    for i in range(n):
         spec = rng.choices(SPECS, weights=[SPEC_SHARE[s] for s in SPECS])[0]
         theta = rng.gauss(0.0, 1.0)
-        true_grade = band_of(theta, content)
-        true_idx = GRADES.index(true_grade)
+        claimed = band_of(theta + rng.gauss(0.0, 0.35), content)      # claims are roughly right
+        out.append((f"sim-{seed}-{i:06d}", spec, theta, claimed))
+    return out
 
-        # Claimed grade has slight realistic variance
-        claim_theta = theta + rng.gauss(0.0, 0.35)
-        claimed_grade = band_of(claim_theta, content)
 
-        sid = f"sim_{seed}_{i:06d}"
-        outcome = run_session(engine, pools[spec], true_params, spec, claimed_grade, theta, sid)
-
-        res_grade = outcome.result.result_grade
-        res_idx = GRADES.index(res_grade)
-
-        true_grades_idx.append(true_idx)
-        res_grades_idx.append(res_idx)
-        confusion[true_idx][res_idx] += 1
-
-        if res_grade == true_grade:
-            exact_count += 1
-        if abs(res_idx - true_idx) <= 1:
-            adjacent_count += 1
-
-        session_lengths.append(len(outcome.families))
-        administered_families.extend(outcome.families)
-
-        # TIF for this session: sum information over administered items
-        session_info = np.zeros_like(tif_grid)
-        for fam_id in outcome.families:
-            meta = all_metas[fam_id]
-            session_info += information(tif_grid, meta.a, meta.b, meta.c)
-        tif_sum += session_info
-
-        # Retest evaluation for a subset
-        if i < retest_count:
-            sid2 = f"retest_{seed}_{i:06d}"
-            outcome2 = run_session(engine, pools[spec], true_params, spec, claimed_grade, theta, sid2)
-            retest_thetas_1.append(outcome.result.theta)
-            retest_thetas_2.append(outcome2.result.theta)
-            if outcome2.result.result_grade == outcome.result.result_grade:
-                retest_same_grade_count += 1
-
-    # Aggregates
-    exact_acc = float(exact_count / n_simulees)
-    adjacent_acc = float(adjacent_count / n_simulees)
-    qwk = quadratic_weighted_kappa(true_grades_idx, res_grades_idx, n_classes=4)
-    median_len = float(np.median(session_lengths))
-
-    # Family exposures
-    counts = Counter(administered_families)
-    max_family_exposure = float(max(counts.values()) / n_simulees) if counts else 0.0
-
-    # Retest statistics
-    retest_same_grade = float(retest_same_grade_count / retest_count) if retest_count > 0 else 1.0
-    retest_r_val = pearson_r(retest_thetas_1, retest_thetas_2) if retest_count > 1 else 1.0
-
-    # Mean Test Information Function curve
-    mean_tif = (tif_sum / n_simulees).tolist()
-
-    # Leak attack simulation on backend pool
-    leak_results = run_leak_attack(
-        engine=engine,
-        pool=pools["backend"],
-        true_params=true_params,
-        spec="backend",
-        n_simulees=leak_n,
-        seed=seed,
-    )
-
+def grade_accuracy(n: int, seed: int, retest_n: int, pools, true_params, content: Content) -> dict[str, Any]:
+    engine = IrtCatEngine()
+    confusion = [[0] * 4 for _ in range(4)]
+    truth_idx, result_idx, lengths, stop = [], [], [], Counter()
+    served_by_spec: dict[str, Counter] = {s: Counter() for s in SPECS}
+    sessions_by_spec: Counter = Counter()
+    grid = np.asarray(TIF_THETA_GRID)
+    tif = np.zeros_like(grid)
+    retest_1, retest_2, retest_same = [], [], 0
+    metas = {m.id: m for spec in SPECS for m in pools[spec]}
+    for k, (sid, spec, theta, claimed) in enumerate(_simulees(n, seed, content)):
+        out = run_session(engine, pools[spec], true_params, spec, claimed, theta, sid)
+        t, r = GRADES.index(band_of(theta, content)), GRADES.index(out.result.result_grade)
+        confusion[t][r] += 1
+        truth_idx.append(t)
+        result_idx.append(r)
+        lengths.append(len(out.families))
+        stop[out.result.stop_reason or "none"] += 1
+        sessions_by_spec[spec] += 1
+        served_by_spec[spec].update(set(out.families))
+        for fid in out.families:
+            m = metas[fid]
+            tif += information(grid, m.a, m.b, m.c)
+        if k < retest_n:
+            again = run_session(engine, pools[spec], true_params, spec, claimed, theta, f"{sid}-retest")
+            retest_1.append(out.result.theta)
+            retest_2.append(again.result.theta)
+            retest_same += again.result.result_grade == out.result.result_grade
+    exposure = {spec: max(served_by_spec[spec].values()) / sessions_by_spec[spec]
+                for spec in SPECS if sessions_by_spec[spec]}
+    exact = sum(confusion[i][i] for i in range(4)) / n
+    adjacent = sum(confusion[i][j] for i in range(4) for j in range(4) if abs(i - j) <= 1) / n
     return {
-        "simulees": int(n_simulees),
-        "exact_acc": round(exact_acc, 4),
-        "adjacent_acc": round(adjacent_acc, 4),
-        "qwk": round(qwk, 4),
-        "retest_same_grade": round(retest_same_grade, 4),
-        "retest_r": round(retest_r_val, 4),
-        "median_len": round(median_len, 1),
-        "max_family_exposure": round(max_family_exposure, 4),
-        "collision_rate": 0.0,
-        "generator_errors": 0,
-        "confusion": confusion,
-        "tif": {
-            "theta": [round(float(th), 2) for th in TIF_THETA_GRID],
-            "info": [round(float(inf), 4) for inf in mean_tif],
-        },
-        "leak_attack": leak_results,
+        "simulees": n, "exact_acc": exact, "adjacent_acc": adjacent,
+        "qwk": quadratic_weighted_kappa(truth_idx, result_idx), "confusion": confusion,
+        "retest_same_grade": retest_same / retest_n, "retest_r": pearson_r(retest_1, retest_2),
+        "median_len": float(statistics.median(lengths)), "max_family_exposure": max(exposure.values()),
+        "tif": {"theta": TIF_THETA_GRID, "info": [round(float(x), 4) for x in tif / n]},
+        "_details": {"retest_n": retest_n, "exposure_by_spec": exposure,
+                     "share_at_max_items": sum(1 for x in lengths if x >= MAX_ITEMS) / n,
+                     "stop_reasons": dict(sorted(stop.items()))},
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run IRT/CAT assessment Monte Carlo simulation.")
-    parser.add_argument("--n", type=int, default=10000, help="Number of simulees (default: 10000)")
-    parser.add_argument("--seed", type=int, default=2026, help="Random seed (default: 2026)")
-    parser.add_argument("--out", type=str, default="", help="Optional JSON file to save assessment metrics")
-    args = parser.parse_args(argv)
+# ── bank quality from the verify harness ───────────────────────────────────
 
-    print(f"Running assessment simulation with {args.n} simulees (seed={args.seed})...")
-    res = run_assessment_simulation(n_simulees=args.n, seed=args.seed)
-    output_str = json.dumps(res, indent=2, ensure_ascii=False)
-    if args.out:
-        Path(args.out).write_text(output_str + "\n", encoding="utf-8")
-        print(f"Wrote assessment results to {args.out}")
-    else:
-        sys.stdout.write(output_str + "\n")
-    return 0
+def bank_quality(n_per_family: int) -> dict[str, Any]:
+    """Collision rate over the families the collision gate applies to (parametric families), and
+    generator errors over all families. Concept (classification) families are reported apart:
+    they have a handful of questions by design (ML.md D14)."""
+    reports = harness.verify_all(n=n_per_family)
+    gated = [r for r in reports if r.collision_gated]
+    instances = sum(r.n for r in gated)
+    duplicates = sum(round(r.collision_rate * r.n) for r in gated)
+    errors = sum(int(e.rsplit("[x", 1)[1].rstrip("]")) if "[x" in e else 1
+                 for r in reports for e in r.errors if e.startswith("generate:"))
+    return {"collision_rate": duplicates / instances if instances else 0.0, "generator_errors": errors,
+            "_details": {"n_per_family": n_per_family, "families": len(reports),
+                         "failing_families": [r.family_id for r in reports if not r.ok],
+                         "concept_collision_rates": {r.family_id: r.collision_rate for r in reports
+                                                     if not r.collision_gated},
+                         "max_parametric_collision_rate": max((r.collision_rate for r in gated), default=0.0)}}
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# ── leak attack ────────────────────────────────────────────────────────────
+
+LEAKED_INSTANCES = 20      # instances of a leaked family the cheater holds (a scraped answer sheet)
+
+
+def key_reuse(fam, leaked: int = LEAKED_INSTANCES, trials: int = 200) -> float:
+    """P(a fresh instance is the same question as one of `leaked` leaked instances). Same semantic
+    fingerprint means same answer (the verify harness checks it), so the cheater answers it right;
+    any other instance is a new question and the leaked answers do not help."""
+    held = {fam.generate(make_rng(SECRET, "leak-held", fam.meta.id, i)).fingerprint for i in range(leaked)}
+    return sum(fam.generate(make_rng(SECRET, "leak-new", fam.meta.id, i)).fingerprint in held
+               for i in range(trials)) / trials
+
+
+def leak_attack(pool: list[FamilyMeta], true_params: dict[str, TrueParams], spec: str, n: int, seed: int,
+                draws: int, content: Content) -> dict[str, Any]:
+    """Cheaters who hold the answers of a share of the bank. Static bank: a leaked item is always
+    answered right. Parametric families: the cheater holds LEAKED_INSTANCES instances of each
+    leaked family; a fresh instance that is the same question as one of them is answered right
+    (probability `key_reuse`), any other is answered honestly. The honest run and both attacks
+    share each simulee's session id (common random numbers), the leaked sets are nested prefixes of
+    one permutation, and the result is averaged over `draws` permutations."""
+    engine = IrtCatEngine()
+    registry = all_families()
+    reuse = {m.id: key_reuse(registry[m.id]) for m in pool}
+    rng = random.Random(f"leak|{seed}")
+    people = [(f"leak-{seed}-{i:05d}", rng.gauss(0.0, 1.0)) for i in range(n)]
+    ids = sorted(m.id for m in pool)
+    rows, details = [], []
+    for share in LEAK_SHARES:
+        d_static, d_param, promo_static, promo_param, promo_honest = [], [], 0, 0, 0
+        for draw in range(draws):
+            order = random.Random(f"leak-perm|{seed}|{draw}").sample(ids, len(ids))
+            leaked = set(order[:max(1, round(share * len(ids)))])
+            for sid, theta in people:
+                claimed = band_of(theta + 1.0, content)          # cheaters claim one band up
+                truth = GRADES.index(band_of(theta, content))
+                sess = f"{sid}|{draw}"
+                honest = run_session(engine, pool, true_params, spec, claimed, theta, sess)
+
+                def static(meta, p, ok, leaked=leaked):
+                    return True if meta.id in leaked else None
+
+                choice_rng = random.Random(f"cheat|{sess}|{share}")
+
+                def parametric(meta, p, ok, leaked=leaked, r=choice_rng):
+                    if meta.id not in leaked:
+                        return None
+                    return True if r.random() < reuse[meta.id] else None
+
+                st = run_session(engine, pool, true_params, spec, claimed, theta, sess, answer_override=static)
+                pa = run_session(engine, pool, true_params, spec, claimed, theta, sess, answer_override=parametric)
+                d_static.append(st.result.theta - honest.result.theta)
+                d_param.append(pa.result.theta - honest.result.theta)
+                promo_honest += GRADES.index(honest.result.result_grade) > truth
+                promo_static += GRADES.index(st.result.result_grade) > truth
+                promo_param += GRADES.index(pa.result.result_grade) > truth
+        m = len(d_static)
+        rows.append({"leak_share": share, "static_dtheta": round(statistics.fmean(d_static), 4),
+                     "parametric_dtheta": round(statistics.fmean(d_param), 4)})
+        details.append({"leak_share": share, "sessions": m,
+                        "static_dtheta_se": statistics.stdev(d_static) / math.sqrt(m),
+                        "parametric_dtheta_se": statistics.stdev(d_param) / math.sqrt(m),
+                        "over_graded_honest": promo_honest / m, "over_graded_static": promo_static / m,
+                        "over_graded_parametric": promo_param / m})
+    return {"rows": rows, "_details": {"spec": spec, "simulees": n, "draws": draws, "per_share": details,
+                                       "leaked_instances_per_family": LEAKED_INSTANCES,
+                                       "same_question_probability": dict(sorted(reuse.items()))}}
+
+
+# ── calibration recovery ───────────────────────────────────────────────────
+
+def calibration_recovery(metas: list[FamilyMeta], true_params: dict[str, TrueParams], seed: int,
+                         n_responses: int = 600, se: float = 0.35) -> dict[str, Any]:
+    """Can the ML-11 recalibration recover the true parameters from the authored priors? For each
+    family: n responses from θ ~ N(0, 1) with the true parameters, θ̂ = EAP-like estimate with
+    standard error `se`, then fixed-θ MAP. RMSE of a and b, before (authored) and after."""
+    rng = np.random.default_rng(seed)
+    shrink = 1 / (1 + se * se)
+    rows = []
+    for m in sorted(metas, key=lambda m: m.id):
+        t = true_params[m.id]
+        theta = rng.normal(0, 1, n_responses)
+        est = (theta + rng.normal(0, se, n_responses)) * shrink
+        u = (rng.random(n_responses) < np.array([p_correct(x, t) for x in theta])).astype(float)
+        cal = recalibrate_family(est, u, m.c, prior_a=m.a, prior_b=m.b)
+        rows.append((m.a - t.a, m.b - t.b, cal.a - t.a, cal.b - t.b, cal.converged))
+
+    def rmse(k):
+        return math.sqrt(statistics.fmean(r[k] ** 2 for r in rows))
+    return {"families": len(rows), "n_responses": n_responses, "theta_se": se,
+            "rmse_a_prior": rmse(0), "rmse_b_prior": rmse(1), "rmse_a_calibrated": rmse(2),
+            "rmse_b_calibrated": rmse(3), "converged": sum(r[4] for r in rows)}
+
+
+# ── entry point ────────────────────────────────────────────────────────────
+
+def run_assessment_simulation(n_simulees: int = 10_000, seed: int = 2026, retest_n: int = 2_500,
+                              leak_n: int = 300, leak_draws: int = 2, verify_n: int = 1_000,
+                              content: Content | None = None) -> dict[str, Any]:
+    """The `assessment` block of report.json, plus `_details` for validation/out/details.json."""
+    content = content or load_content()
+    pools = {spec: active_metas(spec) for spec in SPECS}
+    metas = sorted({m.id: m for spec in SPECS for m in pools[spec]}.values(), key=lambda m: m.id)
+    true_params = perturbed_params(metas, seed=seed)
+    grades = grade_accuracy(n_simulees, seed, min(retest_n, n_simulees), pools, true_params, content)
+    bank = bank_quality(verify_n)
+    leak = leak_attack(pools["backend"], true_params, "backend", leak_n, seed, leak_draws, content)
+    calib = calibration_recovery(metas, true_params, seed)
+    out = {k: v for k, v in grades.items() if k != "_details"}
+    out.update(collision_rate=bank["collision_rate"], generator_errors=bank["generator_errors"],
+               leak_attack=leak["rows"])
+    for k in ("exact_acc", "adjacent_acc", "qwk", "retest_same_grade", "retest_r", "max_family_exposure",
+              "collision_rate"):
+        out[k] = round(float(out[k]), 4)
+    out["_details"] = {"grades": grades["_details"], "bank": bank["_details"], "leak": leak["_details"],
+                       "calibration": calib}
+    return out

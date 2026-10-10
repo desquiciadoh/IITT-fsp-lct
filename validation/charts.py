@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from assessment.families.base import GRADES
+from assessment.engine.content import load_content
 
 GRADE_LABELS = ("Intern", "Junior", "Middle", "Senior")
 
@@ -87,7 +87,7 @@ def render_tif_svg(tif_data: dict[str, list[float]], out_path: Path) -> None:
     def ty(inf: float) -> float:
         return height - margin_b - (inf / max_info) * (height - margin_t - margin_b)
 
-    pts = " ".join(f"{tx(th):.1f},{ty(inf):.1f}" for th, inf in zip(thetas, infos))
+    pts = " ".join(f"{tx(th):.1f},{ty(inf):.1f}" for th, inf in zip(thetas, infos, strict=True))
 
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
@@ -102,7 +102,7 @@ def render_tif_svg(tif_data: dict[str, list[float]], out_path: Path) -> None:
         '    .legend { font-family: system-ui, sans-serif; font-size: 11px; fill: #334155; }',
         '  </style>',
         f'  <text x="{width // 2}" y="25" text-anchor="middle" class="title">Функция информации теста (TIF curve)</text>',
-        f'  <text x="{width // 2}" y="42" text-anchor="middle" class="subtitle">Максимум информации на границах грейдов (θ = -1.0, 0.0, +1.0)</text>',
+        f'  <text x="{width // 2}" y="42" text-anchor="middle" class="subtitle">Средняя информация заданий, выданных в сессиях; пунктир — границы грейдов</text>',
     ]
 
     # Grid lines and axes
@@ -112,14 +112,14 @@ def render_tif_svg(tif_data: dict[str, list[float]], out_path: Path) -> None:
         lines.append(f'  <text x="{x:.1f}" y="{height - margin_b + 16}" text-anchor="middle" class="tick-text">{th:+.1f}</text>')
 
     # Vertical cut lines
-    for cut_th, label in ((-1.0, "Jun"), (0.0, "Mid"), (1.0, "Sen")):
+    for cut_th, label in zip(load_content().band_cuts, ("Jun", "Mid", "Sen"), strict=True):
         x = tx(cut_th)
         lines.append(f'  <line x1="{x:.1f}" y1="{margin_t}" x2="{x:.1f}" y2="{height - margin_b}" class="cut-line" />')
         lines.append(f'  <text x="{x:.1f}" y="{margin_t - 6}" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">{label} cut</text>')
 
     # TIF polyline and points
     lines.append(f'  <polyline fill="none" stroke="#2563eb" stroke-width="3" points="{pts}" />')
-    for th, inf in zip(thetas, infos):
+    for th, inf in zip(thetas, infos, strict=True):
         lines.append(f'  <circle cx="{tx(th):.1f}" cy="{ty(inf):.1f}" r="3.5" fill="#1d4ed8" />')
 
     lines.append('</svg>')
@@ -131,7 +131,6 @@ def render_leak_attack_svg(leak_attack: list[dict[str, Any]], out_path: Path) ->
     """Render leak attack grouped bar chart comparing static bank vs parametric families."""
     width, height = 560, 340
     margin_l, margin_r = 70, 30
-    margin_t, margin_b = 60, 50
 
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
@@ -169,7 +168,8 @@ def render_leak_attack_svg(leak_attack: list[dict[str, Any]], out_path: Path) ->
         s_x = gx - bar_w - 4
         s_y = zero_y - s_h if s_dth >= 0 else zero_y
         lines.append(f'  <rect x="{s_x}" y="{s_y}" width="{bar_w}" height="{max(2.0, s_h)}" rx="3" class="bar-static" />')
-        lines.append(f'  <text x="{s_x + bar_w // 2}" y="{s_y - 6}" text-anchor="middle" class="val-text" fill="#b91c1c">+{s_dth:.2f}</text>')
+        s_text_y = s_y - 6 if s_dth >= 0 else s_y + s_h + 14
+        lines.append(f'  <text x="{s_x + bar_w // 2}" y="{s_text_y}" text-anchor="middle" class="val-text" fill="#b91c1c">{s_dth:+.2f}</text>')
 
         # Parametric bar (near zero or negative, downward)
         p_dth = row["parametric_dtheta"]
@@ -186,7 +186,7 @@ def render_leak_attack_svg(leak_attack: list[dict[str, Any]], out_path: Path) ->
 
 
 def render_matching_svg(systems: list[dict[str, Any]], out_path: Path) -> None:
-    """Render matching benchmark comparison across 5 systems."""
+    """Render the matching benchmark: nDCG@10 and P@10 per system."""
     width, height = 620, 360
     margin_l, margin_r = 140, 40
     margin_t, margin_b = 60, 40
@@ -201,13 +201,14 @@ def render_matching_svg(systems: list[dict[str, Any]], out_path: Path) -> None:
         '    .val-text { font-family: system-ui, sans-serif; font-size: 11px; font-weight: bold; fill: #1e293b; }',
         '  </style>',
         f'  <text x="{width // 2}" y="25" text-anchor="middle" class="title">Качество матчинга: nDCG@10 и Precision@10</text>',
-        f'  <text x="{width // 2}" y="42" text-anchor="middle" class="subtitle">Сравнение 5 подходов против скрытого оракула истинной компетенции</text>',
+        f'  <text x="{width // 2}" y="42" text-anchor="middle" class="subtitle">Все системы ранжируют один и тот же пул (после жёстких фильтров); оракул — скрытая истина</text>',
     ]
 
     labels = {
         "keyword": "1. Keyword (резюме)",
         "bm25": "2. BM25 (текст JD)",
-        "embeddings_only": "3. Эмбеддинги",
+        "embeddings_only": "3. Эмбеддинги (USER-bge-m3)",
+        "hashed_ngram": "3. Хэш n-грамм (без модели)",
         "ours_no_verified": "4. Наш (без тестов)",
         "ours": "5. Наш итоговый (с тестами)",
     }

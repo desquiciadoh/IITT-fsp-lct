@@ -1,17 +1,23 @@
-"""Text embeddings and SemanticFit vector representation (ML-9, AI-11).
+"""Text embeddings for SemanticFit (ML-9, AI-11). Pure engine module: no Django, no ORM, no core.enums.
 
-Pure engine module: no Django, no ORM, no core.enums.
+Backends, chosen by the EMBEDDINGS environment variable:
+  off    (default)  embed_text returns None; SemanticFit stays neutral (0.5) with an info chip.
+  local             deepvk/USER-bge-m3 through sentence-transformers on CPU (1024 dims, L2-normalised).
+                    If the package or the weights are missing, EmbeddingUnavailable is raised. It is
+                    never silently replaced by another backend, because vectors from two backends live
+                    in different spaces and their cosine is meaningless. A failed load is remembered,
+                    so a missing model costs one attempt per process, not one per text.
+  hash              a deterministic feature-hashing projection of word, bigram and character n-grams
+                    (1024 dims, L2-normalised). Lexical, not semantic; for tests, offline demos and
+                    the validation suite when the model is not installed, and always labelled so.
 
-Model: deepvk/USER-bge-m3 (1024 dimensions, CPU inference).
-Configuration:
-  EMBEDDINGS=off (default in dev/test): embed_text returns None; SemanticFit uses neutral 0.5.
-  EMBEDDINGS=local: embed_text produces 1024-dim L2-normalised vectors. When sentence-transformers
-  is available, it uses deepvk/USER-bge-m3; otherwise it falls back to a deterministic, pure-Python
-  hashing projection so tests and offline workflows remain fully functional without downloading weights.
+Every vector is tagged by `active_model_id()`. Store it next to the vector (BE) and pass it in
+`CandidateCtx.embedding_model` / `NeedCtx.embedding_model`: SemanticFit refuses to compare vectors
+of different models and stays neutral instead. Blank text has no embedding (None), so an empty
+profile is neutral rather than penalised.
 
-Latency constraint:
-  Pool scoring p95 stays under 300 ms because candidate and position vectors are pre-computed
-  at save/seed time and stored in the DTOs (CandidateCtx.embedding, NeedCtx.embedding).
+Latency: vectors are computed at save or seed time, never while scoring; `features.cosine` uses
+math.sumprod (about 30 µs per 1024-dim pair), so a 1,500-candidate pool stays well under 300 ms.
 """
 from __future__ import annotations
 
@@ -24,28 +30,38 @@ from typing import Any
 
 EMBEDDING_DIM: int = 1024
 DEFAULT_MODEL: str = "deepvk/USER-bge-m3"
+HASH_MODEL_ID: str = "hash-ngram-1024-v1"
+BACKENDS = ("off", "local", "hash")
 
 _TOKEN_RE = re.compile(r"[\w\+\#\.]+", re.UNICODE)
 _MODEL_CACHE: dict[str, Any] = {}
+_FAILED: dict[str, str] = {}
 
 
-def is_embeddings_enabled() -> bool:
-    """True if local embedding inference is active (EMBEDDINGS=local)."""
-    return os.environ.get("EMBEDDINGS", "off").lower() in ("local", "1", "true")
+class EmbeddingUnavailable(RuntimeError):
+    """EMBEDDINGS=local but the model cannot be loaded or run."""
 
 
-def get_embedding_model_name() -> str:
-    """Name of the HuggingFace / local model to use for embeddings."""
+def backend() -> str:
+    value = os.environ.get("EMBEDDINGS", "off").strip().lower()
+    if value not in BACKENDS:
+        raise ValueError(f"EMBEDDINGS must be one of {BACKENDS}, got {value!r}")
+    return value
+
+
+def model_name() -> str:
     return os.environ.get("EMBEDDINGS_MODEL", DEFAULT_MODEL)
 
 
-def candidate_embedding_text(
-    about: str = "",
-    experience_text: str = "",
-    skills: Sequence[str] = (),
-    roles: Sequence[str] = (),
-) -> str:
-    """Format candidate profile text for embedding."""
+def active_model_id(kind: str | None = None) -> str | None:
+    """The id stored next to vectors of the given (default: active) backend; None when off."""
+    kind = kind or backend()
+    return {"off": None, "local": model_name(), "hash": HASH_MODEL_ID}[kind]
+
+
+def candidate_embedding_text(about: str = "", experience_text: str = "", skills: Sequence[str] = (),
+                             roles: Sequence[str] = ()) -> str:
+    """Candidate profile text for embedding."""
     parts = []
     if roles:
         parts.append("Роли: " + ", ".join(roles))
@@ -58,14 +74,9 @@ def candidate_embedding_text(
     return "\n".join(p for p in parts if p)
 
 
-def need_embedding_text(
-    title: str = "",
-    description: str = "",
-    must_skills: Sequence[str] = (),
-    nice_skills: Sequence[str] = (),
-    team_context: str = "",
-) -> str:
-    """Format job description and requirements for embedding."""
+def need_embedding_text(title: str = "", description: str = "", must_skills: Sequence[str] = (),
+                        nice_skills: Sequence[str] = (), team_context: str = "") -> str:
+    """Job text for embedding."""
     parts = []
     if title:
         parts.append("Позиция: " + title.strip())
@@ -80,105 +91,61 @@ def need_embedding_text(
     return "\n".join(p for p in parts if p)
 
 
-def pseudo_embed(text: str, dim: int = EMBEDDING_DIM) -> tuple[float, ...]:
-    """Deterministic, zero-dependency feature hasher into a unit-length vector of length `dim`.
-
-    Used when sentence-transformers / GPU / internet weights are not available.
-    Preserves lexical and n-gram overlap between related texts (cosine > 0.5), while
-    orthogonal texts yield near-zero dot products.
-    """
+def pseudo_embed(text: str, dim: int = EMBEDDING_DIM) -> tuple[float, ...] | None:
+    """Feature hashing of word tokens (weight 1.0), word bigrams (1.5) and character 3/4-grams (0.4)
+    into `dim` signed buckets, L2-normalised. Deterministic across processes (sha256, not hash())."""
     clean = text.lower().strip()
     if not clean:
-        return tuple(0.0 for _ in range(dim))
-
+        return None
     vec = [0.0] * dim
     tokens = _TOKEN_RE.findall(clean)
-
-    features: list[tuple[str, float]] = []
-    # 1. Word tokens (weight 1.0)
-    for tok in tokens:
-        features.append((f"w:{tok}", 1.0))
-    # 2. Bigrams (weight 1.5)
-    for i in range(len(tokens) - 1):
-        features.append((f"bi:{tokens[i]}_{tokens[i+1]}", 1.5))
-    # 3. Character 3-grams and 4-grams (weight 0.4)
-    for k in (3, 4):
-        for i in range(len(clean) - k + 1):
-            features.append((f"c{k}:{clean[i:i+k]}", 0.4))
-
+    features = [(f"w:{t}", 1.0) for t in tokens]
+    features += [(f"bi:{tokens[i]}_{tokens[i + 1]}", 1.5) for i in range(len(tokens) - 1)]
+    features += [(f"c{k}:{clean[i:i + k]}", 0.4) for k in (3, 4) for i in range(len(clean) - k + 1)]
     for feat, weight in features:
         digest = hashlib.sha256(feat.encode("utf-8")).digest()
-        idx = int.from_bytes(digest[:4], "big") % dim
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vec[idx] += sign * weight
-
-    norm = math.sqrt(sum(x * x for x in vec))
-    if norm < 1e-12:
-        return tuple(0.0 for _ in range(dim))
-    return tuple(x / norm for x in vec)
+        vec[int.from_bytes(digest[:4], "big") % dim] += weight if digest[4] % 2 == 0 else -weight
+    norm = math.sqrt(math.sumprod(vec, vec))
+    return tuple(x / norm for x in vec) if norm > 1e-12 else None
 
 
-def _load_sentence_transformer(model_name: str) -> Any | None:
-    if model_name in _MODEL_CACHE:
-        return _MODEL_CACHE[model_name]
+def _load_model(name: str) -> Any:
+    if name in _MODEL_CACHE:
+        return _MODEL_CACHE[name]
+    if name in _FAILED:
+        raise EmbeddingUnavailable(_FAILED[name])
     try:
         from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(model_name, device="cpu")
-        _MODEL_CACHE[model_name] = model
-        return model
-    except Exception:
-        return None
+        model = SentenceTransformer(name, device="cpu")
+    except Exception as e:  # missing package, missing weights, no network: remembered, then raised
+        _FAILED[name] = f"cannot load embedding model {name!r}: {type(e).__name__}: {e}"
+        raise EmbeddingUnavailable(_FAILED[name]) from e
+    _MODEL_CACHE[name] = model
+    return model
 
 
 def clear_cache() -> None:
-    """Clear cached model instances (for testing)."""
+    """Forget loaded models and remembered failures (tests, or after installing the model)."""
     _MODEL_CACHE.clear()
+    _FAILED.clear()
 
 
-def embed_text(
-    text: str,
-    force: bool = False,
-    model_name: str | None = None,
-) -> tuple[float, ...] | None:
-    """Generate an embedding vector for `text`.
-
-    Returns None if embeddings are disabled (EMBEDDINGS=off) and `force` is False.
-    Otherwise returns a tuple of 1024 floats with L2 norm = 1.0.
-    """
-    if not is_embeddings_enabled() and not force:
-        return None
-
-    if not text or not text.strip():
-        return tuple(0.0 for _ in range(EMBEDDING_DIM))
-
-    name = model_name or get_embedding_model_name()
-    model = _load_sentence_transformer(name)
-    if model is not None:
-        try:
-            arr = model.encode(text, normalize_embeddings=True)
-            return tuple(float(x) for x in arr)
-        except Exception:
-            pass
-
-    return pseudo_embed(text, dim=EMBEDDING_DIM)
-
-
-def embed_batch(
-    texts: Sequence[str],
-    force: bool = False,
-    model_name: str | None = None,
-) -> list[tuple[float, ...] | None]:
-    """Generate embedding vectors for a batch of texts."""
-    if not is_embeddings_enabled() and not force:
+def embed_batch(texts: Sequence[str], kind: str | None = None) -> list[tuple[float, ...] | None]:
+    """Vectors for `texts` with the given (default: active) backend; None for blank texts and
+    for everything when the backend is off. Raises EmbeddingUnavailable for local without a model."""
+    kind = kind or backend()
+    if kind == "off":
         return [None] * len(texts)
+    if kind == "hash":
+        return [pseudo_embed(t) for t in texts]
+    keep = [i for i, t in enumerate(texts) if t and t.strip()]
+    out: list[tuple[float, ...] | None] = [None] * len(texts)
+    if keep:
+        arr = _load_model(model_name()).encode([texts[i] for i in keep], batch_size=32, normalize_embeddings=True)
+        for i, row in zip(keep, arr, strict=True):
+            out[i] = tuple(float(x) for x in row)
+    return out
 
-    name = model_name or get_embedding_model_name()
-    model = _load_sentence_transformer(name)
-    if model is not None:
-        try:
-            arr = model.encode(list(texts), batch_size=32, normalize_embeddings=True)
-            return [tuple(float(x) for x in row) for row in arr]
-        except Exception:
-            pass
 
-    return [embed_text(t, force=True, model_name=name) for t in texts]
+def embed_text(text: str, kind: str | None = None) -> tuple[float, ...] | None:
+    return embed_batch([text], kind)[0]

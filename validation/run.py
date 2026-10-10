@@ -1,121 +1,110 @@
-"""Main validation runner (ML-8, AI-10 part 2; python -m validation.run).
+"""python -m validation.run: the whole validation suite (ML-8). Pure: no Django.
 
-Orchestrates the entire validation suite:
-  1. Assessment Monte Carlo simulation (10,000 simulees on production CAT engine);
-  2. Matching benchmark (5 systems against hidden-truth relevance oracle on 60 needs);
-  3. Strict schema validation against ValidationReport (TASKS.md §1.4);
-  4. Generation of production validation/out/report.json;
-  5. Rendering of SVG charts into validation/out/charts/;
-  6. Human-readable summary output for jury and pitch slides.
+1. assessment simulation (sim_assessment), 2. matching benchmark (bench_matching),
+3. report.json (schema-validated, with the git SHA), details.json (everything the fixed schema has no
+room for: misses, base rates, standard errors, calibration recovery), and SVG charts.
 
-Runtime constraint: executes well under 10 minutes.
-Pure: no Django.
+Every ARCHITECTURE §5.3 target is printed as PASS or MISS; the run never claims success it did not
+measure. The exit code is 0 when the suite ran (misses are results, not crashes).
 """
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 from validation.bench_matching import run_matching_benchmark
 from validation.charts import generate_all_charts
-from validation.report import build_validation_report, write_validation_report
+from validation.report import build_report, git_sha, write_json
 from validation.sim_assessment import run_assessment_simulation
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT_DIR = ROOT / "validation" / "out"
+OUT_DIR = ROOT / "validation" / "out"
 
 
-def run_full_validation(
-    n_simulees: int = 10000,
-    n_positions: int = 60,
-    seed: int = 2026,
-    out_dir: Path = DEFAULT_OUT_DIR,
-) -> dict:
-    """Run full validation suite and write report.json and charts."""
-    t_start = time.time()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    charts_dir = out_dir / "charts"
+def targets(a: dict, m: dict) -> list[dict]:
+    """ARCHITECTURE §5.3 targets against the measured values."""
+    by = {s["name"]: s for s in m["systems"]}
+    ours, keyword, ablated = by["ours"], by["keyword"], by["ours_no_verified"]
+    leak_ok = all(abs(r["parametric_dtheta"]) <= 0.1 for r in a["leak_attack"])
+    leak_big = max(r["static_dtheta"] for r in a["leak_attack"])
+    rows = [
+        ("generator errors", a["generator_errors"], "= 0", a["generator_errors"] == 0),
+        ("instance collision rate (parametric families)", a["collision_rate"], "<= 0.001", a["collision_rate"] <= 0.001),
+        ("exact grade accuracy", a["exact_acc"], ">= 0.80", a["exact_acc"] >= 0.80),
+        ("adjacent grade accuracy", a["adjacent_acc"], ">= 0.98", a["adjacent_acc"] >= 0.98),
+        ("retest same grade", a["retest_same_grade"], ">= 0.80", a["retest_same_grade"] >= 0.80),
+        ("retest r", a["retest_r"], ">= 0.85", a["retest_r"] >= 0.85),
+        ("leak: parametric |dtheta| at every share", max(abs(r["parametric_dtheta"]) for r in a["leak_attack"]),
+         "<= 0.10 (static large)", leak_ok and leak_big >= 0.3),
+        ("median test length", a["median_len"], "<= 14", a["median_len"] <= 14),
+        ("max family exposure (per spec)", a["max_family_exposure"], "<= 0.5", a["max_family_exposure"] <= 0.5),
+        ("nDCG@10 (ours)", ours["ndcg10"], ">= 0.80", ours["ndcg10"] >= 0.80),
+        ("P@10 (ours)", ours["p10"], ">= 0.80", ours["p10"] >= 0.80),
+        ("lift over keyword (nDCG@10)", round(ours["ndcg10"] - keyword["ndcg10"], 4), "> 0",
+         ours["ndcg10"] > keyword["ndcg10"]),
+        ("ablation: verified evidence on - off (nDCG@10)", round(ours["ndcg10"] - ablated["ndcg10"], 4), "> 0",
+         ours["ndcg10"] > ablated["ndcg10"]),
+        ("non-FSP exposure parity", m["non_fsp_parity"], ">= 0.80", m["non_fsp_parity"] >= 0.80),
+        ("pool scoring p95, ms (engine only)", m["pool_p95_ms"], "< 300", m["pool_p95_ms"] < 300),
+    ]
+    return [{"metric": k, "value": v, "target": t, "status": "PASS" if ok else "MISS"} for k, v, t, ok in rows]
 
-    print("=" * 70)
-    print("FSP DRAFT | VALIDATION SUITE (ML-8 / AI-10)")
-    print(f"Seed: {seed} | Simulees: {n_simulees:,} | Positions: {n_positions}")
-    print("=" * 70)
 
-    # 1. Assessment simulation
-    print(f"\n[1/3] Simulating {n_simulees:,} test-takers on production IRT/CAT engine...")
-    t0 = time.time()
-    assessment_res = run_assessment_simulation(
-        n_simulees=n_simulees,
-        seed=seed,
-    )
-    dt_sim = time.time() - t0
-    print(f"      Completed in {dt_sim:.1f} s")
-    print(f"      Exact accuracy:    {assessment_res['exact_acc'] * 100:.1f}%")
-    print(f"      Adjacent accuracy: {assessment_res['adjacent_acc'] * 100:.1f}%")
-    print(f"      QWK (weighted kappa): {assessment_res['qwk']:.3f}")
-    print(f"      Retest same grade:   {assessment_res['retest_same_grade'] * 100:.1f}% (r = {assessment_res['retest_r']:.3f})")
-    print(f"      Median test len:     {assessment_res['median_len']} items (max exposure {assessment_res['max_family_exposure'] * 100:.1f}%)")
+def run(n_simulees: int, retest_n: int, leak_n: int, leak_draws: int, verify_n: int, n_positions: int,
+        seed: int, out_dir: Path) -> dict:
+    sha = git_sha()                                  # fail before an hour of work, not after
+    t0 = time.perf_counter()
+    print(f"[1/2] assessment: {n_simulees:,} simulees, retest {retest_n:,}, leak {leak_n} x {leak_draws}, "
+          f"verify n={verify_n} (seed {seed})", flush=True)
+    assessment = run_assessment_simulation(n_simulees, seed, retest_n, leak_n, leak_draws, verify_n)
+    t1 = time.perf_counter()
+    print(f"      {t1 - t0:.0f} s", flush=True)
+    print(f"[2/2] matching: {n_positions} positions", flush=True)
+    matching = run_matching_benchmark(n_positions)
+    t2 = time.perf_counter()
+    print(f"      {t2 - t1:.0f} s", flush=True)
 
-    # 2. Matching benchmark
-    print(f"\n[2/3] Benchmarking matching algorithms on {n_positions} positions...")
-    t0 = time.time()
-    matching_res = run_matching_benchmark(
-        n_positions=n_positions,
-        seed=seed,
-    )
-    dt_match = time.time() - t0
-    print(f"      Completed in {dt_match:.1f} s (pool p95 latency: {matching_res['pool_p95_ms']} ms)")
-    print(f"      Non-FSP exposure parity: {matching_res['non_fsp_parity']:.3f}")
+    a_details, m_details = assessment.pop("_details"), matching.pop("_details")
+    report = build_report(assessment, matching, sha)
+    table = targets(assessment, matching)
+    details = {"generated_at": report["generated_at"], "git_sha": sha, "seed": seed,
+               "runtime_s": {"assessment": round(t1 - t0, 1), "matching": round(t2 - t1, 1)},
+               "targets": table, "assessment": a_details, "matching": m_details}
+    write_json(report, out_dir / "report.json")
+    write_json(details, out_dir / "details.json")
+    charts = generate_all_charts(report, out_dir / "charts")
 
-    print("\n      Retrieval Systems Comparison:")
-    header = f"      {'System':<18s} {'nDCG@10':>9s} {'P@10':>9s} {'R@50':>9s} {'MRR':>9s}"
-    print(header)
-    print("      " + "-" * 50)
-    for s in matching_res["systems"]:
-        print(f"      {s['name']:<18s} {s['ndcg10']:>9.3f} {s['p10']:>9.3f} {s['r50']:>9.3f} {s['mrr']:>9.3f}")
-
-    # 3. Assemble report and validate schema
-    print("\n[3/3] Assembling report and generating SVG charts...")
-    report = build_validation_report(
-        assessment_metrics=assessment_res,
-        matching_metrics=matching_res,
-    )
-
-    report_path = write_validation_report(report, out_dir / "report.json")
-    print(f"      Wrote validated report: {report_path.relative_to(ROOT)}")
-
-    chart_paths = generate_all_charts(report, charts_dir)
-    for cp in chart_paths:
-        print(f"      Rendered chart: {cp.relative_to(ROOT)}")
-
-    total_time = time.time() - t_start
-    print("\n" + "=" * 70)
-    print(f"VALIDATION PASSED (total runtime: {total_time:.1f} s < 600 s target)")
-    print("=" * 70 + "\n")
-
+    print(f"\n{'metric':<48} {'value':>10}  {'target':<24} status")
+    for row in table:
+        value = row["value"]
+        shown = f"{value:.4f}" if isinstance(value, float) else str(value)
+        print(f"{row['metric']:<48} {shown:>10}  {row['target']:<24} {row['status']}")
+    print("\nsystems:  " + "  ".join(f"{s['name']} nDCG@10 {s['ndcg10']:.3f} P@10 {s['p10']:.3f}"
+                                     for s in matching["systems"]))
+    misses = sum(r["status"] == "MISS" for r in table)
+    print(f"\n{len(table) - misses} targets met, {misses} missed; total {time.perf_counter() - t0:.0f} s")
+    print(f"wrote {out_dir / 'report.json'}, {out_dir / 'details.json'} and {len(charts)} charts")
     return report
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run validation suite (make validate / python -m validation.run).")
-    parser.add_argument("--simulees", "--n", type=int, default=10000, help="Number of simulees (default: 10000)")
-    parser.add_argument("--positions", type=int, default=60, help="Number of positions (default: 60)")
-    parser.add_argument("--seed", type=int, default=2026, help="Random seed (default: 2026)")
-    parser.add_argument("--fast", action="store_true", help="Fast mode for quick smoke checks (500 simulees, 10 positions)")
-    parser.add_argument("--out-dir", type=str, default=str(DEFAULT_OUT_DIR), help="Output directory")
-    args = parser.parse_args(argv)
-
-    n_simulees = 500 if args.fast else args.simulees
-    n_positions = 10 if args.fast else args.positions
-
-    run_full_validation(
-        n_simulees=n_simulees,
-        n_positions=n_positions,
-        seed=args.seed,
-        out_dir=Path(args.out_dir),
-    )
+    ap = argparse.ArgumentParser(description="Run the validation suite (make validate).")
+    ap.add_argument("--simulees", type=int, default=10_000)
+    ap.add_argument("--retest", type=int, default=2_500)
+    ap.add_argument("--leak", type=int, default=300, help="simulees per leak share")
+    ap.add_argument("--leak-draws", type=int, default=2, help="leaked-set permutations to average over")
+    ap.add_argument("--verify-n", type=int, default=1_000, help="instances per family for collisions")
+    ap.add_argument("--positions", type=int, default=60)
+    ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--fast", action="store_true", help="smoke run: 500 simulees, small leak and verify samples")
+    ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    args = ap.parse_args(argv)
+    if args.fast:
+        args.simulees, args.retest, args.leak, args.leak_draws, args.verify_n, args.positions = 500, 200, 40, 1, 100, 10
+    run(args.simulees, args.retest, args.leak, args.leak_draws, args.verify_n, args.positions, args.seed,
+        args.out_dir)
     return 0
 
 

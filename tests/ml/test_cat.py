@@ -412,6 +412,9 @@ def test_verified_skills_come_from_answered_families_in_good_topics():
     skills = {"f.sql": ("sql",), "f.py": ("python",), "f.http": ("rest_api",)}
     topics = [("python.core", "limited"), ("sql.aggregation", "strong")]
     assert verified_skills(topics, adm, skills) == ["sql"]
+    # a wrong answer verifies nothing, even in a strong topic
+    wrong = [dict(adm[0], correct=False, family_id="f.sql2"), adm[0]]
+    assert verified_skills(topics, wrong, {"f.sql2": ("postgresql",), "f.sql": ("sql",)}) == ["sql"]
 
 
 # ── review fixes (ML-3 review) ─────────────────────────────────────────────

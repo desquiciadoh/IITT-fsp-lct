@@ -49,17 +49,19 @@ class SessionOutcome:
 
 def run_session(engine: IrtCatEngine, pool: list[FamilyMeta], true_params: dict[str, TrueParams], spec: str,
                 claimed: str, theta: float, session_id: str, mode: str = "full", kind: str = "initial",
-                seen: frozenset[str] = frozenset(), answer_override=None) -> SessionOutcome:
-    """One CAT session. `answer_override(meta, p) -> bool | None` lets the leak attack replace
-    the honest Bernoulli answer for some items (None keeps the honest draw)."""
+                seen: frozenset[str] = frozenset(), answer_override=None, theta_shift=None) -> SessionOutcome:
+    """One CAT session. `answer_override(meta, p, honest) -> bool | None` lets the leak attack
+    replace the honest Bernoulli answer for some items (None keeps the honest draw).
+    `theta_shift(meta) -> float` adds a person-and-family specific term to θ (the synthetic world
+    uses it for skill exposure, zero-mean given θ); without it the model is unidimensional."""
     rng = random.Random(f"responses|{session_id}")
     state = engine.start(spec, claimed, mode, kind, pool, set(seen))
     served = []
     while (meta := engine.next_family(state, pool, make_rng(SECRET, session_id, "select",
                                                               len(state.administered) + 1))) is not None:
-        p = p_correct(theta, true_params[meta.id])
+        p = p_correct(theta + (theta_shift(meta) if theta_shift else 0.0), true_params[meta.id])
         honest = rng.random() < p
-        forced = answer_override(meta, p) if answer_override else None
+        forced = answer_override(meta, p, honest) if answer_override else None
         engine.record(state, meta.id, honest if forced is None else forced)
         served.append(meta.id)
     return SessionOutcome(state=state, result=engine.result(state), families=served)
