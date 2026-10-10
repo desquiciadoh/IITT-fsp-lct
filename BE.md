@@ -111,7 +111,7 @@ ML, AI and FE add a row here when they need a model, endpoint or contract change
 
 | From | Request | Status |
 |---|---|---|
-| — | — | — |
+| ML-0 | **Engine contract is published** (ML.md §3). `apps/assessment/engine.py` is now the package `apps/assessment/engine/`; `from assessment.engine import FAMILIES_REGISTRY, score_assessment` still works through `engine/legacy.py` until N2 lands, then ML deletes it. Wire through your adapters, never import ML internals elsewhere: `assessment.engine.cat` (`CatEngine`, `CatState.to_json/from_json`, `CatResult`, `item_level`), `assessment.families.registry` (`all_families`, `active_metas`, `make_rng`), `matching.engine.score` (`score_pool`, `passes_hard_filters`, `preset`), `matching.engine.types` (DTOs), `matching.engine.strength` (`strength`, `percentiles`, `fsp_boost`). Two optional fields were added with defaults: `CatState.seen` and `CandidateCtx.microtask_dates`. | open |
 
 ---
 
