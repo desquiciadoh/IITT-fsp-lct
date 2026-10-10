@@ -116,3 +116,77 @@ export function toPositionInput(values: PositionFormInput): PositionFormValues {
     is_public: values.is_public ?? true,
   }
 }
+
+// --- FE-11 · send-offer modal ---------------------------------------------------
+
+export const CONTACT_CHANNELS = ['email', 'phone', 'telegram', 'platform'] as const
+
+/**
+ * POST /api/offers form schema (FE2.md §FE-11). Salary rules mirror the
+ * position wizard (B15): min > 0, max ≥ min, salary_type has NO default and
+ * is always sent explicitly. `why_you` is not part of this form at all —
+ * the server computes it (B9).
+ */
+export const offerFormSchema = z
+  .object({
+    title: z.string().trim().min(3, 'Укажите название вакансии').max(255, 'Максимум 255 символов'),
+    description: z.string().trim().min(10, 'Добавьте описание — от 10 символов').max(5000, 'Максимум 5000 символов'),
+    salary_min: z.coerce
+      .number({ message: 'Укажите зарплату' })
+      .int('Целое число')
+      .min(1, 'Минимум должен быть больше 0'),
+    salary_max: z.coerce
+      .number({ message: 'Укажите зарплату' })
+      .int('Целое число')
+      .min(1, 'Укажите зарплату'),
+    salary_type: salaryTypeSchema,
+    contact_channel: z.enum(['email', 'phone', 'telegram', 'platform']),
+    contact_value: z.string().trim().max(255, 'Максимум 255 символов').default(''),
+    expires_in_days: z.coerce
+      .number({ message: 'Целое число дней' })
+      .int('Целое число')
+      .min(1, 'Минимум 1 день')
+      .max(90, 'Максимум 90 дней')
+      .optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (Number(v.salary_max) < Number(v.salary_min)) {
+      ctx.addIssue({ code: 'custom', path: ['salary_max'], message: 'Максимум не меньше минимума' })
+    }
+    // `platform` means in-platform chat — no external contact needed.
+    if (v.contact_channel !== 'platform' && v.contact_value === '') {
+      ctx.addIssue({ code: 'custom', path: ['contact_value'], message: 'Укажите контакт для связи' })
+    }
+    if (v.contact_channel === 'email' && v.contact_value !== '' && !z.string().email().safeParse(v.contact_value).success) {
+      ctx.addIssue({ code: 'custom', path: ['contact_value'], message: 'Некорректный email' })
+    }
+  })
+
+export type OfferFormValues = z.output<typeof offerFormSchema>
+export type OfferFormInput = Omit<z.input<typeof offerFormSchema>, 'expires_in_days'> & {
+  expires_in_days?: number | string
+}
+
+/** Raw form input → contract body for useSendOffer (numbers coerced, expiry optional). */
+export function toSendOfferInput(values: OfferFormInput): {
+  title: string
+  description: string
+  salary_min: number
+  salary_max: number
+  salary_type: 'gross' | 'net'
+  contact_channel: (typeof CONTACT_CHANNELS)[number]
+  contact_value: string
+  expires_in_days?: number
+} {
+  const days = values.expires_in_days === undefined || values.expires_in_days === '' ? undefined : Number(values.expires_in_days)
+  return {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    salary_min: Number(values.salary_min),
+    salary_max: Number(values.salary_max),
+    salary_type: values.salary_type,
+    contact_channel: values.contact_channel,
+    contact_value: values.contact_channel === 'platform' ? '' : values.contact_value.trim(),
+    ...(days != null && Number.isFinite(days) ? { expires_in_days: days } : {}),
+  }
+}
