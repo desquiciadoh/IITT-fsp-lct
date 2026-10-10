@@ -86,15 +86,28 @@ export type ScoreComponentsDict = Partial<
   Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
 >
 
-export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
+/** gap G8 target — pool skills carry a verification source once BE serves them. */
+export type PoolSkill = { name: string; source: Source | string }
+
+/** TalentShort as served today: the schema flattens `skills` to `string`. */
+type TalentShortServed = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
   public_id: string
   /** present at runtime; the schema does not declare it */
   display_name?: string
   league?: League | null
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
-  /** the schema flattens this nested list to `string` */
-  skills?: string[]
+  /** the schema flattens this nested list to `string`; FE serves either shape */
+  skills?: (string | PoolSkill)[]
 }
+
+/**
+ * Public view of a talent row: `skills` is normalized to objects with an
+ * explicit `source`, so consumers never have to handle the legacy `string[]`
+ * shape (gap G8). Normalization happens in `normalizePoolItem` / talent hooks.
+ */
+export type TalentShortView = Omit<TalentShortServed, 'skills'> & { skills?: PoolSkill[] }
+
+export type TalentShort = TalentShortServed
 
 export type Offer = Omit<
   GeneratedOffer,
@@ -309,7 +322,7 @@ export type PoolComponentsInput = ScoreComponent[] | ScoreComponentsDict
  * optional `gaps` once BE adds them (target of G8).
  */
 export type PoolItemView = {
-  talent: TalentShort
+  talent: TalentShortView
   score: number
   components: PoolComponentsInput
   reasons: Reason[]
@@ -356,7 +369,39 @@ export type ScoutingFilters = {
  * grant). Sections for topics/assessments/integrity come later — hidden when
  * absent. Hand-written wrapper over the loose generated schema.
  */
-export type TalentDetail = TalentShort & {
+/** One FSP competition result served to the scouting drawer. */
+export type FspResultEntry = {
+  event_id?: string
+  event_name?: string
+  discipline?: string
+  date?: string
+  placement?: number | null
+  tier?: string | null
+  participants_total?: number | null
+}
+
+/** Assessment history row for the drawer (gap G9). */
+export type TalentAssessmentEntry = {
+  id?: string
+  kind: string
+  mode?: string
+  status?: string
+  result_grade?: string
+  rating?: number | null
+  taken_at?: string
+}
+
+/** Integrity capture summary row for the drawer (gap G9). */
+export type TalentIntegrityEntry = {
+  session_id?: string
+  focus_loss?: number
+  paste?: number
+  flagged?: boolean
+  taken_at?: string
+}
+
+export type TalentDetail = Omit<TalentShortView, 'skills'> & {
+  skills?: PoolSkill[]
   display_name?: string
   about?: string | null
   experience_text?: string | null
@@ -366,8 +411,10 @@ export type TalentDetail = TalentShort & {
     phone?: string
     telegram?: string
   } | null
+  /** gap G8 target — detailed FSP results for the drawer (pool `fsp` is summary-only) */
+  fsp_results?: FspResultEntry[] | null
   /** gap G9 — future sections, hidden while undefined */
-  topics?: unknown[] | null
-  assessments?: unknown[] | null
-  integrity_flags?: unknown[] | null
+  topics?: ResultTopic[] | null
+  assessments?: TalentAssessmentEntry[] | null
+  integrity_flags?: TalentIntegrityEntry[] | null
 }

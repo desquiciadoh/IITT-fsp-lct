@@ -197,6 +197,7 @@ export function ScoutingPage() {
                   talent={item.talent}
                   score={item.score}
                   reasons={item.reasons}
+                  gaps={item.gaps}
                   shortlisted={item.shortlisted}
                   onToggleShortlist={onToggleShortlist}
                   className="cursor-pointer"

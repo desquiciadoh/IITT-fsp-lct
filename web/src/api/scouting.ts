@@ -39,6 +39,37 @@ export function filterParams(filters: Pick<ScoutingFilters, 'grades' | 'skills' 
   return p
 }
 
+// --- skill shape helpers (gap G8: `skills` is a flat string list today) -----
+
+import type { PoolSkill, TalentShort, TalentShortView } from '@/api/types'
+
+/** Read the name out of either served skill shape (`string` or `{name}`). */
+export function skillName(s: string | PoolSkill): string {
+  return typeof s === 'string' ? s : s.name
+}
+
+/**
+ * Normalize skills to `{name, source}` objects. Until BE marks verification
+ * per skill, we infer the source from the talent's reasons: a plus/minus
+ * reason with `source: 'test'` mentions the skill → verified; otherwise the
+ * skill stays self-reported (declared). Unknown strings default to declared.
+ */
+export function normalizeSkills(
+  skills: (string | PoolSkill)[] | undefined,
+  reasons?: { kind: string; text: string; source?: string }[],
+): PoolSkill[] {
+  if (!skills) return []
+  const testText = (reasons ?? [])
+    .filter((r) => r.source === 'test')
+    .map((r) => r.text.toLowerCase())
+    .join(' ')
+  return skills.map((s) => {
+    if (typeof s !== 'string') return { name: s.name, source: s.source }
+    const verified = testText.includes(s.toLowerCase())
+    return { name: s, source: verified ? 'test' : 'declared' }
+  })
+}
+
 // --- client-side fallback (gap G8: backend ignores filters) ------------------
 
 const GRADE_ORDER: Grade[] = ['intern', 'junior', 'middle', 'senior']
@@ -55,7 +86,7 @@ export function matchesPoolFilters(item: PoolItemView, f: ScoutingFilters): bool
     if (!grade || !f.grades.includes(grade)) return false
   }
   if (f.skills.length) {
-    const owned = (t.skills ?? []).map((s) => s.toLowerCase())
+    const owned = (t.skills ?? []).map((s) => skillName(s).toLowerCase())
     if (!f.skills.every((s) => owned.includes(s.toLowerCase()))) return false
   }
   if (f.fsp !== 'any') {
@@ -156,12 +187,14 @@ export function usePositionPool(positionId: string | undefined, filters: Scoutin
 
 /** Accept both component shapes (dict today, list tomorrow — gap G8). */
 function normalizePoolItem(raw: PoolItemView): PoolItemView {
+  const reasons = raw.reasons ?? []
   return {
     ...raw,
     // keep the components payload as-is; ScoreBar normalizes dict|list via
     // normalizeComponents() at render time (single normalization point)
-    reasons: raw.reasons ?? [],
-    gaps: raw.gaps ?? raw.reasons?.filter((r) => r.kind === 'minus').map((r) => r.text),
+    talent: { ...raw.talent, skills: normalizeSkills(raw.talent.skills, reasons) },
+    reasons,
+    gaps: raw.gaps ?? reasons.filter((r) => r.kind === 'minus').map((r) => r.text),
   }
 }
 
@@ -210,13 +243,20 @@ export function useShortlistToggle(positionId: string) {
 /**
  * GET /api/talent/{public_id} — drawer payload (gap G9).
  * `contacts` is null until the company holds a grant; future sections are
- * hidden while absent.
+ * hidden while absent. Skills are normalized to `{name, source}` here too,
+ * so the drawer can split verified vs self-reported without string[] leaks.
  */
 export function useTalent(publicId: string | undefined) {
   return useQuery({
     queryKey: keys.talent(publicId ?? ''),
     enabled: Boolean(publicId),
     staleTime: 60_000,
-    queryFn: () => customFetch<TalentDetail>(`/api/talent/${publicId}`),
+    queryFn: async () => {
+      const raw = await customFetch<TalentDetail & TalentShort>(`/api/talent/${publicId}`)
+      return {
+        ...raw,
+        skills: normalizeSkills(raw.skills as (string | PoolSkill)[] | undefined),
+      } satisfies TalentDetail
+    },
   })
 }
