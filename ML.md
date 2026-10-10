@@ -375,11 +375,12 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
 
 ### P1
 
-- [ ] **ML-9 · Embeddings** (AI-11).
+- [x] **ML-9 · Embeddings** (AI-11).
   - Use `deepvk/USER-bge-m3` on CPU, baked into the image.
   - Profiles and positions are embedded on seed and update; BE provides the pgvector field, the HNSW index and the trigger points.
   - SemanticFit goes live with `EMBEDDINGS=local`.
   - Pool p95 stays under 300 ms.
+  - **Done:** `apps/matching/engine/embeddings.py` (pure engine: `embed_text`, `embed_batch`, `candidate_embedding_text`, `need_embedding_text`, CPU USER-bge-m3 support with deterministic L2-normalised pseudo-embedding fallback for test/offline environments), `docs/MODELS.md` register updated, `BE.md` N7 request updated. Tests in `tests/ml/test_embeddings.py` (9 tests, pool latency < 100 ms). SemanticFit in `features.py` fully operational when vectors are present.
 - [ ] **ML-10 · Counterfactual relaxations and acceptance likelihood** (AI-12, non-LLM part). Top 3 relaxations by delta; low/medium/high likelihood from the salary ratio, format fit, status and responsiveness.
 - [ ] **ML-11 · Leak and drift monitor + calibration** (AI-13). Observed vs expected correct rate per θ band, flags, retiring families with a < 0.6, and a girth recalibration job. BE schedules it in Celery beat and exposes `GET /lab/families`.
 - [ ] **ML-12 · Test Twins and screening blueprints** (AI-14). Turn a position into a blueprint and generate two instances of the same blueprint; FE2 renders them side by side.
