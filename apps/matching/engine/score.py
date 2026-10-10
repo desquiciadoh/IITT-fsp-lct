@@ -1,10 +1,24 @@
-"""Match score over DTOs (ML.md §3). ML-0 stub: the old scoring.py rules on the final shapes."""
+"""Match score over DTOs (ML-4; ARCHITECTURE §2.6).
+
+score = Σ_k value_k · weight_k, with weights rescaled to Σ = 100 (D4), so 0 <= score <= 100.
+Candidates whose grade is not confirmed by a test are ranked ×0.75: their effective weights
+are multiplied by 0.75, so Σ contribution still equals the score (invariant 7) and the chip
+says why. Every component emits at least one Russian reason chip; `gaps` lists the
+must-have skills the candidate has no direct evidence for (display names).
+score_pool scores every candidate it gets (BE applies the hard filters in SQL; the
+reference is passes_hard_filters) and sorts by score desc, then public_id.
+"""
 from __future__ import annotations
 
 import datetime
 from collections.abc import Sequence
 
+from .features import GRADE_RU, freshness_fit, grade_fit, salary_fit, semantic_fit, skill_fit
 from .types import COMPONENT_KEYS, GRADES, CandidateCtx, Component, NeedCtx, Reason, Scored, Weights
+
+UNCONFIRMED_FACTOR = 0.75
+RANK_RU = {"cat3": "3 разряд", "cat2": "2 разряд", "cat1": "1 разряд", "kms": "КМС", "ms": "МС"}
+TIER_RU = {"winner": "победитель", "prize_winner": "призёр", "finalist": "финалист", "participant": "участник"}
 
 PRESETS: dict[str, Weights] = {
     "balanced": Weights(),
@@ -33,6 +47,7 @@ def _adjacent(a: str, b: str) -> bool:
 
 
 def passes_hard_filters(need: NeedCtx, c: CandidateCtx) -> bool:
+    """Reference for BE's SQL prefilter: specialization, grade (+adjacent if allowed), work format."""
     if c.specialization != need.specialization or c.league_grade is None:
         return False
     if c.league_grade not in need.grades and not (
@@ -43,58 +58,59 @@ def passes_hard_filters(need: NeedCtx, c: CandidateCtx) -> bool:
     return True
 
 
-def _score_one(need: NeedCtx, c: CandidateCtx, w: dict[str, float]) -> Scored:
+def _strength_component(c: CandidateCtx) -> tuple[float, list[Reason]]:
     reasons: list[Reason] = []
-    gaps: list[str] = []
-    have = {e.skill_id: e for e in c.skills}
-    must = list(need.must_skills)
-    hits = [s for s in must if s in have]
-    for s in must:
-        if s in have:
-            reasons.append(Reason("plus", f"Владеет {s}", have[s].source))
-        else:
-            reasons.append(Reason("minus", f"Нет обязательного навыка {s}", None))
-            gaps.append(s)
-    skill = len(hits) / len(must) if must else 0.7
-    if not must:
-        reasons.append(Reason("info", "В вакансии нет обязательных навыков", None))
-
-    if c.league_grade in need.grades:
-        grade = 1.0 if c.league_status == "confirmed" else 0.6
-        reasons.append(Reason("plus" if grade == 1.0 else "info",
-                              f"Грейд {c.league_grade} {'подтверждён тестом' if grade == 1.0 else 'не подтверждён'}",
-                              "test" if grade == 1.0 else "declared"))
+    if c.strength is None:
+        reasons.append(Reason("info", "Сила профиля ещё не рассчитана", None))
+        value = 0.0
     else:
-        grade = 0.2
-        reasons.append(Reason("minus", "Грейд не совпадает с требованиями", None))
-
-    rating = c.rating if c.rating is not None else 1000
-    strength = min(1.0, max(0.0, (rating - 800) / 600))
-    reasons.append(Reason("info", f"Рейтинг {rating}", "test" if c.rating is not None else None))
-
-    salary = 1.0
-    if c.salary_min:
-        if c.salary_min > need.salary_max:
-            salary = 0.2
-            reasons.append(Reason("minus", "Ожидания выше бюджета вакансии", "declared"))
-        else:
-            reasons.append(Reason("plus", "Ожидания в пределах вилки", "declared"))
+        value = min(1.0, max(0.0, c.strength / 100.0))
+        text = f"Сила профиля {round(c.strength)}"
+        if c.percentile is not None:
+            text += f" (топ {max(1, round(100 - c.percentile))}% лиги)"
+        reasons.append(Reason("plus" if value >= 0.6 else "info", text, "test"))
+    if c.fsp_results or c.fsp_rank:
+        parts = []
+        if c.fsp_rank:
+            parts.append(RANK_RU.get(c.fsp_rank, c.fsp_rank))
+        tiers = [r.tier for r in set(c.fsp_results)]
+        for tier in ("winner", "prize_winner", "finalist", "participant"):
+            n = tiers.count(tier)
+            if n:
+                parts.append(f"{TIER_RU[tier]} ×{n}")
+        reasons.append(Reason("plus", "Достижения ФСП: " + ", ".join(parts), "fsp"))
     else:
-        salary = 0.5
-        reasons.append(Reason("info", "Зарплатные ожидания не указаны", None))
+        reasons.append(Reason("info", "Без истории ФСП: сила по квалификации платформы", None))
+    return value, reasons
 
-    reasons.append(Reason("info", "Семантическое сходство пока не учитывается", None))
-    reasons.append(Reason("info", "Активность пока не учитывается", None))
+
+def score_candidate(need: NeedCtx, c: CandidateCtx, weights: Weights, now: datetime.datetime) -> Scored:
+    w = effective_weights(weights)
+    reasons: list[Reason] = []
+    skill, r_skill, gaps = skill_fit(need, c)
+    strength, r_strength = _strength_component(c)
+    grade, r_grade = grade_fit(need, c)
+    salary, r_salary = salary_fit(need, c)
+    semantic, r_semantic = semantic_fit(need, c)
+    fresh, r_fresh = freshness_fit(c, now)
     values = {"skill": skill, "strength": strength, "grade": grade, "salary": salary,
-              "semantic": 0.5, "freshness": 0.5}
-    comps = tuple(Component(k, values[k], w[k], values[k] * w[k]) for k in COMPONENT_KEYS)
-    return Scored(c.public_id, sum(x.contribution for x in comps), comps,
-                  tuple(reasons), tuple(gaps))
+              "semantic": semantic, "freshness": fresh}
+    for r in (r_skill, r_strength, r_grade, r_salary, r_semantic, r_fresh):
+        reasons += r
+    factor = 1.0
+    if c.league_status != "confirmed":
+        factor = UNCONFIRMED_FACTOR
+        grade_name = GRADE_RU.get(c.league_grade or "", "")
+        reasons.append(Reason("minus", f"Грейд {grade_name} не подтверждён: ранжирование ×0.75".replace("  ", " "),
+                              None))
+    comps = tuple(Component(k, values[k], w[k] * factor, values[k] * w[k] * factor) for k in COMPONENT_KEYS)
+    return Scored(public_id=c.public_id, score=sum(x.contribution for x in comps), components=comps,
+                  reasons=tuple(reasons), gaps=tuple(gaps))
 
 
 def score_pool(need: NeedCtx, pool: Sequence[CandidateCtx], weights: Weights,
                now: datetime.datetime) -> list[Scored]:
     """Score every candidate; sorted by score desc, ties by public_id."""
-    w = effective_weights(weights)
-    scored = [_score_one(need, c, w) for c in pool]
+    effective_weights(weights)                   # fail fast on bad weights, even for an empty pool
+    scored = [score_candidate(need, c, weights, now) for c in pool]
     return sorted(scored, key=lambda s: (-s.score, s.public_id))

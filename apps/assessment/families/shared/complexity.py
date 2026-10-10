@@ -6,8 +6,10 @@ option set with a uniform answer leaves nothing to guess from the options (ML-1 
 per-shape distractor lists let the option set reveal the answer 65 % of the time). The stem
 asks for Θ, not O, so exactly one option is true.
 
-Twelve loop shapes (linear, nested, triangular, halving, n·log n, geometric sum, square root,
-sequential, cubic, constant inner loop, log of a growing bound, two-pointer) with random
+Seventeen loop shapes, at least two per class: log n (halving, doubling, bisection), √n
+(square-root loop bound, early exit at i² > n), n (linear, sequential, geometric sum, constant
+inner loop, two pointers), n log n (inner doubling, log of a growing bound), n² (nested,
+triangular), n³ (cubic, tetrahedral, square-sized inner loop). Each comes with random
 names, steps and bodies. The generator takes the class from the shape table; the oracle
 never looks at the shape: it instruments every loop of the rendered code, counts iterations
 for n = 12, 17, 24, 34, ... (x sqrt 2) and picks the growth class with the best log-log fit.
@@ -18,8 +20,9 @@ who count iterations from those who count nested loops. Shapes differ in difficu
 family's single b is an average and a = 0.9 is set lower than for homogeneous families.
 
 Known limits:
-- Leak resistance comes from reasoning, not from the variant space: 12 shapes behind many
-  cosmetic variants. A candidate who memorised the shapes can recognise them. The exposure
+- Leak resistance comes from reasoning, not from the variant space: 17 shapes behind many
+  cosmetic variants (at least two shapes per answer class). A candidate who memorised the
+  shapes can recognise them. The exposure
   monitor (ML-11) should count exposures per shape, which is the first field of the hashed
   parameters.
 - The oracle counts loop iterations only: no recursion, and only `range` among builtins.
@@ -145,6 +148,47 @@ def {f}(n):
         else:
             {j} -= 1
         {acc} += {m}
+    return {acc}"""),
+    "doubling": ("O(log n)", ("O(n)", "O(√n)", "O(n log n)"), """\
+def {f}(n):
+{guard}    {acc} = {init}
+    {i} = 1
+    while {i} <= n:
+        {acc} += {i} % {m}
+        {i} *= {s2}
+    return {acc}"""),
+    "bisect": ("O(log n)", ("O(n)", "O(√n)", "O(n log n)"), """\
+def {f}(n):
+{guard}    {i}, {j} = 0, n * {c}
+    while {i} < {j}:
+        {k} = ({i} + {j}) // 2
+        if {k} % {m} < {m} // 2:
+            {i} = {k} + 1
+        else:
+            {j} = {k}
+    return {i}"""),
+    "sqrt_break": ("O(√n)", ("O(n)", "O(log n)", "O(n log n)"), """\
+def {f}(n):
+{guard}    {acc} = {init}
+    for {i} in range(1, n + 1):
+        if {i} * {i} > n:
+            return {acc}
+        {acc} += {i} % {m}
+    return {acc}"""),
+    "tetra": ("O(n^3)", ("O(n^2)", "O(n log n)", "O(n)"), """\
+def {f}(n):
+{guard}    {acc} = {init}
+    for {i} in range(n):
+        for {j} in range({i}):
+            for {k} in range({j}):
+                {acc} += {m}
+    return {acc}"""),
+    "square_inner": ("O(n^3)", ("O(n^2)", "O(n log n)", "O(n)"), """\
+def {f}(n):
+{guard}    {acc} = {init}
+    for {i} in range(n):
+        for {j} in range(n * n):
+            {acc} += ({i} + {j}) % {m}
     return {acc}"""),
 }
 

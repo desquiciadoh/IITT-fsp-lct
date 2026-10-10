@@ -12,7 +12,8 @@ For every family it generates n instances from fixed HMAC seeds and checks:
   entropy     answer-text entropy > 1 bit (no constant keys)
   position    the correct option's position is not predictable (chi-square, choice families)
   guessing    no option-only strategy (longest, most similar, value rank, frequent answer for an
-              option set, order closest to the others) beats c by more than 0.10
+              option set, value correct most often before, closest to the typical answer, order
+              closest to the others) beats c by more than max(0.05, 4 standard errors)
   meta        id/version/specs/format/a/b/c/time limit, skills exist in content/skills.yaml
 
 Exit code 0 only when every family passes. Pure: no Django.
@@ -262,11 +263,20 @@ def verify_family(fam: ItemFamily, n: int = 1000, skills: set[str] | None = None
 # ── can the answer be guessed from the options alone? ──────────────────────
 # Each strategy below looks only at the option texts (what a test-wise candidate sees without
 # solving the item). A family fails if any strategy beats the guessing rate c by more than
-# GUESS_MARGIN, i.e. if the 3PL's fixed c understates how often an ignorant candidate is right.
+# guess_margin(c, n), i.e. if the 3PL's fixed c understates how often an ignorant candidate
+# is right. The margin is max(0.05, 4 standard errors of a chance-level accuracy): about
+# c + 0.055 at n = 1000 and c + 0.10 at n = 300. With ~12 strategies the false-alarm rate of
+# a leak-free family stays below 1e-3, and leaks of +0.05 are caught at n = 1000.
 
 MIN_GUESS_SAMPLES = 100
-GUESS_MARGIN = 0.10
+MIN_GUESS_EFFECT = 0.05
+GUESS_SE_FACTOR = 4.0
 MIN_GROUP = 10
+SMOOTHING = 2.0           # pseudo-observations at the chance rate for per-value learning
+
+
+def guess_margin(c: float, n: int) -> float:
+    return max(MIN_GUESS_EFFECT, GUESS_SE_FACTOR * math.sqrt(c * (1 - c) / n))
 
 
 def _pick_accuracy(records, score) -> float:
@@ -341,6 +351,8 @@ def guessing_strategies(records: list[tuple[list[str], int]]) -> dict[str, float
                 return 1 if order.index(i) == rank else 0
             out[f"value rank {rank + 1} of {k}"] = _pick_accuracy(numeric, by_rank)
 
+    out.update(_per_value_strategies(records))
+
     seqs = [r for r in records if all(_as_sequence(x) for x in r[0])]
     if len(seqs) >= MIN_GUESS_SAMPLES:
         def central(t, i):
@@ -349,14 +361,50 @@ def guessing_strategies(records: list[tuple[list[str], int]]) -> dict[str, float
     return out
 
 
+def _per_value_strategies(records) -> dict[str, float]:
+    """Strategies that learn from single option values, 2-fold cross-validated.
+
+    - 'value correct most often before': per normalised option text, the smoothed rate at which
+      it was the answer when shown in the other half; pick the option with the highest rate.
+    - 'closest to the typical answer' (numeric options): pick the value closest to the median
+      answer of the other half.
+    """
+    out: dict[str, float] = {}
+    halves = [records[0::2], records[1::2]]
+    hits_rate = hits_median = 0.0
+    numeric_all = all(all(_as_number(x) is not None for x in t) for t, _ in records)
+    for train, test in ((halves[0], halves[1]), (halves[1], halves[0])):
+        shown: Counter[str] = Counter()
+        right: Counter[str] = Counter()
+        for texts, correct in train:
+            for i, x in enumerate(texts):
+                shown[norm_text(x)] += 1
+                right[norm_text(x)] += i == correct
+        k = len(train[0][0]) if train else 4
+
+        def rate(t, i, shown=shown, right=right, k=k):
+            key = norm_text(t[i])
+            return (right[key] + SMOOTHING / k) / (shown[key] + SMOOTHING)
+        hits_rate += _pick_accuracy(test, rate) * len(test)
+        if numeric_all and train:
+            answers = sorted(_as_number(t[c]) for t, c in train)
+            median = answers[len(answers) // 2]
+            hits_median += _pick_accuracy(test, lambda t, i, m=median: -abs(_as_number(t[i]) - m)) * len(test)
+    out["value correct most often before"] = hits_rate / len(records)
+    if numeric_all:
+        out["closest to the typical answer"] = hits_median / len(records)
+    return out
+
+
 def guessing_checks(records: list[tuple[list[str], int]], c: float) -> list[str]:
     if len(records) < MIN_GUESS_SAMPLES:
         return [f"guessing: only {len(records)} choice instances, need {MIN_GUESS_SAMPLES}"]
+    margin = guess_margin(c, len(records))
     errs = []
     for name, acc in guessing_strategies(records).items():
-        if acc > c + GUESS_MARGIN:
+        if acc > c + margin:
             errs.append(f"guessing: '{name}' is right {acc:.0%} of the time without reading the item "
-                        f"(c = {c:.2f})")
+                        f"(c = {c:.2f}, limit {c + margin:.0%})")
     return errs
 
 
