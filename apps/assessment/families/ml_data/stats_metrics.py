@@ -24,6 +24,7 @@ class Center(TypedNumberFamily):
     meta = FamilyMeta(id="ml.stats.center.v1", version=1, specs=M, topic="ml.statistics",
                       skills=("machine_learning", "numpy"), format="numeric_scenario", a=1.0, b=-1.4, c=0.0,
                       time_limit_s=90)
+    SEMANTIC = ('values', 'ask')
     DECIMALS = 2
 
     def draw(self, rng):
@@ -63,10 +64,11 @@ class Bayes(TypedNumberFamily):
     meta = FamilyMeta(id="ml.stats.bayes.v1", version=1, specs=M, topic="ml.statistics",
                       skills=("machine_learning",), format="numeric_scenario", a=1.3, b=1.0, c=0.0,
                       time_limit_s=150)
+    SEMANTIC = ('base', 'tpr', 'tnr')
     DECIMALS = 1
 
     def draw(self, rng):
-        return {"base": rng.randint(1, 200) / 10, "tpr": rng.randint(60, 99),
+        return {"base": rng.randint(10, 2000) / 100, "tpr": rng.randint(60, 99),
                 "tnr": rng.randint(70, 99), "ctx": rng.randrange(len(CONTEXTS))}
 
     def solve(self, p):
@@ -101,7 +103,7 @@ class PrecisionRecall(TypedNumberFamily):
 
     def draw(self, rng):
         while True:
-            n = rng.randint(10, 14)
+            n = rng.randint(12, 20)
             y_true = [int(rng.random() < 0.45) for _ in range(n)]
             y_pred = [t if rng.random() < 0.7 else 1 - t for t in y_true]
             tp = sum(1 for t, q in zip(y_true, y_pred, strict=True) if t == q == 1)

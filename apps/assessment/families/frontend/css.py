@@ -12,8 +12,8 @@ from __future__ import annotations
 import re
 from fractions import Fraction
 
-from ..base import FamilyMeta, Instance
-from ..builder import TypedNumberFamily, rendered_fingerprint
+from ..base import FamilyMeta, Instance, fingerprint_of
+from ..builder import TypedNumberFamily
 from ..kit import choice_options, is_choice_correct, option_key_for_text
 
 F = ("frontend",)
@@ -55,7 +55,7 @@ class Specificity:
         options, key = choice_options(rng, winner, [c for c in colors if c != winner])
         stem = "Какого цвета будет текст абзаца?"
         code = {"lang": "html", "text": f"{html}\n\n<style>\n{css}\n</style>"}
-        return Instance(stem_md=stem, input="choice", key=key, fingerprint=rendered_fingerprint(stem, code, winner),
+        return Instance(stem_md=stem, input="choice", key=key, fingerprint=fingerprint_of({"picks": picks, "important": important, "colors": colors}),
                         code=code, options=options)
 
     def is_correct(self, key, answer):
@@ -100,6 +100,7 @@ class BoxModel(TypedNumberFamily):
 
     meta = FamilyMeta(id="fe.css.box_model.v1", version=1, specs=F, topic="web.css",
                       skills=("css",), format="numeric_scenario", a=1.1, b=-0.6, c=0.0, time_limit_s=90)
+    SEMANTIC = ('width', 'form', 'pads', 'border', 'margin', 'sizing')
 
     def draw(self, rng):
         form = rng.choice((1, 2, 4))
@@ -147,6 +148,7 @@ class FlexGrow(TypedNumberFamily):
 
     meta = FamilyMeta(id="fe.css.flex_grow.v1", version=1, specs=F, topic="web.css",
                       skills=("css",), format="numeric_scenario", a=1.3, b=1.0, c=0.0, time_limit_s=150)
+    SEMANTIC = ('bases', 'grows', 'gap', 'width', 'ask')
     DECIMALS = 1
 
     def draw(self, rng):

@@ -16,14 +16,17 @@ ALL_SPECS = ("backend", "frontend", "ml_data")
 
 class HeapOrder(RedrawChoiceFamily):
     """b = 0.2 (lower middle): heapq is a min-heap and pops the smallest present value, not the
-    oldest or the last pushed; interleaved pushes and pops make that visible."""
+    oldest or the last pushed; interleaved pushes and pops make that visible. Distractors are
+    built from the same pushed values (stack, queue, max-heap, globally sorted), so checking which
+    numbers appear in the code does not eliminate any of them (ML-6 review)."""
 
     meta = FamilyMeta(id="sh.ds.heap_order.v1", version=1, specs=ALL_SPECS,
                       topic="algorithms.data_structures", skills=("data_structures", "python"),
                       format="code_output", a=1.2, b=0.2, c=0.25, time_limit_s=120)
+    SEMANTIC = ("ops",)
 
     def draw(self, rng):
-        values = rng.sample(range(1, 60), 8)
+        values = rng.sample(range(10, 100), 8)        # two digits: option length says nothing
         ops, size, pops, vi = [], 0, 0, 0
         while pops < 4:
             if size and (vi >= len(values) or rng.random() < 0.4):
@@ -36,7 +39,8 @@ class HeapOrder(RedrawChoiceFamily):
                 size += 1
         return {"ops": ops, "name": rng.choice(("heap", "pq", "h", "queue", "tasks"))}
 
-    def answer(self, p):
+    @staticmethod
+    def _popped(p):
         import heapq
 
         heap, out = [], []
@@ -45,18 +49,32 @@ class HeapOrder(RedrawChoiceFamily):
                 heapq.heappush(heap, op[1])
             else:
                 out.append(heapq.heappop(heap))
-        return str(out)
+        return out
 
-    def misconceptions(self, p):
-        stack, queue, out_s, out_q = [], [], [], []
+    def answer(self, p):
+        return str(self._popped(p))
+
+    def alternatives(self, p, rng):
+        stack, queue, present = [], [], []
+        out_s, out_q, out_max = [], [], []
         for op in p["ops"]:
             if op[0] == "push":
                 stack.append(op[1])
                 queue.append(op[1])
+                present.append(op[1])
             else:
-                out_s.append(stack.pop())
-                out_q.append(queue.pop(0))
-        return [str(out_s), str(out_q)]                   # treated as a stack / as a FIFO queue
+                out_s.append(stack.pop())                              # treated as a stack
+                out_q.append(queue.pop(0))                             # treated as a FIFO queue
+                out_max.append(present.pop(present.index(max(present))))   # treated as a max-heap
+        pushed = [op[1] for op in p["ops"] if op[0] == "push"]
+        k = len(out_s)
+        right = self._popped(p)
+        return [str(out_s), str(out_q), str(out_max),
+                str(sorted(pushed)[:k]),                 # the k smallest pushed values, ignoring timing
+                str(sorted(right, reverse=True)),        # the right values in the wrong order
+                str(right[1:] + right[:1]),              # the right values, rotated
+                str(pushed[:k]),                         # the first k pushed
+                str(sorted(pushed)[-k:])]                # the k largest pushed
 
     def render(self, p):
         name = p["name"]
@@ -81,8 +99,10 @@ OPERATIONS = {
     "Θ(1)": [("список", "{v}.append(x)"), ("список", "{v}.pop()"), ("словарь", "{v}[key] = x"),
              ("словарь", "x = {v}[key]"), ("множество", "x in {v}"), ("список", "len({v})"),
              ("deque", "{v}.appendleft(x)"), ("deque", "{v}.popleft()")],
-    "Θ(log n)": [("куча (heapq)", "heapq.heappush({v}, x)"), ("куча (heapq)", "heapq.heappop({v})"),
-                 ("отсортированный список", "bisect.bisect_left({v}, x)")],
+    # heappush was dropped (ML-6 review): it is O(1) on average for random inserts, so a Θ(log n)
+    # key for an "average" question is contestable.
+    "Θ(log n)": [("куча (heapq)", "heapq.heappop({v})"), ("отсортированный список", "bisect.bisect_left({v}, x)"),
+                 ("отсортированный список", "bisect.bisect_right({v}, x)")],
     "Θ(n)": [("список", "{v}.insert(0, x)"), ("список", "x in {v}"), ("список", "{v}.pop(0)"),
              ("список", "min({v})"), ("список", "{v}.remove(x)"), ("список", "heapq.heapify({v})"),
              ("список", "{v}.index(x)")],
@@ -91,8 +111,8 @@ OPERATIONS = {
 # Independent lookup on the rendered operation (method or function name), reviewed by hand.
 ORACLE_TABLE = {
     ".append(": "Θ(1)", ".pop()": "Θ(1)", "] = x": "Θ(1)", "x = ": "Θ(1)", "len(": "Θ(1)",
-    ".appendleft(": "Θ(1)", ".popleft(": "Θ(1)", "heappush": "Θ(log n)", "heappop": "Θ(log n)",
-    "bisect_left": "Θ(log n)", ".insert(0": "Θ(n)", ".pop(0)": "Θ(n)", "min(": "Θ(n)", ".remove(": "Θ(n)",
+    ".appendleft(": "Θ(1)", ".popleft(": "Θ(1)", "heappop": "Θ(log n)",
+    "bisect_left": "Θ(log n)", "bisect_right": "Θ(log n)", ".insert(0": "Θ(n)", ".pop(0)": "Θ(n)", "min(": "Θ(n)", ".remove(": "Θ(n)",
     "heapify": "Θ(n)", ".index(": "Θ(n)", "sorted(": "Θ(n log n)", ".sort()": "Θ(n log n)",
 }
 CONTEXTS = ("заказов", "пользователей", "событий", "логов", "товаров", "задач", "сообщений", "платежей",
@@ -101,12 +121,15 @@ CONTEXTS = ("заказов", "пользователей", "событий", "�
 
 class OperationCost(ClassificationFamily):
     """b = -0.3 (upper junior): append vs insert(0), list vs set membership, heapify being linear,
-    sort being n log n: the standard costs every developer is expected to know."""
+    sort being n log n: the standard costs every developer is expected to know. Concept item: about
+    20 distinct questions; n, names and contexts are decoration (verify exempts classification
+    families from the collision gate and reports their rate)."""
 
     meta = FamilyMeta(id="sh.ds.op_cost.v1", version=1, specs=ALL_SPECS,
                       topic="algorithms.data_structures", skills=("data_structures", "algorithms"),
                       format="concept_mcq", a=1.0, b=-0.3, c=0.25, time_limit_s=60)
     LABELS = COST_LABELS
+    SEMANTIC = ("kind", "op")
 
     def draw(self, rng, label):
         kind, op = OPERATIONS[label][rng.randrange(len(OPERATIONS[label]))]
@@ -242,6 +265,7 @@ class FindBug(ClassificationFamily):
                       topic="algorithms.code_reading", skills=("algorithms", "python"),
                       format="find_bug", a=1.1, b=-0.5, c=0.2, time_limit_s=120)
     LABELS = ("Строка 2", "Строка 3", "Строка 4", "Строка 5", "Строка 6")
+    SEMANTIC = ("task", "k", "bug", "hint")
 
     def draw(self, rng, label):
         while True:

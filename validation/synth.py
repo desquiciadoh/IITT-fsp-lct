@@ -122,7 +122,7 @@ HEROES = [
      "claim": "junior", "fsp": None, "city": 2, "inflation": 0.2},
     {"key": "dmitry", "name": "Дмитрий Волков", "email": "dmitry.unconfirmed@example.com", "spec": "backend",
      "theta": -0.2, "claim": "senior", "fsp": None, "city": 0, "inflation": 0.9},
-    {"key": "maksim", "name": "Максим Орлов", "email": "maksim.fsp@example.com", "spec": "backend", "theta": 0.6,
+    {"key": "maksim", "name": "Максим Орлов", "email": "maksim.fsp@example.com", "spec": "backend", "theta": 0.8,
      "claim": "middle", "fsp": {"rank": "kms", "results": [("finalist", "algorithmic", 7), ("participant", "infosec", 30)]},
      "city": 3, "inflation": 0.2},
     {"key": "olga", "name": "Ольга Никитина", "email": "olga.fullstack@example.com", "spec": "frontend", "theta": 0.6,

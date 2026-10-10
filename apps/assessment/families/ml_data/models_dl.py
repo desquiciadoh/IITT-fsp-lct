@@ -4,18 +4,19 @@ ml.models.knn.v1             k-NN regression prediction (typed; oracle re-sorts 
 ml.models.gini.v1            Gini impurity / weighted Gini after a split (typed; Fraction oracle)
 ml.models.fit_diagnosis.v1   overfitting / underfitting / fine from train and validation scores (classification)
 ml.data.groupby.v1           pandas groupby aggregate with missing values (typed; sqlite oracle)
-ml.data.broadcast.v1         numpy broadcasting result shape or error (choice; numpy oracle)
+ml.data.broadcast.v2         number of elements after numpy broadcasting (typed; numpy oracle)
 ml.dl.conv_output.v1         Conv2d output size (typed; sliding-window count oracle)
 ml.dl.param_count.v1         trainable parameters of a small network (typed; numpy-array oracle)
 """
 from __future__ import annotations
 
+import math
 import re
 import sqlite3
 from fractions import Fraction
 
 from ..base import FamilyMeta, Instance
-from ..builder import ClassificationFamily, RedrawChoiceFamily, TypedNumberFamily
+from ..builder import ClassificationFamily, TypedNumberFamily
 
 M = ("ml_data",)
 
@@ -117,11 +118,14 @@ class Gini(TypedNumberFamily):
 
 class FitDiagnosis(ClassificationFamily):
     """b = -0.8 (junior): a big train/validation gap is overfitting, both scores low is
-    underfitting, both high and close is a healthy fit."""
+    underfitting, both high and close is a healthy fit. Concept item: the question is the two
+    scores; model, task and metric names are decoration. The "trained for N epochs" phrase was
+    removed (ML-6 review): it made no sense for k-NN."""
 
     meta = FamilyMeta(id="ml.models.fit_diagnosis.v1", version=1, specs=M, topic="ml.models",
                       skills=("machine_learning",), format="concept_mcq", a=1.0, b=-0.8, c=1 / 3, time_limit_s=60)
     LABELS = ("Переобучение", "Недообучение", "Модель обучилась нормально")
+    SEMANTIC = ("train", "val")
 
     def draw(self, rng, label):
         if label == "Переобучение":
@@ -137,11 +141,10 @@ class FitDiagnosis(ClassificationFamily):
                 "model": rng.choice(("градиентный бустинг", "случайный лес", "нейросеть", "логистическая регрессия",
                                      "SVM", "k-NN")),
                 "task": rng.choice(("отток клиентов", "кредитный скоринг", "классификацию отзывов",
-                                    "детекцию мошенничества", "прогноз покупки")),
-                "epochs": rng.randint(5, 200)}
+                                    "детекцию мошенничества", "прогноз покупки"))}
 
     def render(self, p):
-        return (f"Модель «{p['model']}» для задачи «{p['task']}» обучали {p['epochs']} эпох/итераций. "
+        return (f"Модель «{p['model']}» обучили на задачу «{p['task']}». "
                 f"{p['metric']} на обучающей выборке — {p['train']} %, на валидационной — {p['val']} %. "
                 "Что вероятнее всего происходит?", None)
 
@@ -168,10 +171,10 @@ class Groupby(TypedNumberFamily):
         while True:
             cities = rng.sample(self.CITIES, 3)
             rows = [[rng.choice(cities), None if rng.random() < 0.2 else rng.randint(1, 50) * 10]
-                    for _ in range(rng.randint(6, 9))]
+                    for _ in range(rng.randint(8, 14))]
             target = rng.choice(cities)
             vals = [v for c, v in rows if c == target and v is not None]
-            agg = rng.choice(("mean", "sum", "count"))
+            agg = rng.choice(("mean", "sum", "mean", "sum", "count"))      # count answers are small ints
             if vals:
                 return {"rows": rows, "target": target, "agg": agg,
                         "col": rng.choice(("amount", "revenue", "price", "visits"))}
@@ -204,27 +207,29 @@ class Groupby(TypedNumberFamily):
             db.close()
 
 
-class Broadcast(RedrawChoiceFamily):
+class Broadcast(TypedNumberFamily):
     """b = 0.4 (middle): shapes are aligned from the right; a dimension is compatible if equal or 1,
-    and a missing leading dimension counts as 1. The result takes the larger size in each place.
-    Every item is broadcastable: an "error" option made the answer guessable from its frequency
-    (verify gate), so incompatible pairs are left to other items."""
+    and a missing leading dimension counts as 1. The result takes the larger size in each place,
+    and the program prints its number of elements. Every pair is broadcastable (incompatible pairs
+    are left to other items). Version 2 is typed: shape options derived from the two operands were
+    always guessable above chance (ML-6 review)."""
 
-    meta = FamilyMeta(id="ml.data.broadcast.v1", version=1, specs=M, topic="ml.data_processing",
-                      skills=("numpy",), format="code_output", a=1.2, b=0.4, c=0.25, time_limit_s=90)
+    meta = FamilyMeta(id="ml.data.broadcast.v2", version=2, specs=M, topic="ml.data_processing",
+                      skills=("numpy",), format="code_output", a=1.2, b=0.4, c=0.0, time_limit_s=120)
+    SEMANTIC = ("a", "b")
 
     def draw(self, rng):
-        out = [rng.randint(2, 9) for _ in range(rng.randint(2, 4))]
+        out = [rng.randint(2, 16) for _ in range(rng.choice((3, 4, 4)))]
         a, b = [], []
         for size in out:                          # each place: one side has the size, the other size or 1
-            pair = rng.choice(((size, size), (size, 1), (1, size)))
+            pair = rng.choice(((size, size), (size, 1), (1, size), (size, size)))
             a.append(pair[0])
             b.append(pair[1])
-        drop = rng.randint(0, len(out) - 1)       # missing leading dims on one side count as 1
+        drop = rng.randint(0, 1)                  # a missing leading dim on one side counts as 1
         if rng.random() < 0.5:
-            a = [x if i >= drop or b[i] == x else 1 for i, x in enumerate(a)][drop:] or a
+            a = a[drop:]
         else:
-            b = [x if i >= drop or a[i] == x else 1 for i, x in enumerate(b)][drop:] or b
+            b = b[drop:]
         return {"a": a, "b": b, "op": rng.choice(("+", "*", "-")),
                 "names": rng.choice((("a", "b"), ("x", "w"), ("u", "v"), ("m", "n"), ("img", "mask"),
                                      ("feat", "scale")))}
@@ -240,26 +245,20 @@ class Broadcast(RedrawChoiceFamily):
             out.append(max(x, y))
         return tuple(reversed(out))
 
-    def answer(self, p):
-        return str(self._shape(p["a"], p["b"]))
-
-    def misconceptions(self, p):
-        a, b = p["a"], p["b"]
-        longer, shorter = (a, b) if len(a) >= len(b) else (b, a)
-        left = [max(x, y) for x, y in zip(longer, shorter, strict=False)] + longer[len(shorter):]   # left-aligned
-        return [str(tuple(left)), str(tuple(longer))]
+    def solve(self, p):
+        return math.prod(self._shape(p["a"], p["b"]))
 
     def render(self, p):
         x, y = p["names"]
         code = (f"import numpy as np\n\n{x} = np.ones({tuple(p['a'])})\n{y} = np.ones({tuple(p['b'])})\n"
-                f"print(({x} {p['op']} {y}).shape)")
+                f"print(({x} {p['op']} {y}).size)")
         return "Что напечатает код?", {"lang": "python", "text": code}
 
-    def oracle_answer(self, inst):
+    def oracle_value(self, inst):
         import numpy as np
         shapes = [tuple(int(v) for v in m.split(",") if v.strip()) for m in
                   re.findall(r"np\.ones\(\(([\d, ]*)\)\)", inst.code["text"])]
-        return str(np.broadcast_shapes(*shapes))
+        return float(np.prod(np.broadcast_shapes(*shapes)))
 
 
 class ConvOutput(TypedNumberFamily):
@@ -284,12 +283,12 @@ class ConvOutput(TypedNumberFamily):
         return {"h": h, "w": w, "numel": p["c_out"] * h * w}[p["ask"]]
 
     def render(self, p):
-        ask = {"h": "высота выходной карты признаков", "w": "ширина выходной карты признаков",
-               "numel": "число элементов выходного тензора для одного примера (C × H × W)"}[p["ask"]]
+        ask = {"h": "Какой будет высота выходной карты признаков", "w": "Какой будет ширина выходной карты признаков",
+               "numel": "Каким будет число элементов выходного тензора для одного примера (C × H × W)"}[p["ask"]]
         code = (f"conv = nn.Conv2d(in_channels={p['c_in']}, out_channels={p['c_out']}, kernel_size={p['k']}, "
                 f"stride={p['s']}, padding={p['pad']})\n"
                 f"x = torch.randn(1, {p['c_in']}, {p['h']}, {p['w']})  # N, C, H, W\ny = conv(x)")
-        return f"Какой будет {ask}?", {"lang": "python", "text": code}
+        return f"{ask}?", {"lang": "python", "text": code}
 
     def oracle_value(self, inst):
         text = inst.code["text"]

@@ -1,9 +1,9 @@
 """Shared code-reading families: trace a short Python program and type the printed number.
 
-sh.code.binary_search_steps.v1  loop iterations of a binary search on a visible sorted list
+sh.code.binary_search_steps.v2  sum of the mid indices a binary search visits on a visible progression
 sh.code.stack_queue.v1          pops from a stack or a queue, encoded as digits (order matters)
 sh.code.loop_trace.v1           nested loops with a filter, the accumulated total
-sh.code.recursion_calls.v1      how many times a tree-recursive function is called
+sh.code.recursion_calls.v2      sum of the values a pruned recursive tree walk visits
 
 Every answer is a typed number (c = 0). The generator computes it from the drawn parameters in
 plain Python; the oracle executes the program the candidate sees (builder.run_python) and reads
@@ -24,53 +24,58 @@ class _ExecOracle(TypedNumberFamily):
 
 
 class BinarySearchSteps(_ExecOracle):
-    """b = 0.3 (lower middle): the loop is textbook, but counting iterations needs exact tracking
-    of lo/hi/mid with integer division, and a target that is absent runs to the end."""
+    """b = 0.5 (middle): the loop is textbook, but the printed value is the sum of every `mid`
+    visited, so the candidate has to track lo/hi/mid with integer division on an arithmetic
+    progression of 20-60 elements, and an absent target runs to the end. Version 2: version 1
+    printed the step count, and "4" was right on 55 % of items (ML-6 review)."""
 
-    meta = FamilyMeta(id="sh.code.binary_search_steps.v1", version=1, specs=ALL_SPECS,
+    meta = FamilyMeta(id="sh.code.binary_search_steps.v2", version=2, specs=ALL_SPECS,
                       topic="algorithms.code_reading", skills=("algorithms",), format="code_output",
-                      a=1.2, b=0.3, c=0.0, time_limit_s=150)
+                      a=1.2, b=0.5, c=0.0, time_limit_s=180)
+    SEMANTIC = ("n", "first", "d", "target")
 
     def draw(self, rng):
-        n = rng.randint(9, 19)
-        arr = sorted(rng.sample(range(1, 100), n))
-        absent = [x for x in range(1, 100) if x not in arr]
-        target = rng.choice(arr) if rng.random() < 0.6 else rng.choice(absent)
-        return {"arr": arr, "target": target, "name": rng.choice(NAMES)}
+        n, first, d = rng.randint(20, 60), rng.randint(0, 50), rng.randint(2, 9)
+        if rng.random() < 0.6:
+            target = first + d * rng.randrange(n)
+        else:                                             # absent: between two elements or outside
+            target = first + d * rng.randrange(-1, n + 1) + rng.randint(1, d - 1)
+        return {"n": n, "first": first, "d": d, "target": target, "name": rng.choice(NAMES)}
 
     def solve(self, p):
-        a, x = p["arr"], p["target"]
-        lo, hi, steps = 0, len(a) - 1, 0
+        a = [p["first"] + p["d"] * i for i in range(p["n"])]
+        lo, hi, trace = 0, len(a) - 1, 0
         while lo <= hi:
-            steps += 1
             mid = (lo + hi) // 2
-            if a[mid] == x:
+            trace += mid
+            if a[mid] == p["target"]:
                 break
-            if a[mid] < x:
+            if a[mid] < p["target"]:
                 lo = mid + 1
             else:
                 hi = mid - 1
-        return steps
+        return trace
 
     def render(self, p):
         a = p["name"]
+        stop = p["first"] + p["d"] * p["n"]
         lines = [
             f"def search({a}, x):",
             f"    lo, hi = 0, len({a}) - 1",
-            "    steps = 0",
+            "    trace = 0",
             "    while lo <= hi:",
-            "        steps += 1",
             "        mid = (lo + hi) // 2",
+            "        trace += mid",
             f"        if {a}[mid] == x:",
-            "            return steps",
+            "            return trace",
             f"        if {a}[mid] < x:",
             "            lo = mid + 1",
             "        else:",
             "            hi = mid - 1",
-            "    return steps",
+            "    return trace",
             "",
             "",
-            f"print(search({p['arr']}, {p['target']}))",
+            f"print(search(list(range({p['first']}, {stop}, {p['d']})), {p['target']}))",
         ]
         return "Что напечатает программа?", {"lang": "python", "text": "\n".join(lines)}
 
@@ -82,6 +87,7 @@ class StackQueue(_ExecOracle):
     meta = FamilyMeta(id="sh.code.stack_queue.v1", version=1, specs=ALL_SPECS,
                       topic="algorithms.data_structures", skills=("data_structures",), format="code_output",
                       a=1.1, b=-1.2, c=0.0, time_limit_s=120)
+    SEMANTIC = ("kind", "ops")
 
     def draw(self, rng):
         kind = rng.choice(("stack", "queue"))
@@ -122,18 +128,23 @@ class StackQueue(_ExecOracle):
 
 
 class LoopTrace(_ExecOracle):
-    """b = -0.8 (junior): two nested loops with a modulo filter; careful bookkeeping, no tricks."""
+    """b = -0.8 (junior): two nested loops with a modulo filter; careful bookkeeping, no tricks.
+    Draws whose total is 0 are redrawn: "0" was right on 13 % of items (ML-6 review)."""
 
     meta = FamilyMeta(id="sh.code.loop_trace.v1", version=1, specs=ALL_SPECS,
                       topic="algorithms.code_reading", skills=("algorithms",), format="code_output",
                       a=1.0, b=-0.8, c=0.0, time_limit_s=180)
+    SEMANTIC = ("n", "m", "mod", "rem", "start", "ka", "kb", "k")
 
     def draw(self, rng):
-        mod = rng.randint(2, 5)
-        return {"n": rng.randint(3, 6), "m": rng.randint(3, 6), "mod": mod, "rem": rng.randrange(mod),
-                "start": rng.randint(0, 2), "ka": rng.randint(1, 4), "kb": rng.randint(1, 4),
-                "k": rng.randint(0, 9),
-                "acc": rng.choice(("total", "s", "acc", "res", "out", "sum_", "x", "cnt"))}
+        acc = rng.choice(("total", "s", "acc", "res", "out", "sum_", "x", "cnt"))
+        while True:
+            mod = rng.randint(2, 5)
+            p = {"n": rng.randint(3, 7), "m": rng.randint(3, 7), "mod": mod, "rem": rng.randrange(mod),
+                 "start": rng.randint(0, 2), "ka": rng.randint(1, 4), "kb": rng.randint(1, 4),
+                 "k": rng.randint(0, 19), "acc": acc}
+            if self.solve(p):
+                return p
 
     @staticmethod
     def _expr(p):
@@ -165,60 +176,70 @@ class LoopTrace(_ExecOracle):
 
 
 class RecursionCalls(_ExecOracle):
-    """b = 0.6 (middle): counting calls of a two-branch recursion needs the call tree, not the
-    value; `<` vs `<=` in the base case and two different step sizes are where people slip."""
+    """b = 0.5 (middle): a recursive walk over a small tree that adds each visited value and stops
+    descending below a node whose value is over the limit (the node itself is still added). The
+    candidate has to follow the call tree and the early return, not a formula. Version 2: version
+    1 counted calls of a two-branch recursion; with only a few hundred distinct call trees the
+    same question repeated in 35 % of draws once names were excluded from the fingerprint (ML-6
+    review)."""
 
-    meta = FamilyMeta(id="sh.code.recursion_calls.v1", version=1, specs=ALL_SPECS,
+    meta = FamilyMeta(id="sh.code.recursion_calls.v2", version=2, specs=ALL_SPECS,
                       topic="algorithms.code_reading", skills=("algorithms",), format="code_output",
-                      a=1.2, b=0.6, c=0.0, time_limit_s=180)
+                      a=1.2, b=0.5, c=0.0, time_limit_s=180)
+    SEMANTIC = ("tree", "limit")
 
     def draw(self, rng):
+        fn = rng.choice(("walk", "visit", "dfs", "go", "explore", "scan"))
+        acc = rng.choice(("total", "acc", "s", "seen", "score"))
         while True:
-            s1, s2 = rng.sample((1, 2, 3), 2)
-            base = rng.randint(0, 2)
-            p = {"s1": s1, "s2": s2, "base": base, "cmp": rng.choice(("<=", "<")),
-                 "n": rng.randint(base + 2, base + 7), "n2": rng.randint(0, base + 4), "k": rng.randint(0, 9),
-                 "join": rng.choice(("+", "*", "-")), "fn": rng.choice(("f", "walk", "g", "rec", "visit", "step")),
-                 "counter": rng.choice(("calls", "count", "hits", "cnt"))}
-            if 6 <= self.solve(p) <= 45:          # countable by hand within the time limit
+            values = [rng.randint(1, 40) for _ in range(rng.randint(7, 11))]
+            parents = [None] + [rng.randrange(i) for i in range(1, len(values))]
+            nodes = [[v, []] for v in values]
+            for child, parent in enumerate(parents):
+                if parent is not None:
+                    nodes[parent][1].append(nodes[child])
+            limit = rng.randint(10, 35)
+            p = {"tree": nodes[0], "limit": limit, "fn": fn, "acc": acc}
+            pruned = [n for n in nodes if n[0] > limit and n[1]]
+            if pruned and len(self._visited(p["tree"], limit)) < len(values):
                 return p
 
+    @staticmethod
+    def _visited(node, limit):
+        out = [node[0]]
+        if node[0] <= limit:
+            for kid in node[1]:
+                out += RecursionCalls._visited(kid, limit)
+        return out
+
     def solve(self, p):
-        calls = 0
+        return sum(self._visited(p["tree"], p["limit"]))
 
-        def f(n):
-            nonlocal calls
-            calls += 1
-            stop = n <= p["base"] if p["cmp"] == "<=" else n < p["base"]
-            if stop:
-                return 1
-            return f(n - p["s1"]) + f(n - p["s2"])
-
-        f(p["n"])
-        f(p["n2"])
-        return calls
+    @staticmethod
+    def _literal(node):
+        return "(" + str(node[0]) + ", [" + ", ".join(RecursionCalls._literal(k) for k in node[1]) + "])"
 
     def render(self, p):
-        fn, cnt = p["fn"], p["counter"]
-        tail = f" {p['join']} {p['k']}" if p["k"] else ""
+        fn, acc = p["fn"], p["acc"]
         lines = [
-            f"{cnt} = 0",
+            f"tree = {self._literal(p['tree'])}",
+            f"{acc} = 0",
             "",
             "",
-            f"def {fn}(n):",
-            f"    global {cnt}",
-            f"    {cnt} += 1",
-            f"    if n {p['cmp']} {p['base']}:",
-            "        return 1",
-            f"    return {fn}(n - {p['s1']}) + {fn}(n - {p['s2']}){tail}",
+            f"def {fn}(node):",
+            f"    global {acc}",
+            "    value, kids = node",
+            f"    {acc} += value",
+            f"    if value > {p['limit']}:",
+            "        return",
+            "    for kid in kids:",
+            f"        {fn}(kid)",
             "",
             "",
-            f"{fn}({p['n']})",
-            f"{fn}({p['n2']})",
-            f"print({cnt})",
+            f"{fn}(tree)",
+            f"print({acc})",
         ]
-        return ("Что напечатает программа (сколько всего раз была вызвана функция)?",
-                {"lang": "python", "text": "\n".join(lines)})
+        return "Что напечатает программа?", {"lang": "python", "text": "\n".join(lines)}
 
 
 FAMILIES = [BinarySearchSteps(), StackQueue(), LoopTrace(), RecursionCalls()]
