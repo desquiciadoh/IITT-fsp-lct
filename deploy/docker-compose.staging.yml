@@ -1,0 +1,167 @@
+version: '3.8'
+
+x-backend-env: &backend-env
+  DEBUG: "False"
+  DEMO_MODE: "False"
+  AUTO_SEED: "False"
+  SECRET_KEY: ${SECRET_KEY}
+  ALLOWED_HOSTS: "${ALLOWED_HOSTS:-staging.fsp-draft.ru,api}"
+  CSRF_TRUSTED_ORIGINS: "${CSRF_TRUSTED_ORIGINS:-https://staging.fsp-draft.ru}"
+  PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-https://staging.fsp-draft.ru}"
+  OIDC_ISSUER: "${OIDC_ISSUER:-https://idp.fsp-draft.ru/realms/fsp}"
+  OIDC_INTERNAL_URL: "${OIDC_INTERNAL_URL:-https://idp.fsp-draft.ru/realms/fsp}"
+  SECURE_SSL_REDIRECT: "False" # Handled by Caddy reverse proxy
+  SESSION_COOKIE_SECURE: "True"
+  CSRF_COOKIE_SECURE: "True"
+  SECURE_PROXY_SSL_HEADER: "HTTP_X_FORWARDED_PROTO,https"
+  POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+  POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: 5432
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  REDIS_URL: redis://redis:6379/0
+  ITEM_SEED_SECRET: ${ITEM_SEED_SECRET}
+  CONTACT_ENCRYPTION_KEY: ${CONTACT_ENCRYPTION_KEY}
+  NUM_PROXIES: 1
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-staging.fsp-draft.ru}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - staticfiles:/var/www/staticfiles:ro
+    depends_on:
+      - api
+
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fsp_draft}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate --noinput && gunicorn config.asgi:application --bind 0.0.0.0:8000 -k uvicorn.workers.UvicornWorker --workers 3 --timeout 60"
+    environment:
+      <<: *backend-env
+    volumes:
+      - staticfiles:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/auth/csrf"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A config worker -l info -Q celery
+    environment:
+      <<: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  worker-llm:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A config worker -l info -Q llm --concurrency=2
+    environment:
+      <<: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  beat:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      <<: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: |
+      sh -c '
+        echo "0 2 * * * /backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+        crond -f -l 8
+      '
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-fsp_draft}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:
+  staticfiles:
+  backups:

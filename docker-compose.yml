@@ -1,3 +1,30 @@
+x-backend-env: &backend-env
+  DEBUG: "False"
+  DEMO_MODE: "True"
+  AUTO_SEED: "True"
+  SECRET_KEY: ${SECRET_KEY}
+  ALLOWED_HOSTS: "localhost,127.0.0.1,api,web"
+  CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:8000,http://127.0.0.1:8000"
+  PUBLIC_BASE_URL: "http://localhost:8000"
+  # In-app mock IdP (DEMO_MODE): browser-facing issuer + server-to-server URL
+  OIDC_ISSUER: "http://localhost:8000/idp/realms/fsp"
+  OIDC_INTERNAL_URL: "http://localhost:8000/idp/realms/fsp"
+  # Plain-HTTP local stack: the server-to-server IdP calls must not be redirected to https
+  SECURE_SSL_REDIRECT: "False"
+  SESSION_COOKIE_SECURE: "False"
+  CSRF_COOKIE_SECURE: "False"
+  POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
+  POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: 5432
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  REDIS_URL: redis://redis:6379/0
+  ITEM_SEED_SECRET: ${ITEM_SEED_SECRET}
+  SMTP_HOST: mailhog
+  SMTP_PORT: 1025
+
 services:
   db:
     image: pgvector/pgvector:pg17
@@ -32,31 +59,13 @@ services:
   api:
     build: .
     restart: unless-stopped
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+    command: gunicorn config.asgi:application --bind 0.0.0.0:8000 -k uvicorn.workers.UvicornWorker --workers 3 --timeout 60
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      DEBUG: "False"
-      DEMO_MODE: "True"
-      AUTO_SEED: "True"
-      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
-      ALLOWED_HOSTS: "localhost,127.0.0.1,api,web"
-      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:8000,http://127.0.0.1:8000"
-      PUBLIC_BASE_URL: "http://localhost:8000"
-      # In-app mock IdP (DEMO_MODE): browser-facing issuer + server-to-server URL
-      OIDC_ISSUER: "http://localhost:8000/idp/realms/fsp"
-      OIDC_INTERNAL_URL: "http://localhost:8000/idp/realms/fsp"
-      # Plain-HTTP local stack: the server-to-server IdP calls must not be redirected to https
-      SECURE_SSL_REDIRECT: "False"
-      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+      <<: *backend-env
     depends_on:
       db:
         condition: service_healthy
@@ -72,19 +81,10 @@ services:
     build: .
     restart: unless-stopped
     command: celery -A config worker -l info -Q celery
+    env_file:
+      - .env
     environment:
-      DEBUG: "False"
-      DEMO_MODE: "True"
-      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
-      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+      <<: *backend-env
     depends_on:
       db:
         condition: service_healthy
@@ -97,19 +97,10 @@ services:
     build: .
     restart: unless-stopped
     command: celery -A config worker -l info -Q llm --concurrency=1
+    env_file:
+      - .env
     environment:
-      DEBUG: "False"
-      DEMO_MODE: "True"
-      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
-      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+      <<: *backend-env
     depends_on:
       db:
         condition: service_healthy
@@ -122,19 +113,10 @@ services:
     build: .
     restart: unless-stopped
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env
     environment:
-      DEBUG: "False"
-      DEMO_MODE: "True"
-      SECRET_KEY: ${SECRET_KEY:-fsp-draft-prod-like-secret-key-change-in-production-1234567890}
-      POSTGRES_DB: ${POSTGRES_DB:-fsp_draft}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-family-seed-secret-cat}
+      <<: *backend-env
     depends_on:
       db:
         condition: service_healthy
@@ -142,6 +124,13 @@ services:
         condition: service_healthy
       api:
         condition: service_started
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
 volumes:
   pgdata:

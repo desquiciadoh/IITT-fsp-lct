@@ -4,6 +4,7 @@ Backend bank (engine.py): seq 1 = SQL (b=0.4, 90 s), seq 2 = complexity (b=0.8, 
 Placeholder scorer: theta = avg_b + (pct - 0.5) * 2 = 0.6 + (pct - 0.5) * 2
   2/2 correct -> 1.6 (Senior), 1/2 -> 0.6 (Middle), 0/2 -> -0.4 (Intern).
 """
+
 from datetime import timedelta
 from unittest import mock
 
@@ -28,8 +29,8 @@ from rest_framework.test import APIClient
 @pytest.fixture
 def cand(db):
     return User.objects.create_user(
-        email='lifecycle@example.com',
-        password='password123',
+        email="lifecycle@example.com",
+        password="password123",
         role=UserRole.CANDIDATE,
         email_verified_at=timezone.now(),
     )
@@ -47,24 +48,24 @@ def _start(cand, grade=Grade.SENIOR):
 
 
 def _items(session):
-    return list(AssessmentItem.objects.filter(assessment=session).order_by('seq'))
+    return list(AssessmentItem.objects.filter(assessment=session).order_by("seq"))
 
 
 def _wrong(item):
-    return next(o['id'] for o in item.view['options'] if o['id'] != item.key)
+    return next(o["id"] for o in item.view["options"] if o["id"] != item.key)
 
 
 def _answer(client, session, item, value):
     return client.post(
-        f'/api/assessments/{session.id}/answers',
-        {'item_id': str(item.id), 'option_id': value},
-        format='json',
+        f"/api/assessments/{session.id}/answers",
+        {"item_id": str(item.id), "option_id": value},
+        format="json",
     )
 
 
 def _expire(item, seconds_ago):
     item.deadline_at = timezone.now() - timedelta(seconds=seconds_ago)
-    item.save(update_fields=['deadline_at'])
+    item.save(update_fields=["deadline_at"])
 
 
 # --- Bug 1: deadlines are per served item; a late answer never rolls the session back ---
@@ -76,7 +77,11 @@ def test_start_sets_deadline_only_for_first_item(cand):
     first, second = _items(session)
 
     assert first.deadline_at is not None
-    assert before + timedelta(seconds=90) <= first.deadline_at <= timezone.now() + timedelta(seconds=90)
+    assert (
+        before + timedelta(seconds=90)
+        <= first.deadline_at
+        <= timezone.now() + timedelta(seconds=90)
+    )
     assert second.deadline_at is None
 
 
@@ -89,17 +94,21 @@ def test_next_item_deadline_starts_when_it_is_served(cand, client):
 
     assert res.status_code == 200
     body = res.json()
-    assert body['done'] is False
-    assert body['next']['item_id'] == str(second.id)
-    assert body['next']['deadline_at'] is not None
+    assert body["done"] is False
+    assert body["next"]["item_id"] == str(second.id)
+    assert body["next"]["deadline_at"] is not None
     second.refresh_from_db()
-    assert before + timedelta(seconds=60) <= second.deadline_at <= timezone.now() + timedelta(seconds=60)
+    assert (
+        before + timedelta(seconds=60)
+        <= second.deadline_at
+        <= timezone.now() + timedelta(seconds=60)
+    )
     assert second.served_at >= before
 
-    detail = client.get(f'/api/assessments/{session.id}').json()
-    assert detail['current']['item_id'] == str(second.id)
-    assert detail['current']['deadline_at'] is not None
-    assert 'key' not in detail['current']
+    detail = client.get(f"/api/assessments/{session.id}").json()
+    assert detail["current"]["item_id"] == str(second.id)
+    assert detail["current"]["deadline_at"] is not None
+    assert "key" not in detail["current"]
 
 
 def test_late_answer_is_recorded_wrong_and_test_continues(cand, client):
@@ -110,18 +119,18 @@ def test_late_answer_is_recorded_wrong_and_test_continues(cand, client):
     res = _answer(client, session, first, first.key)
 
     assert res.status_code == 200
-    assert res.json()['done'] is False
-    assert res.json()['next']['item_id'] == str(second.id)
+    assert res.json()["done"] is False
+    assert res.json()["next"]["item_id"] == str(second.id)
     first.refresh_from_db()
     assert first.correct is False
-    assert first.answer == {'value': None, 'timed_out': True, 'late': True}
+    assert first.answer == {"value": None, "timed_out": True, "late": True}
     session.refresh_from_db()
     assert session.status == AssessmentStatus.IN_PROGRESS
 
     # Retrying the late item is a normal 409, not a stuck 400.
     retry = _answer(client, session, first, first.key)
     assert retry.status_code == 409
-    assert retry.json()['code'] == 'item_not_current'
+    assert retry.json()["code"] == "item_not_current"
 
 
 def test_answer_within_grace_counts(cand, client):
@@ -134,7 +143,7 @@ def test_answer_within_grace_counts(cand, client):
     assert res.status_code == 200
     first.refresh_from_db()
     assert first.correct is True
-    assert first.answer == {'value': first.key}
+    assert first.answer == {"value": first.key}
 
 
 def test_late_last_item_finalizes_session(cand, client):
@@ -148,13 +157,13 @@ def test_late_last_item_finalizes_session(cand, client):
 
     assert res.status_code == 200
     body = res.json()
-    assert body['done'] is True
+    assert body["done"] is True
     session.refresh_from_db()
     assert session.status == AssessmentStatus.FINISHED
     assert session.finished_at is not None
     second.refresh_from_db()
     assert second.correct is False
-    assert second.answer['late'] is True
+    assert second.answer["late"] is True
     # 1/2 correct -> theta 0.6 (Middle) < claimed Senior
     assert session.decision == GradeDecision.UNCONFIRMED
 
@@ -168,7 +177,7 @@ def _finish_senior(cand, client, correct_first=True, correct_second=False):
     _answer(client, session, first, first.key if correct_first else _wrong(first))
     second.refresh_from_db()
     res = _answer(client, session, second, second.key if correct_second else _wrong(second))
-    assert res.json()['done'] is True
+    assert res.json()["done"] is True
     session.refresh_from_db()
     assert session.decision == GradeDecision.UNCONFIRMED
     return session
@@ -177,11 +186,11 @@ def _finish_senior(cand, client, correct_first=True, correct_second=False):
 def test_instant_fallback_confirms_when_answers_support_lower_grade(cand, client):
     session = _finish_senior(cand, client, correct_first=True)  # theta 0.6 -> Middle
 
-    res = client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'instant'}, format='json')
+    res = client.post(f"/api/assessments/{session.id}/fallback", {"mode": "instant"}, format="json")
 
     assert res.status_code == 200
-    assert res.json()['result_grade'] == Grade.MIDDLE
-    assert res.json()['decision'] == GradeDecision.CONFIRMED
+    assert res.json()["result_grade"] == Grade.MIDDLE
+    assert res.json()["decision"] == GradeDecision.CONFIRMED
     lm = LeagueMembership.objects.get(candidate=cand, specialization=Specialization.BACKEND)
     assert lm.grade == Grade.MIDDLE
     assert lm.status == LeagueStatus.CONFIRMED
@@ -194,11 +203,11 @@ def test_instant_fallback_refused_when_answers_do_not_support_lower_grade(cand, 
     cooldown = lm.next_attempt_at
     assert cooldown is not None
 
-    res = client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'instant'}, format='json')
+    res = client.post(f"/api/assessments/{session.id}/fallback", {"mode": "instant"}, format="json")
 
     assert res.status_code == 409
-    assert res.json()['code'] == 'fallback_not_eligible'
-    assert 'short_test' in res.json()['detail']
+    assert res.json()["code"] == "fallback_not_eligible"
+    assert "short_test" in res.json()["detail"]
     lm.refresh_from_db()
     assert lm.next_attempt_at == cooldown
     assert lm.status == LeagueStatus.UNCONFIRMED
@@ -210,14 +219,14 @@ def test_instant_fallback_refused_after_abandon(cand, client):
     session = _start(cand, Grade.SENIOR)
     first, _ = _items(session)
     _answer(client, session, first, first.key)  # 1/2 correct would rescore to Middle
-    assert client.post(f'/api/assessments/{session.id}/finish').status_code == 200
+    assert client.post(f"/api/assessments/{session.id}/finish").status_code == 200
     lm = LeagueMembership.objects.get(candidate=cand, specialization=Specialization.BACKEND)
     cooldown = lm.next_attempt_at
 
-    res = client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'instant'}, format='json')
+    res = client.post(f"/api/assessments/{session.id}/fallback", {"mode": "instant"}, format="json")
 
     assert res.status_code == 409
-    assert res.json()['code'] == 'fallback_not_eligible'
+    assert res.json()["code"] == "fallback_not_eligible"
     lm.refresh_from_db()
     assert lm.next_attempt_at == cooldown
 
@@ -225,17 +234,21 @@ def test_instant_fallback_refused_after_abandon(cand, client):
 def test_short_test_fallback_usable_once(cand, client):
     session = _finish_senior(cand, client, correct_first=False)
 
-    first = client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'short_test'}, format='json')
+    first = client.post(
+        f"/api/assessments/{session.id}/fallback", {"mode": "short_test"}, format="json"
+    )
     assert first.status_code == 201
-    short_id = first.json()['id']
-    assert client.post(f'/api/assessments/{short_id}/finish').status_code == 200
+    short_id = first.json()["id"]
+    assert client.post(f"/api/assessments/{short_id}/finish").status_code == 200
     lm = LeagueMembership.objects.get(candidate=cand, specialization=Specialization.BACKEND)
     cooldown = lm.next_attempt_at
 
-    again = client.post(f'/api/assessments/{session.id}/fallback', {'mode': 'short_test'}, format='json')
+    again = client.post(
+        f"/api/assessments/{session.id}/fallback", {"mode": "short_test"}, format="json"
+    )
 
     assert again.status_code == 409
-    assert again.json()['code'] == 'fallback_already_used'
+    assert again.json()["code"] == "fallback_already_used"
     lm.refresh_from_db()
     assert lm.next_attempt_at == cooldown
     assert AssessmentSession.objects.filter(candidate=cand, claimed_grade=Grade.MIDDLE).count() == 1
@@ -246,19 +259,27 @@ def test_short_test_fallback_usable_once(cand, client):
 
 def test_db_rejects_second_in_progress_session(cand):
     AssessmentSession.objects.create(
-        candidate=cand, specialization=Specialization.BACKEND, claimed_grade=Grade.MIDDLE,
+        candidate=cand,
+        specialization=Specialization.BACKEND,
+        claimed_grade=Grade.MIDDLE,
     )
     with pytest.raises(IntegrityError), transaction.atomic():
         AssessmentSession.objects.create(
-            candidate=cand, specialization=Specialization.BACKEND, claimed_grade=Grade.SENIOR,
+            candidate=cand,
+            specialization=Specialization.BACKEND,
+            claimed_grade=Grade.SENIOR,
         )
     # Other specializations and closed sessions are unaffected.
     AssessmentSession.objects.create(
-        candidate=cand, specialization=Specialization.FRONTEND, claimed_grade=Grade.MIDDLE,
+        candidate=cand,
+        specialization=Specialization.FRONTEND,
+        claimed_grade=Grade.MIDDLE,
     )
     for _ in range(2):
         AssessmentSession.objects.create(
-            candidate=cand, specialization=Specialization.BACKEND, claimed_grade=Grade.MIDDLE,
+            candidate=cand,
+            specialization=Specialization.BACKEND,
+            claimed_grade=Grade.MIDDLE,
             status=AssessmentStatus.FINISHED,
         )
 
@@ -266,11 +287,13 @@ def test_db_rejects_second_in_progress_session(cand):
 def test_start_maps_race_to_assessment_in_progress(cand):
     """Simulate the race: the pre-check sees nothing, the insert hits the constraint."""
     existing = AssessmentSession.objects.create(
-        candidate=cand, specialization=Specialization.BACKEND, claimed_grade=Grade.MIDDLE,
+        candidate=cand,
+        specialization=Specialization.BACKEND,
+        claimed_grade=Grade.MIDDLE,
     )
     empty = mock.Mock()
     empty.filter.return_value = []
-    with mock.patch.object(AssessmentSession.objects, 'select_for_update', return_value=empty):
+    with mock.patch.object(AssessmentSession.objects, "select_for_update", return_value=empty):
         with pytest.raises(AssessmentInProgress):
             _start(cand)
 
