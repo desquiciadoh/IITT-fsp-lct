@@ -1,16 +1,33 @@
-"""CAT contract (ML.md §3): session state, result, engine protocol.
+"""CAT (ML-3): session state, result, engine protocol and the fixed-c 3PL engine.
 
-ML-0 ships `StubCatEngine` so BE can wire the final shapes; ML-3 replaces it with the
-3PL/EAP engine behind the same signatures.
+IrtCatEngine
+  start        empty state; θ̂ = 0 and SE = the prior SD.
+  next_family  checks the stop rules, then picks the most informative eligible family and draws
+               uniformly among the top 5 (randomesque exposure control) with the passed rng.
+               A family is eligible if it serves the session's spec, was not administered in this
+               session, and its topic is under its blueprint quota (count < ⌊w·(n+1)⌋ + 1, so a
+               topic never runs more than one item ahead of its proportional share). Families unseen
+               in earlier attempts are preferred. The first item is targeted at start_theta(claimed),
+               later ones at the current θ̂. Ties break by family id.
+  record       scores the pending item (late -> incorrect) and re-estimates θ̂, SE (EAP, neutral prior).
+  result       grade policy on the same posterior (policy.decide), topic evidence, item evidence.
+Stop rules: express mode stops at 8 items. Full mode stops at 20 items, or at >= 10 once
+SE <= 0.30 or the 95 % CI θ̂ ± 1.96·SE lies wholly above or below cut(claimed). It also stops
+when no family is left. A session counts as complete (and may confirm a grade) only if a stop
+rule ended it; a session BE ends early (finish, abandon) is scored but never confirms (D8).
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
-from ..families.base import GRADES, FamilyMeta, Grade, Spec
-from .content import load_content
+from ..families.base import GRADES, SPECS, FamilyMeta, Grade, Spec
+from .content import Content, load_content
+from .irt import eap, information, posterior
+from .policy import band_of, decide
+from .topics import topic_levels
 
 Mode = Literal["full", "express"]
 Kind = Literal["initial", "fallback", "promotion", "screening"]
@@ -19,8 +36,9 @@ TopicLevel = Literal["strong", "moderate", "limited"]
 MODES: tuple[str, ...] = ("full", "express")
 KINDS: tuple[str, ...] = ("initial", "fallback", "promotion", "screening")
 
-
 STATE_VERSION = 1   # bump only with a from_json migration; new fields are optional and read with .get
+
+__all__ = ["CatEngine", "CatResult", "CatState", "IrtCatEngine", "band_of", "item_level"]
 
 
 @dataclass
@@ -36,6 +54,7 @@ class CatState:
     max_items: int
     seen: list[str] = field(default_factory=list)   # family ids from earlier attempts, sorted
     blueprint: list[tuple[str, float]] | None = None  # screening quotas; None -> the spec blueprint
+    stop_reason: str | None = None                    # set when a stop rule ends the test
 
     def to_json(self) -> dict:
         """Plain JSON types only; BE stores it in AssessmentSession.state (JSONB)."""
@@ -46,6 +65,7 @@ class CatState:
             "min_items": int(self.min_items), "max_items": int(self.max_items),
             "seen": list(self.seen),
             "blueprint": [[t, float(w)] for t, w in self.blueprint] if self.blueprint is not None else None,
+            "stop_reason": self.stop_reason,
         }
 
     @classmethod
@@ -60,6 +80,7 @@ class CatState:
             min_items=int(d["min_items"]), max_items=int(d["max_items"]),
             seen=list(d.get("seen", [])),
             blueprint=[(str(t), float(w)) for t, w in bp] if bp is not None else None,
+            stop_reason=d.get("stop_reason"),
         )
 
 
@@ -82,7 +103,8 @@ class CatEngine(Protocol):
 
     - `next_family` appends a pending entry (correct=None) to `state.administered` and returns
       its meta; called again before `record`, it returns the same family (safe to retry). BE
-      generates the item with make_rng(secret, session_id, family_id, n=seq) and persists state.
+      generates the item with make_rng(secret, session_id, family_id, n=seq), selects with
+      make_rng(secret, session_id, "select", n=seq), and persists state.
     - `record` scores the pending entry; `late=True` scores it as incorrect.
     - `result` scores any entry still pending as incorrect (a served item that was never
       answered counts against the candidate, so ending a session can't skip a hard item).
@@ -103,43 +125,51 @@ class CatEngine(Protocol):
     def result(self, state: CatState) -> CatResult: ...
 
 
-def band_of(theta: float, cuts: tuple[float, float, float] | None = None) -> Grade:
-    """Grade band of a point on the θ scale; cuts between intern|junior|middle|senior from grades.yaml."""
-    cuts = cuts if cuts is not None else load_content().band_cuts
-    return GRADES[sum(theta >= x for x in cuts)]  # type: ignore[return-value]
-
-
 def item_level(meta: FamilyMeta) -> Grade:
     """Difficulty band of b -> ItemView.level."""
-    return band_of(meta.b)
+    return band_of(meta.b)  # type: ignore[return-value]
 
 
-class StubCatEngine:
-    """ML-0 stub: 8 items in id order, θ = (correct − 4) / 2, decision against the claimed cut."""
+class IrtCatEngine:
+    TOP_K = 5
+    FULL_MIN, FULL_MAX, EXPRESS = 10, 20, 8
+    SE_STOP = 0.30
+    Z95 = 1.96
 
-    N_ITEMS = 8
+    def __init__(self, content: Content | None = None):
+        self.content = content or load_content()
 
+    # ── protocol ──────────────────────────────────────────────────────────
     def start(self, spec, claimed, mode, kind, pool, seen, blueprint=None) -> CatState:
+        if spec not in SPECS or claimed not in GRADES or mode not in MODES or kind not in KINDS:
+            raise ValueError(f"bad session parameters: {spec!r}, {claimed!r}, {mode!r}, {kind!r}")
+        lo, hi = (self.EXPRESS, self.EXPRESS) if mode == "express" else (self.FULL_MIN, self.FULL_MAX)
+        theta, se = eap([], [])
         return CatState(spec=spec, claimed=claimed, mode=mode, kind=kind, administered=[],
-                        theta=0.0, se=1.0, min_items=self.N_ITEMS, max_items=self.N_ITEMS,
-                        seen=sorted(seen), blueprint=list(blueprint) if blueprint is not None else None)
+                        theta=theta, se=se, min_items=lo, max_items=hi, seen=sorted(set(seen)),
+                        blueprint=_normalised(blueprint) if blueprint is not None else None)
 
     def next_family(self, state, pool, rng) -> FamilyMeta | None:
-        pending = [x for x in state.administered if x["correct"] is None]
         by_id = {m.id: m for m in pool}
+        pending = [x for x in state.administered if x["correct"] is None]
         if pending:
-            return by_id.get(pending[-1]["family_id"])
-        if len(state.administered) >= state.max_items:
+            meta = by_id.get(pending[-1]["family_id"])
+            if meta is None:
+                raise ValueError(f"pending family {pending[-1]['family_id']!r} is not in the pool")
+            return meta
+        if state.stop_reason is not None:
             return None
-        used = {x["family_id"] for x in state.administered}
-        free = sorted((m for m in pool if m.id not in used), key=lambda m: (m.id in state.seen, m.id))
-        if not free:
-            return None
-        meta = free[0]
-        state.administered.append({"family_id": meta.id, "seq": len(state.administered) + 1,
-                                   "a": meta.a, "b": meta.b, "c": meta.c, "topic": meta.topic,
-                                   "correct": None, "late": False})
-        return meta
+        reason = self.stop_rule(state)
+        if reason is None:
+            meta = self._select(state, pool, rng)
+            if meta is not None:
+                state.administered.append({"family_id": meta.id, "seq": len(state.administered) + 1,
+                                           "a": float(meta.a), "b": float(meta.b), "c": float(meta.c),
+                                           "topic": meta.topic, "correct": None, "late": False})
+                return meta
+            reason = "pool_exhausted"
+        state.stop_reason = reason
+        return None
 
     def record(self, state, family_id, correct, late=False) -> CatState:
         for x in state.administered:
@@ -149,24 +179,88 @@ class StubCatEngine:
                 break
         else:
             raise ValueError(f"family {family_id!r} is not pending in this session")
-        n_correct = sum(1 for x in state.administered if x["correct"])
-        state.theta = (n_correct - 4) / 2
-        state.se = 0.5
+        state.theta, state.se = eap(*_responses(state.administered))
         return state
 
     def result(self, state) -> CatResult:
         for x in state.administered:
-            if x["correct"] is None:          # served, never answered: incorrect
+            if x["correct"] is None:                      # served, never answered: incorrect (D1)
                 x["correct"], x["late"] = False, True
-        state.theta = (sum(1 for x in state.administered if x["correct"]) - 4) / 2
-        theta, se = state.theta, state.se
-        grade = band_of(theta)
-        cut = load_content().grade(state.claimed).theta_cut
-        answered = [x for x in state.administered if x["correct"] is not None]
+        items, resp = _responses(state.administered)
+        post = posterior(items, resp)
+        d = decide(post, state.claimed, self.is_complete(state), self.content)
+        state.theta, state.se = d.theta, d.se
+        reference = state.claimed if d.decision == "confirmed" else d.result_grade
         return CatResult(
-            theta=theta, se=se, rating=round(1000 + 200 * theta), rating_ci=round(1.96 * 200 * se),
-            result_grade=grade, decision="confirmed" if theta >= cut else "unconfirmed",
-            promotion_unlocked=False, fallback_grade=None,
-            topics=sorted({(x["topic"], "moderate") for x in answered}),
-            evidence=[(x["seq"], band_of(x["b"]), bool(x["correct"])) for x in answered],
-        )
+            theta=d.theta, se=d.se, rating=d.rating, rating_ci=d.rating_ci, result_grade=d.result_grade,
+            decision=d.decision, promotion_unlocked=d.promotion_unlocked, fallback_grade=d.fallback_grade,
+            topics=topic_levels(state.administered, reference, self.content),
+            evidence=[(x["seq"], band_of(x["b"], self.content), bool(x["correct"]))
+                      for x in state.administered])
+
+    # ── rules ─────────────────────────────────────────────────────────────
+    def stop_rule(self, state: CatState) -> str | None:
+        """The stop rule that applies now, or None to continue."""
+        n = len(state.administered)
+        if state.mode == "express":
+            return "express" if n >= self.EXPRESS else None
+        if n >= state.max_items:
+            return "max_items"
+        if n < state.min_items:
+            return None
+        if state.se <= self.SE_STOP:
+            return "se"
+        cut = self.content.grade(state.claimed).theta_cut
+        lo, hi = state.theta - self.Z95 * state.se, state.theta + self.Z95 * state.se
+        if lo >= cut or hi < cut:
+            return "ci"
+        return None
+
+    def is_complete(self, state: CatState) -> bool:
+        """A stop rule ended the test; pool exhaustion counts only after min_items answers."""
+        if state.stop_reason is None:
+            return False
+        if state.stop_reason == "pool_exhausted":
+            return len(state.administered) >= state.min_items
+        return True
+
+    def _select(self, state: CatState, pool: list[FamilyMeta], rng: random.Random) -> FamilyMeta | None:
+        used = {x["family_id"] for x in state.administered}
+        cands = [m for m in pool if m.id not in used and state.spec in m.specs]
+        if not cands:
+            return None
+        weights = dict(state.blueprint) if state.blueprint is not None else self.content.blueprints[state.spec]
+        n = len(state.administered)
+        counts: dict[str, int] = {}
+        for x in state.administered:
+            counts[x["topic"]] = counts.get(x["topic"], 0) + 1
+
+        def under_quota(m: FamilyMeta) -> bool:
+            w = weights.get(m.topic, 0.0)
+            return w > 0 and counts.get(m.topic, 0) < math.floor(w * (n + 1)) + 1
+
+        eligible = [m for m in cands if under_quota(m)]
+        if not eligible:                     # every quota is full or empty: any blueprint topic, else any
+            eligible = [m for m in cands if weights.get(m.topic, 0.0) > 0] or cands
+        unseen = [m for m in eligible if m.id not in state.seen]
+        if unseen:
+            eligible = unseen
+        target = self.content.grade(state.claimed).start_theta if n == 0 else state.theta
+        scored = sorted(((-float(information(target, m.a, m.b, m.c)), m.id, m) for m in eligible),
+                        key=lambda t: (t[0], t[1]))
+        top = [m for _, _, m in scored[: self.TOP_K]]
+        return top[rng.randrange(len(top))]
+
+
+def _responses(administered: list[dict]) -> tuple[list[tuple[float, float, float]], list[bool]]:
+    answered = [x for x in administered if x["correct"] is not None]
+    return ([(float(x["a"]), float(x["b"]), float(x["c"])) for x in answered],
+            [bool(x["correct"]) for x in answered])
+
+
+def _normalised(blueprint: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    clean = [(str(t), float(w)) for t, w in blueprint if float(w) > 0]
+    total = sum(w for _, w in clean)
+    if not clean or total <= 0:
+        raise ValueError("a screening blueprint needs at least one topic with a positive weight")
+    return sorted(((t, w / total) for t, w in clean), key=lambda tw: tw[0])

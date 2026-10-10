@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from assessment.engine.blueprint import blueprint_for
-from assessment.engine.cat import CatResult, CatState, StubCatEngine, band_of, item_level
+from assessment.engine.cat import CatState, IrtCatEngine, band_of, item_level
 from assessment.families import base as fbase
 from assessment.families.base import FamilyMeta, Instance, fingerprint_of
 from assessment.families.registry import active_metas, all_families, make_rng
@@ -167,55 +167,12 @@ def test_band_and_item_level_use_cuts_minus1_0_1():
     assert item_level(_meta("x", b=0.4)) == "middle"
 
 
-def test_stub_engine_serves_eight_and_scores_correct_minus_four_over_two():
-    eng = StubCatEngine()
-    pool = [_meta(f"f{i:02d}", topic=f"t{i % 3}") for i in range(12)]
-    state = eng.start("backend", "middle", "full", "initial", pool, {"f00"})
-    served = []
-    while (meta := eng.next_family(state, pool, random.Random(1))) is not None:
-        served.append(meta.id)
-        state = eng.record(state, meta.id, correct=len(served) <= 6)
-        state = CatState.from_json(json.loads(json.dumps(state.to_json())))
-    assert len(served) == 8 and "f00" not in served          # unseen families first
-    res = eng.result(state)
-    assert isinstance(res, CatResult)
-    assert res.theta == 1.0 and res.rating == 1200 and res.rating_ci == round(1.96 * 200 * 0.5)
-    assert res.decision == "confirmed" and res.result_grade == "senior"
-    assert [e[0] for e in res.evidence] == list(range(1, 9))
-
-
-def test_stub_record_rejects_unserved_family_and_scores_late_as_wrong():
-    eng = StubCatEngine()
-    pool = [_meta("a"), _meta("b")]
-    state = eng.start("backend", "senior", "full", "initial", pool, set())
-    with pytest.raises(ValueError):
-        eng.record(state, "a", True)
-    meta = eng.next_family(state, pool, random.Random(0))
-    assert eng.next_family(state, pool, random.Random(0)) == meta     # pending item is re-served
-    eng.record(state, meta.id, True, late=True)
-    assert state.administered[0]["correct"] is False and state.administered[0]["late"] is True
-    assert eng.result(state).decision == "unconfirmed"
-
-
-def test_result_scores_a_served_but_unanswered_item_as_incorrect():
-    eng = StubCatEngine()
-    pool = [_meta(f"f{i}") for i in range(8)]
-    state = eng.start("backend", "intern", "full", "initial", pool, set())
-    for _ in range(7):
-        m = eng.next_family(state, pool, random.Random(0))
-        eng.record(state, m.id, True)
-    eng.next_family(state, pool, random.Random(0))          # served, then the session ends
-    res = eng.result(state)
-    assert len(res.evidence) == 8 and res.evidence[-1][2] is False
-    assert state.administered[-1]["late"] is True and res.theta == (7 - 4) / 2
-
-
 def test_cat_state_round_trips_through_json():
     st = CatState(spec="frontend", claimed="junior", mode="express", kind="fallback",
                   administered=[{"family_id": "x", "seq": 1, "a": 1.3, "b": -0.25, "c": 0.25,
                                  "topic": "t", "correct": True, "late": False}],
                   theta=0.123456789, se=0.4321, min_items=8, max_items=8, seen=["a", "b"],
-                  blueprint=[("sql.aggregation", 0.6), ("python.core", 0.4)])
+                  blueprint=[("sql.aggregation", 0.6), ("python.core", 0.4)], stop_reason="ci")
     assert CatState.from_json(json.loads(json.dumps(st.to_json()))) == st
     assert st.to_json()["v"] == 1
 
@@ -230,7 +187,7 @@ def test_cat_state_reads_v1_dicts_without_optional_fields_and_refuses_newer():
 
 
 def test_start_keeps_a_screening_blueprint():
-    st = StubCatEngine().start("backend", "middle", "full", "screening", [_meta("a")], set(),
+    st = IrtCatEngine().start("backend", "middle", "full", "screening", [_meta("a")], set(),
                                blueprint=[("sql.aggregation", 1.0)])
     assert CatState.from_json(st.to_json()).blueprint == [("sql.aggregation", 1.0)]
 
