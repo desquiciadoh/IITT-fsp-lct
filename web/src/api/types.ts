@@ -8,6 +8,8 @@
  * still to be shipped, each tagged with a comment.
  */
 import type {
+  Company as GeneratedCompany,
+  Position as GeneratedPosition,
   AnswerResponse as GeneratedAnswerResponse,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
@@ -292,129 +294,51 @@ export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
   result?: AssessmentResult
 }
 
-// --- FE-10 · Scouting --------------------------------------------------------
-
-/** GET /api/positions/{id} — the schema is accurate here; alias for imports. */
-export type { Position } from '@/api/generated/models/position'
+// --- FE-09 · Company & position wizard --------------------------------------
 
 /**
- * gap G7 — `GET /api/leagues?specialization=` returns the candidate's own
- * league today; the scouting screen needs per-grade shelf counts, which the
- * backend does not expose yet. Hand-written until G7 ships; mocked in
- * `mocks/handlers/gaps.ts`. Shape follows FE2.md §FE-10:
- * `[{specialization, grade, confirmed, unconfirmed, median_expectation?}]`.
+ * GET/PUT /api/companies/me (FE2.md §FE-09).
+ * gap G17 — after the BE fixes B1 there is no dedicated "create company"
+ * endpoint yet; the wizard will use PUT /api/companies/me to create it.
+ * Until then the backend auto-creates a company for employers (security bug),
+ * so `useCompany` must treat 403 `company_required` as "no company yet".
  */
-export type LeagueShelf = {
-  specialization: Spec
-  grade: Grade
-  confirmed: number
-  unconfirmed: number
-  median_expectation?: number | null
-}
+export type Company = GeneratedCompany
 
-/** Pool item as served today: `components` is a flat dict (gap G8). */
-export type PoolComponentsInput = ScoreComponent[] | ScoreComponentsDict
+/** PUT /api/companies/me payload (readonly fields stripped by the schema). */
+export type CompanyInput = Omit<Company, 'id' | 'trust_level' | 'created_at'>
 
 /**
- * One row of `GET /api/positions/{id}/pool`. Wraps the generated `PoolItem`
- * and widens it to what the server actually sends: normalized components
- * (dict today, list tomorrow — always via `normalizeComponents()`), plus
- * optional `gaps` once BE adds them (target of G8).
+ * GET/POST/PUT /api/positions (FE2.md §FE-09).
+ * The schema types `company` as a URI string; keep it opaque here.
  */
-export type PoolItemView = {
-  talent: TalentShortView
-  score: number
-  components: PoolComponentsInput
-  reasons: Reason[]
-  shortlisted: boolean
-  /** gap G8 target — derived from `kind === 'minus'` reasons until served */
-  gaps?: string[]
-}
+export type Position = GeneratedPosition
+export type PositionStatus = Position['status']
+
+/** POST /api/positions payload (readonly fields stripped). */
+export type PositionInput = Omit<Position, 'id' | 'company' | 'created_at'>
 
 /**
- * Response of `GET /api/positions/{id}/pool`. The backend ignores filters and
- * omits `facets`/pagination metadata today (gap G8). When `facets` is absent
- * we detect the missing capability and apply filters client-side.
+ * PATCH-lite used by the edit screen (`GET`/`PUT /api/positions/{id}`).
+ * Same shape as PositionInput but every field optional except title/spec.
  */
-export type ScoutingPoolResponse = {
-  items: PoolItemView[]
-  total: number
-  page: number
-  /** server-computed facet counts — absent until G8 ships */
-  facets?: Record<string, Record<string, number>>
-  /** server-side filtering applied — absent until G8 ships */
-  filters_applied?: boolean
-}
-
-/** Tri-state FSP filter (FE2.md §FE-10). */
-export type FspFilter = 'any' | 'linked' | 'prize'
-
-/** All URL-synced scouting state (see features/scouting/url-state.ts). */
-export type ScoutingFilters = {
-  grades: Grade[]
-  skills: string[]
-  fsp: FspFilter
-  formats: WorkFormat[]
-  salary_max?: number
-  confirmed_only: boolean
-  preset?: string
-  page: number
-  /** drawer: `?c=<public_id>` */
-  candidate?: string
-}
+export type PositionUpdate = Partial<PositionInput> & Pick<PositionInput, 'title' | 'specialization'>
 
 /**
- * gap G9 — `GET /api/talent/{public_id}`: pool fields plus `about`,
- * `experience_text` and gated `contacts` (null until the company has a
- * grant). Sections for topics/assessments/integrity come later — hidden when
- * absent. Hand-written wrapper over the loose generated schema.
+ * POST /api/positions/parse response (FE2.md §FE-09, AI.md §3).
+ * gap G6 — the backend endpoint is unstable; mocked in employer.ts until
+ * shipped. `draft` is a partial PositionInput prefill; `unknown_terms` are
+ * skill-like tokens the taxonomy did not recognize; `blueprint` feeds the
+ * assessment topic bars; `source` marks which parser produced the draft.
  */
-/** One FSP competition result served to the scouting drawer. */
-export type FspResultEntry = {
-  event_id?: string
-  event_name?: string
-  discipline?: string
-  date?: string
-  placement?: number | null
-  tier?: string | null
-  participants_total?: number | null
+export type JdParseSource = 'llm' | 'regex' | 'fallback' | 'mock'
+export type BlueprintTopic = { topic: string; weight: number }
+export type JdParseResult = {
+  draft: Partial<PositionInput>
+  unknown_terms: string[]
+  blueprint: BlueprintTopic[]
+  source: JdParseSource
 }
 
-/** Assessment history row for the drawer (gap G9). */
-export type TalentAssessmentEntry = {
-  id?: string
-  kind: string
-  mode?: string
-  status?: string
-  result_grade?: string
-  rating?: number | null
-  taken_at?: string
-}
-
-/** Integrity capture summary row for the drawer (gap G9). */
-export type TalentIntegrityEntry = {
-  session_id?: string
-  focus_loss?: number
-  paste?: number
-  flagged?: boolean
-  taken_at?: string
-}
-
-export type TalentDetail = Omit<TalentShortView, 'skills'> & {
-  skills?: PoolSkill[]
-  display_name?: string
-  about?: string | null
-  experience_text?: string | null
-  contacts?: {
-    full_name?: string
-    email?: string
-    phone?: string
-    telegram?: string
-  } | null
-  /** gap G8 target — detailed FSP results for the drawer (pool `fsp` is summary-only) */
-  fsp_results?: FspResultEntry[] | null
-  /** gap G9 — future sections, hidden while undefined */
-  topics?: ResultTopic[] | null
-  assessments?: TalentAssessmentEntry[] | null
-  integrity_flags?: TalentIntegrityEntry[] | null
-}
+/** POST /api/positions/parse request body. */
+export type JdParseInput = { text: string }

@@ -141,11 +141,10 @@ describe('qualification mock — FE-05 e2e QA', () => {
     setMockNow(() => new Date(baseServedAt + offsetMs))
     const id = await startSession()
     const s = __getMockSession(id)!
-    baseServedAt = Date.parse(s.servedAt!)
-    // Jump the mock clock 64 s ahead of q-py-1's 60 s window (+3 s grace → late).
-    offsetMs = 64_000
-    // The handler grades with mockNow(); assert through the same seam.
-    expect(isLate(s as never, new Date(baseServedAt + offsetMs))).toBe(true)
+    // Jump the mock clock 61 s ahead of q-py-1's 60 s window (+3 s grace).
+    setMockNow(() => new Date(Date.parse(s.servedAt!) + 61_000))
+    // `isLate` defaults to the (shifted) mock clock — no real-clock leak.
+    expect(isLate(s as never)).toBe(true)
 
     // The candidate's tab was frozen; the expired draft (empty choice) lands late.
     const r = await post(`/api/assessments/${id}/answers`, {

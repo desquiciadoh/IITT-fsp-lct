@@ -2,6 +2,7 @@ import { setupWorker } from 'msw/browser'
 import { coreHandlers } from '@/mocks/handlers/core'
 import { demoHandlers, demoGapHandlers } from '@/mocks/handlers/demo'
 import { gapHandlers } from '@/mocks/handlers/gaps'
+import { employerHandlers, employerGapHandlers } from '@/mocks/handlers/employer'
 import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
@@ -21,10 +22,10 @@ export async function startMocks(): Promise<void> {
   const handlers =
     mode === 'all'
       ? [
-          // FE-10 scouting store FIRST: its `/api/positions/:id` wildcard must
-          // win over the static G7 leagues stub below, and the pool/shortlist
-          // routes need the stateful set (MSW is first-match-wins).
-          ...scoutingHandlers,
+          // FE-09 stateful company/positions/parse mock FIRST: its wildcard
+          // `/api/positions/:id` must win over the static gap stubs (MSW is
+          // first-match-wins).
+          ...employerHandlers,
           ...gapHandlers,
           ...demoGapHandlers,
           ...demoHandlers,
@@ -40,7 +41,7 @@ export async function startMocks(): Promise<void> {
           ...fspHandlers,
           ...coreHandlers,
         ]
-      : [...gapHandlers, ...demoGapHandlers, ...scoutingHandlers]
+      : [...gapHandlers, ...employerGapHandlers, ...demoGapHandlers]
   const worker = setupWorker(...handlers)
   await worker.start({
     onUnhandledRequest: 'bypass',

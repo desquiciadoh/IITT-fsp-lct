@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -106,15 +106,26 @@ export function resolveStartView(
 
 // --- component ---------------------------------------------------------------------
 
+/** FE-05 start screen. */
 export function StartPage() {
   const navigate = useNavigate()
-  const [spec, setSpec] = useState<Spec>('backend')
+  const [searchParams] = useSearchParams()
+
+  // FE2.md §FE-05: read `specialization` and `claimed_grade` from the query
+  // string — FE1's onboarding deep-links here with these params prefilled.
+  const qsSpec = (SPEC_OPTIONS.find((o) => o.value === searchParams.get('specialization'))?.value ??
+    'backend') as Spec
+  const qsGrade = GRADE_OPTIONS.some((o) => o.value === searchParams.get('claimed_grade'))
+    ? (searchParams.get('claimed_grade') as Grade)
+    : 'junior'
+
+  const [spec, setSpec] = useState<Spec>(qsSpec)
   const eligibility = useEligibility(spec)
   const view = resolveStartView(eligibility.data, eligibility.isLoading, eligibility.isError)
 
   const form = useForm<StartFormValues>({
     resolver: zodResolver(startFormSchema),
-    defaultValues: { specialization: spec, claimed_grade: 'junior', mode: 'full' },
+    defaultValues: { specialization: qsSpec, claimed_grade: qsGrade, mode: 'full' },
   })
 
   // The eligibility query follows the specialization chosen in the form.

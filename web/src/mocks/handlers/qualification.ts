@@ -170,8 +170,6 @@ const BANK: BankItem[] = [
   },
 ]
 
-const MAX_ITEMS = BANK.length
-
 /** Oracle keys are mock-only (never serialized to the client). */
 const KEY: Record<string, string> = {
   'q-py-1': 'b', // 6
@@ -197,7 +195,7 @@ type MockSession = {
   status: 'in_progress' | 'finished' | 'abandoned' | 'expired'
   startedAt: string
   finishedAt: string | null
-  /** index into BANK of the served item; equals MAX_ITEMS once done */
+  /** index into BANK of the served item; equals max_items once done */
   cursor: number
   servedAt: string | null
   answers: StoredAnswer[]
@@ -223,13 +221,20 @@ export function resetQualificationMock(): void {
   nowOverride = null
 }
 
+/** Items served per mode (FE2.md §FE-05: full/express choice on the start
+ *  screen). The backend does not adapt item count yet (gap G5); the mock
+ *  truncates its 8-item bank so the runner can be exercised in both modes. */
+function maxItemsFor(s: MockSession): number {
+  return s.mode === 'express' ? Math.ceil(BANK.length / 2) : BANK.length
+}
+
 function serveItem(s: MockSession, at: Date): AssessmentItem {
   const tpl = BANK[s.cursor]
   return { ...tpl, deadline_at: new Date(at.getTime() + tpl.time_limit_s * 1000).toISOString(), served_at: at.toISOString() }
 }
 
 function currentOf(s: MockSession): AssessmentItem | null {
-  if (s.status !== 'in_progress' || s.cursor >= MAX_ITEMS) return null
+  if (s.status !== 'in_progress' || s.cursor >= maxItemsFor(s)) return null
   // Served item keeps its ORIGINAL deadline — refresh/resume must not buy
   // extra time; the candidate spends the remaining budget (QA case 2b).
   return serveItem(s, new Date(s.servedAt ?? s.startedAt))
@@ -244,7 +249,7 @@ function toSessionDto(s: MockSession): AssessmentSession {
     mode: s.mode,
     status: s.status,
     current: currentOf(s),
-    max_items: MAX_ITEMS,
+    max_items: maxItemsFor(s),
     theta: null,
     se: null,
     rating: null,
@@ -257,15 +262,16 @@ function isCorrect(answer: StoredAnswer): boolean {
   return answer.correct
 }
 
-/** MK3 scoring: θ = (correct − 4) / 2; confirmed when θ ≥ 1 for the claim. */
-function finalize(s: MockSession, now = new Date()): AssessmentResult {
+/** MK3 scoring: θ = (correct − max/2) / 2; confirmed when θ ≥ 1 for the claim. */
+function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
   s.status = 'finished'
   s.finishedAt = now.toISOString()
+  const maxItems = maxItemsFor(s)
   const correct = s.answers.filter(isCorrect).length
-  const theta = Math.round(((correct - MAX_ITEMS / 2) / 2) * 100) / 100
+  const theta = Math.round(((correct - maxItems / 2) / 2) * 100) / 100
   const rating = 1000 + 200 * theta
   const confirmed = theta >= 1
-  const evidence = BANK.map((item, i) => ({
+  const evidence = BANK.slice(0, maxItems).map((item, i) => ({
     seq: item.seq,
     correct: s.answers[i] ? s.answers[i].correct : null,
   }))
@@ -312,11 +318,11 @@ function gradeAnswer(item: AssessmentItem, optionId?: string, value?: string): b
 /** Late answer past deadline + 3 s grace counts as incorrect (BE.md H5).
  *  Exported only so the QA suite can pin session timestamps and prove
  *  the lateness rule without sleeping in tests. */
-export function isLate(s: MockSession, now: Date): boolean {
+export function isLate(s: MockSession, at: Date = mockNow()): boolean {
   if (!s.servedAt) return false
   const item = BANK[s.cursor]
   const deadline = new Date(s.servedAt).getTime() + item.time_limit_s * 1000 + 3000
-  return now.getTime() > deadline
+  return at.getTime() > deadline
 }
 
 function activeInProgress(): MockSession | undefined {
@@ -433,7 +439,7 @@ export const qualificationHandlers = [
     s.answers.push({ itemId: current.item_id, correct })
     s.cursor += 1
 
-    if (s.cursor >= MAX_ITEMS) {
+    if (s.cursor >= maxItemsFor(s)) {
       const result = finalize(s, now)
       const outcome: AnswerOutcome = { done: true, result }
       return json(outcome)
@@ -451,21 +457,22 @@ export const qualificationHandlers = [
     if (s.status !== 'in_progress') {
       return problem(409, 'invalid_transition', 'Only an in-progress session can be finished.')
     }
+    // BE.md R9: <50% of the mode's items answered → abandoned. The check
+    // runs BEFORE padding, otherwise the padded tail always passes it
+    // (QA case 4b).
+    const maxItems = maxItemsFor(s)
+    if (s.cursor * 2 < maxItems) {
+      s.status = 'abandoned'
+      s.finishedAt = mockNow().toISOString()
+      return problem(409, 'not_enough_answers', 'Less than half of the items were answered.')
+    }
     // Current item was never submitted — record it as unanswered/incorrect
     // before padding the rest of the tail (keeps `answers` aligned with BANK).
     if (s.answers.length < s.cursor) {
       s.answers.push({ itemId: BANK[s.answers.length].item_id, correct: false })
     }
-    // Real submissions only (<50% → abandoned, BE.md R9). The current item
-    // counts as "attempted" but not answered; pad the tail after the check.
-    const answered = s.answers.length
-    if (answered * 2 < MAX_ITEMS) {
-      s.status = 'abandoned'
-      s.finishedAt = new Date().toISOString()
-      return problem(409, 'not_enough_answers', 'Less than half of the items were answered.')
-    }
-    // Unanswered tail counts as incorrect (BE.md R9).
-    while (s.answers.length < MAX_ITEMS) {
+    // Unanswered tail counts as incorrect.
+    while (s.answers.length < maxItems) {
       s.answers.push({ itemId: BANK[s.answers.length].item_id, correct: false })
     }
     const result = finalize(s)

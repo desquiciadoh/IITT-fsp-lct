@@ -14,7 +14,11 @@ import { StartPage } from '@/features/qualification-runner/start-page'
 import { TestRunnerPage } from '@/features/qualification-runner/test-runner-page'
 import { OffersListPage } from '@/features/offers/offers-list-page'
 import { OfferDetailPage } from '@/features/offers/offer-detail-page'
+import { OffersBoardPage } from '@/features/employer/offers-board-page'
 import { SettingsPage } from '@/features/settings/settings-page'
+import { CompanyPage } from '@/features/employer/company-page'
+import { EmployerDashboardPage } from '@/features/employer/dashboard-page'
+import { PositionWizardPage } from '@/features/employer/position-wizard-page'
 import { AppLayout } from '@/app/layouts/app-layout'
 import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
 import { IndexRedirect } from '@/app/index-redirect'
@@ -82,18 +86,18 @@ export const router = createBrowserRouter([
           {
             element: <RequireRole role="employer" />,
             children: [
-              { path: '/employer', element: ph('Кабинет работодателя', 'FE2', 'FE-13') },
-              { path: '/employer/company', element: ph('Профиль компании', 'FE2', 'FE-13') },
+              { path: '/employer', element: <EmployerDashboardPage /> },
+              { path: '/employer/company', element: <CompanyPage /> },
               {
                 path: '/employer/positions/new',
-                element: ph('Новая вакансия', 'FE2', 'FE-14'),
+                element: <PositionWizardPage />,
               },
               {
                 path: '/employer/positions/:id',
                 element: <ScoutingPage />,
               },
               { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
-              { path: '/employer/offers', element: ph('Офферы работодателя', 'FE2', 'FE-17') },
+              { path: '/employer/offers', element: <OffersBoardPage /> },
             ],
           },
         ],
