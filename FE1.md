@@ -113,13 +113,14 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - Every chart has a text alternative (table or `aria-label`), and colours come from `tokens.css`.
   - *Done:* renders from the live backend and from an `all`-mode fixture; banner shows for the fixture; link from `/jury` works.
 
-- [ ] **FE-19 · Playwright e2e** (S), `web/e2e/`. The golden path against the docker compose stack, two browser contexts:
+- [x] **FE-19 · Playwright e2e** (S), `web/e2e/`. The golden path against the docker compose stack, two browser contexts:
   1. Persona login (candidate) → onboarding → test (FE2 runner) → result.
   2. Employer: pool → send offer.
   3. Candidate: offer appears (live or ≤ 10 s) → accept.
   4. Employer: contacts appear.
   - **Assert that no response carries `X-Stub`.** A script `pnpm e2e`; it runs in CI once BE adds the workflow (M1).
   - Until FE2's screens land, write steps 1 and 3 and mark the rest `test.fixme`.
+  - *Done:* harness + specs (candidate golden path, employer surfaces, axe, mobile-375); mock mode green on chromium; `E2E_REQUIRE_REAL=1` guard + CI scaffold (real run `continue-on-error` until BE G18/G19/G21 land).
 
 - [x] **FE-15 · Vacancies & applications** (M). Depends on BE-17; mock it in its target shape until then and add a gap row to BE.md §2.3 if the contract is not written down yet.
   - **Candidate:** `/candidate/vacancies` (list with salary first, league fit, apply button), application statuses on the dashboard.

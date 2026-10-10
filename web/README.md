@@ -20,3 +20,13 @@ Frontend for the FSP Draft platform (React + TypeScript + Vite).
 - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` — quality gates
 - `pnpm api:schema` then `pnpm api:gen` — regenerate the typed client after
   the backend schema changes
+
+## E2E (FE-19)
+
+- `pnpm test:e2e` — Playwright tests (mock mode by default, `VITE_API_MOCKS=all`)
+- `pnpm test:e2e:install` — install Playwright browsers
+- `E2E_REQUIRE_REAL=1 pnpm test:e2e` — run against a real backend (docker compose),
+  asserts that no response carries `X-Stub`
+
+CI: `.github/workflows/e2e.yml` runs mock-mode tests on every push/PR and a
+real-backend smoke test once the backend stack is ready.

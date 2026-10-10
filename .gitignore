@@ -55,6 +55,10 @@ Thumbs.db
 # Node / frontend
 node_modules/
 .vite/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
 
 # Claude Code personal settings
 .claude/settings.local.json

@@ -31,11 +31,11 @@ export function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <NavLink to="/" className="font-semibold tracking-tight">
             ФСП<span className="text-primary">·</span>Практикум
           </NavLink>
-          <nav className="flex flex-1 items-center gap-1">
+          <nav className="flex flex-1 flex-wrap items-center gap-1">
             {me?.role === 'candidate' && (
               <>
                 <NavLink to="/candidate" className={linkClass} end>

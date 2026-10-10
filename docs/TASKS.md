@@ -627,13 +627,13 @@ Every screen is built against MK1 stubs first and switches to real data without 
   Deps: FE-10 · Done: filtering by FSP prize-winners plus a stack works.
 
 **P1**
-- [ ] **FE-13** · P1 · M: **Validation Lab.** Confusion matrix, retest, TIF, leak-attack bars, a systems table with nDCG bars, and parity. A red FIXTURE banner shows while `synthetic_fixture` is true. Deps: BE-22 (MK9 until then).
-- [ ] **FE-14** · P1 · S: **Test Twins & Blueprint Builder.** JD → blueprint → two instances side by side. Deps: BE-22, AI-14.
-- [ ] **FE-15** · P1 · M: **Vacancies & applications.** Candidate: list, apply, statuses. Employer: publish toggle and applicant pipeline. Deps: BE-17.
-- [ ] **FE-16** · P1 · M: **Micro-tasks.** Candidate inbox and solve; employer create, review, and invite from a submission. Deps: BE-18.
-- [ ] **FE-17** · P1 · M: **Pool power features.** Presets and sliders, counterfactual hints, the acceptance badge, Need Health, the below-floor warning. Deps: AI-12, BE-20.
-- [ ] **FE-18** · P1 · M: **Polish.** Test runner and offers responsive on phones (needed for the QR wow option), a contrast check, loading/empty/error states, a Russian copy pass. Deps: PD-05.
-- [ ] **FE-19** · P1 · S: **Playwright e2e** of the golden path, run in CI against compose and asserting that no response carries `X-Stub`. Deps: M1.
+- [x] **FE-13** · P1 · M: **Validation Lab.** Confusion matrix, retest, TIF, leak-attack bars, a systems table with nDCG bars, and parity. A red FIXTURE banner shows while `synthetic_fixture` is true. Deps: BE-22 (MK9 until then).
+- [x] **FE-14** · P1 · S: **Test Twins & Blueprint Builder.** JD → blueprint → two instances side by side. Deps: BE-22, AI-14.
+- [x] **FE-15** · P1 · M: **Vacancies & applications.** Candidate: list, apply, statuses. Employer: publish toggle and applicant pipeline. Deps: BE-17.
+- [x] **FE-16** · P1 · M: **Micro-tasks.** Candidate inbox and solve; employer create, review, and invite from a submission. Deps: BE-18.
+- [x] **FE-17** · P1 · M: **Pool power features.** Presets and sliders, counterfactual hints, the acceptance badge, Need Health, the below-floor warning. Deps: AI-12, BE-20.
+- [x] **FE-18** · P1 · M: **Polish.** Test runner and offers responsive on phones (needed for the QR wow option), a contrast check, loading/empty/error states, a Russian copy pass. Deps: PD-05.
+- [x] **FE-19** · P1 · S: **Playwright e2e** of the golden path, run in CI against compose and asserting that no response carries `X-Stub`. Deps: M1.
 
 ### 2.7 Integrations/AI (AI)
 

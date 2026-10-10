@@ -12,6 +12,8 @@ export default tseslint.config(
       'node_modules/',
       '.vite/',
       'public/',
+      'playwright-report/',
+      'test-results/',
     ],
   },
   js.configs.recommended,
@@ -23,6 +25,10 @@ export default tseslint.config(
   {
     files: ['*.config.{js,ts}', 'vite.config.ts'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
+    files: ['e2e/**/*.ts'],
+    languageOptions: { globals: globals.node },
   },
   {
     files: ['**/*.{ts,tsx}'],
