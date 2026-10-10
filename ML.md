@@ -170,7 +170,10 @@ class CatState:
     administered: list[dict]   # [{family_id, seq, a, b, c, topic, correct: bool|None, late: bool}]
     theta: float; se: float
     min_items: int; max_items: int
-    def to_json(self) -> dict: ...              # BE stores it in AssessmentSession.state (JSONB)
+    seen: list[str] = []                        # family ids from earlier attempts (D2)
+    blueprint: list[tuple[str, float]] | None = None   # screening quotas (D2)
+    stop_reason: str | None = None              # set when a stop rule ends the test (D8)
+    def to_json(self) -> dict: ...              # BE stores it in AssessmentSession.state (JSONB); "v": 1
     @classmethod
     def from_json(cls, d: dict) -> "CatState": ...
 
@@ -185,15 +188,18 @@ class CatResult:
     fallback_grade: Grade | None    # highest lower grade with P(θ ≥ cut) ≥ 0.8, else None
     topics: list[tuple[str, Literal["strong", "moderate", "limited"]]]
     evidence: list[tuple[int, Grade, bool]]     # (seq, item level, correct)
+    complete: bool = False          # a stop rule ended the test; False -> never confirmed (D8)
+    stop_reason: str | None = None  # express | max_items | se | ci | pool_exhausted | None
 
 class CatEngine(Protocol):
     def start(self, spec: Spec, claimed: Grade, mode: Mode, kind: Kind,
-              pool: list[FamilyMeta], seen: set[str]) -> CatState: ...
+              pool: list[FamilyMeta], seen: set[str],
+              blueprint: list[tuple[str, float]] | None = None) -> CatState: ...
     def next_family(self, state: CatState, pool: list[FamilyMeta],
                     rng: random.Random) -> FamilyMeta | None: ...      # None → stop
     def record(self, state: CatState, family_id: str, correct: bool,
                late: bool = False) -> CatState: ...                     # late ⇒ scored as incorrect
-    def result(self, state: CatState) -> CatResult: ...
+    def result(self, state: CatState) -> CatResult: ...                 # pure: never mutates state
 
 def item_level(meta: FamilyMeta) -> Grade: ...       # difficulty band of b → ItemView.level
 
@@ -413,7 +419,7 @@ Decisions taken while implementing this file. Each one is referenced from the ta
 | ID | Decision | Why |
 |---|---|---|
 | D1 | `CatEngine.next_family` appends a pending entry (`correct: None`) to `state.administered` and returns the same family if it is called again before `record`. `result()` scores any still-pending entry as incorrect (`late`). | `record()` only receives a family id, so the state must already know the item's a/b/c/topic. Retries are safe. A candidate who ends a session on a hard item can't skip it. |
-| D2 | `CatState` serializes `"v": 1`. New fields are optional and read with `.get`, and `from_json` refuses a newer version. Optional fields: `seen` (family ids from earlier attempts) and `blueprint` (screening quotas, passed to `start(..., blueprint=None)`). | BE stores the state in JSONB across deploys. A screening test (ML-12) needs its own topic quotas without a signature change. |
+| D2 | `CatState` serializes `"v": 1`. New fields are optional and read with `.get`, and `from_json` refuses a newer version. Optional fields: `seen` (family ids from earlier attempts), `blueprint` (screening quotas, passed to `start(..., blueprint=None)`, validated against the spec's topics, duplicates merged) and `stop_reason`. `CatResult` gained `complete` and `stop_reason` (with defaults). `result()` never mutates the state and applies the stop rules itself, so the call order doesn't matter. | BE stores the state in JSONB across deploys. A screening test (ML-12) needs its own topic quotas without a signature change. |
 | D3 | `make_rng` seeds `random.Random` with the full 256-bit HMAC digest. It refuses an empty secret, and `n` is the item `seq` (generation) or the selection step (`"select"`). | With an empty secret, seeds could be computed from the session id. With `n = seq`, re-serving an item renders the same instance. |
 | D4 | `score_pool` rescales any `Weights` to Σ = 100 (`Component.weight` is the effective weight), so the score stays in 0..100 and Σ contribution = score exactly (no rounding inside the engine). | Sliders and `Position.weights` can sum to anything. Rounding is left to the presentation layer. |
 | D6 | **Option-only guessing gate.** The verify harness runs test-wise strategies that never read the item: longest or shortest option, most or least similar to the others, value rank (numeric options), the most frequent answer for a repeated option set (cross-validated, scored over all items), and the per-value correct rate and closeness to the typical answer (both cross-validated), and the order closest to the others (sequence options). A family fails if any strategy beats c by more than max(0.05, 4·√(c(1−c)/n)): c + 0.055 at n = 1000, under 1e-3 false alarms over all strategies. Families fix leaks by construction: distractors drawn from the answer's own distribution, a fixed option set with a uniform answer class, and distractor triples chosen for a uniform centrality rank. | The 3PL fixes c = 1/k. If options leak the answer, the real guessing rate is higher and θ̂ is inflated for guessers. No human reviews the content, so the gate must catch this. |
@@ -421,4 +427,6 @@ Decisions taken while implementing this file. Each one is referenced from the ta
 | D8 | **Completeness.** A session may confirm a grade (or offer a fallback) only when a stop rule ended it (`stop_reason`). Running out of families counts only after `min_items` answers. A session BE ends early (finish, abandon, expiry) is scored, but `decision` is `unconfirmed` and `fallback_grade` is None. | θ̂ from 3 answers can sit above a cut by luck. BE's H6 already refuses instant fallback for abandoned sessions; the engine now says the same thing. |
 | D9 | **Topic evidence** compares the topic's observed score with the expected score of a borderline candidate at the reference cut: z = (O − E)/√ΣP(1−P); strong if z ≥ 0.5 (and ≥ 2 items), limited if z ≤ −1. The reference is the claimed grade if confirmed, else the result grade. | A posterior θ_T with a leave-topic-out prior was tried first: with 2–3 items the prior dominated, and 0/3 correct could read "strong". |
 | D10 | **Matching semantics.** (a) The ×0.75 for unconfirmed (any status other than `confirmed`) multiplies the effective weights, so Σ contribution = score still holds and a chip states it; GradeFit also drops to 0.6 (both, as the spec lists them). (b) SalaryFit is asymmetric: expectations below the budget score 1 (the employer can afford them), partially above score 0.5–1 by the affordable share, and above score 0.5 falling to 0 at 25 % over. (c) Related-skill evidence is max(direct, 0.5 × best related direct evidence), with the graph from AI's `skills.yaml` treated as undirected. (d) Activity uses accepted micro-task dates (`CandidateCtx.microtask_dates`, added with a default in ML-0): 1 − exp(−Σ 0.5^(age/90)). (e) NDFL: steady monthly salary, one employer, no regional coefficients. | The spec gives the weights and evidence factors but not these shapes. Each choice is the simplest monotone rule that an employer can read from the chip. |
+| D11 | **Confirmation uses the EAP under the N(0,1) prior, as specified, and the shrinkage is accepted and measured.** The ML-3 review simulated about +0.24 bias at the junior cut and −0.23 at the senior cut: a true θ = 1.2 senior is confirmed 44.5 % of the time on a synthetic 60-family pool. Under an N(0,1) population, deciding on the posterior is Bayes-optimal for overall accuracy, and the neutral prior is what keeps a high claim from inflating θ̂. The cost is that per-grade error is asymmetric for short tests. ML-8 reports P(confirm \| true θ) at each cut ± 0.2. If that curve is unacceptable, the lever is a flatter decision prior (`posterior(..., prior_sd=…)` already exists) together with longer tests, decided on simulation evidence and never tuned on the evaluation set. | The spec fixes the prior. Changing the decision estimator is a product decision about the trade-off between fairness to rare high performers and overall accuracy, so it should be made on the ML-8 numbers. |
+| D12 | **Blueprint quotas are two-sided.** The ceiling is count < ⌊w(n+1)⌋+1, and the floor comes from Kingsbury–Zara with slack: only topics within 0.5 item of the largest deficit w(n+1) − count compete on information. Measured on 200 synthetic 20-item sessions: all 11 backend topics covered, and no topic more than one item below ⌊w·n⌋ at any step. | ARCHITECTURE: "the fixed category blueprint keeps grades comparable". A ceiling alone left topics uncovered (median 9 of 11). |
 | D5 | `percentiles` is the mid-rank: 100·(#below + ½·#equal)/N, with the candidate inside the league list. NaN raises. | Ties share a value, and a single member gets 50. |

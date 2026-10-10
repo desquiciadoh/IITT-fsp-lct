@@ -46,8 +46,8 @@ def log_likelihood(items: Sequence[Item], responses: Sequence[bool]) -> np.ndarr
 
 def posterior(items: Sequence[Item], responses: Sequence[bool],
               prior_mean: float = 0.0, prior_sd: float = 1.0) -> np.ndarray:
-    """Normalised posterior weights on GRID. Scoring always uses the neutral N(0, 1) prior;
-    other priors exist only for topic evidence (assessment.engine.topics)."""
+    """Normalised posterior weights on GRID. Scoring always uses the neutral N(0, 1) prior; the
+    prior parameters exist for analysis (e.g. validation of shrinkage), never for a grade."""
     if prior_mean == 0.0 and prior_sd == 1.0:
         log_prior = _LOG_PRIOR
     else:

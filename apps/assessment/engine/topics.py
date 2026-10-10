@@ -7,9 +7,10 @@ A topic is compared with the standard of the reference grade, the grade the sess
     O = Σ u_i                       observed score
     z = (O − E) / √(Σ P_i(1 − P_i)) standardised difference
 
-    strong    z ≥ +0.5   (and at least two items: one answer is not strong evidence)
+    strong    z ≥ +0.5
     limited   z ≤ −1.0
-    moderate  otherwise
+    moderate  otherwise, and always for a topic seen through one item (one answer is not
+              strong evidence either way)
 
 So "strong SQL" for a confirmed Middle means "on the SQL items you did clearly better than a
 borderline Middle would". A posterior-based θ_T was tried first and rejected: with 2–3 items
@@ -57,7 +58,9 @@ def topic_levels(administered: list[dict], reference_grade: str,
         expected = sum(ps)
         observed = sum(1 for x in items if x["correct"])
         z = (observed - expected) / math.sqrt(max(sum(p * (1 - p) for p in ps), 1e-9))
-        if z >= STRONG_Z and len(items) > 1:
+        if len(items) < 2:
+            level = "moderate"
+        elif z >= STRONG_Z:
             level = "strong"
         elif z <= LIMITED_Z:
             level = "limited"

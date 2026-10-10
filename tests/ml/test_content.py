@@ -89,12 +89,15 @@ def test_missing_file_is_refused(tmp_path):
 # ── blueprint_for: hand-computed goldens ───────────────────────────────────
 
 def test_blueprint_for_python_asyncio_backend_by_hand():
-    # python.core 0.12 (python: 1 hit) -> 0.24; algorithms.code_reading 0.10 (python) -> 0.20;
-    # backend.concurrency 0.08 (asyncio, python: 2 hits) -> 0.24. Total 0.68.
-    # 0.24/0.68 = 0.35294 -> 0.3529 (x2), 0.20/0.68 = 0.29412 -> 0.2941; Σ = 0.9999, the first
-    # (tie broken by id: backend.concurrency) absorbs 0.0001.
-    assert blueprint_for("backend", ["python", "asyncio"]) == [
-        ("backend.concurrency", 0.353), ("python.core", 0.3529), ("algorithms.code_reading", 0.2941)]
+    # python.core 0.12 (python: 1 hit) -> 0.24; backend.concurrency 0.08 (asyncio, python: 2 hits)
+    # -> 0.24; algorithms.code_reading lists only `algorithms`, so no hit. Total 0.48 -> 0.5 each,
+    # tie broken by topic id.
+    assert blueprint_for("backend", ["python", "asyncio"]) == [("backend.concurrency", 0.5), ("python.core", 0.5)]
+    # algorithms + python + asyncio: code_reading 0.10·2 = 0.20, complexity 0.10·2, data_structures
+    # 0.10·2, python.core 0.24, concurrency 0.24; total 1.08 -> 0.2222 (x2), 0.1852 (x3); Σ = 1.0
+    bp = blueprint_for("backend", ["algorithms", "python", "asyncio"])
+    assert bp == [("backend.concurrency", 0.2222), ("python.core", 0.2222), ("algorithms.code_reading", 0.1852),
+                  ("algorithms.complexity", 0.1852), ("algorithms.data_structures", 0.1852)]
 
 
 def test_blueprint_for_sql_on_ml_data_by_hand():
