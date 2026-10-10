@@ -13,9 +13,10 @@ Input: the families' authored parameters and their administered responses, each 
    Within a family the tests are Bonferroni-combined; across families `monitor_families` controls
    the false discovery rate (Benjamini–Hochberg, q = 0.05), because ~50 families are tested on
    every run.
-3. Recalibration: MAP (a, b) with c fixed and θ̂ taken as known, a lognormal prior on a (sd 0.5 on
-   ln a) and a normal prior on b (sd 1.5) centred on the authored values; Fisher scoring with step
-   halving until the step is below 1e-6. Standard errors come from the posterior information.
+3. Recalibration: MAP (a, b) with c fixed, the likelihood integrated over each response's
+   N(θ̂, SE²) (so a shrunk θ̂ does not bias a), a lognormal prior on a (sd 0.5 on ln a) and a normal
+   prior on b (sd 1.5) centred on the authored values; Fisher scoring with step halving until the
+   step is below 1e-6. Standard errors come from the posterior information.
    girth is not used (it is not a dependency); fixed-θ MAP is what a monitor with a θ̂ per session
    needs. Parameter recovery is measured in validation (ML-8).
 4. Status (a recommendation; BE decides what to apply and when):
@@ -49,7 +50,10 @@ BAND_CUTS: tuple[tuple[str, float, float], ...] = (
 )
 MIN_BAND_N = 20              # a band test needs this many responses (normal approximation)
 MIN_GLOBAL_N = 30
-MIN_CALIBRATION_N = 200      # ARCHITECTURE §2.12: recalibrate after about 200 responses
+MIN_CALIBRATION_N = 200      # ARCHITECTURE §2.12: estimate after about 200 responses. Apply with care:
+                             # validation (ML-8) recovers b better than the prior from ~600 responses
+                             # and a only from ~2000 (RMSE 0.07 vs the prior's 0.13); below that the
+                             # authored a is the better value.
 RETIRE_A = 0.6
 FDR_Q = 0.05
 ALPHA_SINGLE = 0.001         # per-test level when one family is analysed on its own
@@ -188,21 +192,29 @@ def benjamini_hochberg(pvalues: Sequence[float], q: float = FDR_Q) -> list[bool]
 
 # ── recalibration ──────────────────────────────────────────────────────────
 
-def _log_posterior(alpha: float, b: float, thetas, u, c: float, prior_a: float, prior_b: float) -> float:
-    p = np.clip(p_3pl(thetas, math.exp(alpha), b, c), EPS, 1.0 - EPS)
+def _nodes(thetas: np.ndarray, ses: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    """Quadrature nodes for θ ~ N(θ̂, SE²) per response, and their weights; one node when SE = 0."""
+    if ses is None or not np.any(ses > 0):
+        return thetas[:, None], np.ones(1)
+    return thetas[:, None] + ses[:, None] * _GH_X[None, :], _GH_W
+
+
+def _log_posterior(alpha: float, b: float, nodes, weights, u, c: float, prior_a: float, prior_b: float) -> float:
+    p = np.clip(np.asarray(p_3pl(nodes, math.exp(alpha), b, c)) @ weights, EPS, 1.0 - EPS)
     ll = float(np.sum(u * np.log(p) + (1.0 - u) * np.log(1.0 - p)))
     return (ll - 0.5 * ((alpha - math.log(prior_a)) / PRIOR_SD_LOG_A) ** 2
             - 0.5 * ((b - prior_b) / PRIOR_SD_B) ** 2)
 
 
-def _score_info(alpha, b, thetas, u, c, prior_a, prior_b):
-    """Gradient and expected information of the log posterior in (ln a, b)."""
+def _score_info(alpha, b, nodes, weights, u, c, prior_a, prior_b):
+    """Gradient and expected information of the log posterior in (ln a, b). With SEs, P and its
+    derivatives are averaged over each response's θ quadrature (the marginal likelihood)."""
     a = math.exp(alpha)
-    sig = 1.0 / (1.0 + np.exp(-np.clip(a * (thetas - b), -30.0, 30.0)))
-    p = np.clip(c + (1.0 - c) * sig, EPS, 1.0 - EPS)
+    sig = 1.0 / (1.0 + np.exp(-np.clip(a * (nodes - b), -30.0, 30.0)))
     dp = (1.0 - c) * sig * (1.0 - sig)
-    g_alpha = dp * a * (thetas - b)              # dP / d(ln a)
-    g_b = -dp * a                                # dP / db
+    p = np.clip((c + (1.0 - c) * sig) @ weights, EPS, 1.0 - EPS)
+    g_alpha = (dp * a * (nodes - b)) @ weights          # dP / d(ln a)
+    g_b = (-dp * a) @ weights                           # dP / db
     w = 1.0 / (p * (1.0 - p))
     prec = np.diag([1.0 / PRIOR_SD_LOG_A ** 2, 1.0 / PRIOR_SD_B ** 2])
     score = np.array([np.sum(w * (u - p) * g_alpha), np.sum(w * (u - p) * g_b)])
@@ -212,25 +224,28 @@ def _score_info(alpha, b, thetas, u, c, prior_a, prior_b):
     return score, info
 
 
-def recalibrate_family(thetas, u, c: float, prior_a: float = 1.0, prior_b: float = 0.0,
+def recalibrate_family(thetas, u, c: float, prior_a: float = 1.0, prior_b: float = 0.0, ses=None,
                        max_iter: int = 100, tol: float = 1e-6) -> Calibration:
-    """MAP (a, b) of a 3PL item with fixed c and known abilities: Fisher scoring in (ln a, b), the
-    step halved until the log posterior does not decrease. `converged` is False if the step never
-    got below `tol` within `max_iter` iterations. Bounds: a in [0.1, 5], b in [-5, 5]."""
+    """MAP (a, b) of a 3PL item with fixed c: Fisher scoring in (ln a, b), the step halved until the
+    log posterior does not decrease. Abilities are θ̂ with standard errors `ses` (None: exact). With
+    SEs the likelihood integrates P over N(θ̂, SE²): treating a shrunk θ̂ as exact biases a (errors in
+    variables; ML-8 calibration recovery). `converged` is False if the step never got below `tol`
+    within `max_iter` iterations. Bounds: a in [0.1, 5], b in [-5, 5]."""
     thetas = np.asarray(thetas, dtype=float)
     u = np.asarray(u, dtype=float)
+    nodes, weights = _nodes(thetas, None if ses is None else np.asarray(ses, dtype=float))
     alpha, b = math.log(prior_a), float(prior_b)
-    current = _log_posterior(alpha, b, thetas, u, c, prior_a, prior_b)
+    current = _log_posterior(alpha, b, nodes, weights, u, c, prior_a, prior_b)
     converged, it = False, 0
     for _ in range(max_iter):
         it += 1
-        score, info = _score_info(alpha, b, thetas, u, c, prior_a, prior_b)
+        score, info = _score_info(alpha, b, nodes, weights, u, c, prior_a, prior_b)
         step = np.linalg.solve(info, score)
         scale = 1.0
         while True:
             na = min(max(alpha + scale * step[0], math.log(0.1)), math.log(5.0))
             nb = min(max(b + scale * step[1], -5.0), 5.0)
-            value = _log_posterior(na, nb, thetas, u, c, prior_a, prior_b)
+            value = _log_posterior(na, nb, nodes, weights, u, c, prior_a, prior_b)
             if value >= current - 1e-12 or scale < 1e-6:
                 break
             scale *= 0.5
@@ -239,7 +254,7 @@ def recalibrate_family(thetas, u, c: float, prior_a: float = 1.0, prior_b: float
         if moved < tol:
             converged = True
             break
-    _, info = _score_info(alpha, b, thetas, u, c, prior_a, prior_b)
+    _, info = _score_info(alpha, b, nodes, weights, u, c, prior_a, prior_b)
     cov = np.linalg.inv(info)
     a = math.exp(alpha)
     return Calibration(a=a, b=b, se_a=a * math.sqrt(max(float(cov[0, 0]), 0.0)),
@@ -288,7 +303,7 @@ def analyze_family(meta: FamilyMeta, responses: Sequence[ItemResponse]) -> Famil
         rep.p_leak = min(1.0, min(leak_p) * len(leak_p)) if leak_p else 1.0
         rep.p_drift = min(1.0, min(drift_p) * len(drift_p)) if drift_p else 1.0
         if len(rows) >= MIN_CALIBRATION_N and 0 < u.sum() < len(u):
-            cal = recalibrate_family(thetas, u, meta.c, prior_a=meta.a, prior_b=meta.b)
+            cal = recalibrate_family(thetas, u, meta.c, prior_a=meta.a, prior_b=meta.b, ses=ses)
             rep.calibrated_a, rep.calibrated_b = cal.a, cal.b
             rep.calibrated_se_a, rep.calibrated_se_b = cal.se_a, cal.se_b
             rep.calibration_converged = cal.converged

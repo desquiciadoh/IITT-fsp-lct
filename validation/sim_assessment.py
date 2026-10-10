@@ -223,13 +223,14 @@ def calibration_recovery(metas: list[FamilyMeta], true_params: dict[str, TruePar
     standard error `se`, then fixed-θ MAP. RMSE of a and b, before (authored) and after."""
     rng = np.random.default_rng(seed)
     shrink = 1 / (1 + se * se)
+    post_sd = se * math.sqrt(shrink)            # SD of θ given the EAP-like estimate
     rows = []
     for m in sorted(metas, key=lambda m: m.id):
         t = true_params[m.id]
         theta = rng.normal(0, 1, n_responses)
         est = (theta + rng.normal(0, se, n_responses)) * shrink
         u = (rng.random(n_responses) < np.array([p_correct(x, t) for x in theta])).astype(float)
-        cal = recalibrate_family(est, u, m.c, prior_a=m.a, prior_b=m.b)
+        cal = recalibrate_family(est, u, m.c, prior_a=m.a, prior_b=m.b, ses=np.full(n_responses, post_sd))
         rows.append((m.a - t.a, m.b - t.b, cal.a - t.a, cal.b - t.b, cal.converged))
 
     def rmse(k):
@@ -252,7 +253,7 @@ def run_assessment_simulation(n_simulees: int = 10_000, seed: int = 2026, retest
     grades = grade_accuracy(n_simulees, seed, min(retest_n, n_simulees), pools, true_params, content)
     bank = bank_quality(verify_n)
     leak = leak_attack(pools["backend"], true_params, "backend", leak_n, seed, leak_draws, content)
-    calib = calibration_recovery(metas, true_params, seed)
+    calib = [calibration_recovery(metas, true_params, seed, n_responses=n) for n in (200, 600, 2000)]
     out = {k: v for k, v in grades.items() if k != "_details"}
     out.update(collision_rate=bank["collision_rate"], generator_errors=bank["generator_errors"],
                leak_attack=leak["rows"])

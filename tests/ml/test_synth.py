@@ -108,6 +108,7 @@ def test_hero_grade_stories_hold_on_most_sessions():
     shipped seed is not re-drawn to make a story come true."""
     from assessment.engine.cat import IrtCatEngine
     from assessment.families.registry import active_metas
+
     from validation.simulate import perturbed_params, run_session
 
     engine = IrtCatEngine()
