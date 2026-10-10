@@ -385,7 +385,9 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
 - [x] **ML-10 · Counterfactual relaxations and acceptance likelihood** (AI-12, non-LLM part).
   - Top 3 relaxations by delta; low/medium/high likelihood from the salary ratio, format fit, status and responsiveness.
   - **Done:** `apps/matching/engine/relax.py` (`relaxations`: evaluation of must-skills, adjacent grades, work formats, salary budget; top 3 sorted by delta desc with deterministic tie-breaks; `acceptance_likelihood`: multi-factor scoring with salary interpolation, format conflict guard, responsiveness and league status). 10 unit tests in `tests/ml/test_relax.py`.
-- [ ] **ML-11 · Leak and drift monitor + calibration** (AI-13). Observed vs expected correct rate per θ band, flags, retiring families with a < 0.6, and a girth recalibration job. BE schedules it in Celery beat and exposes `GET /lab/families`.
+- [x] **ML-11 · Leak and drift monitor + calibration** (AI-13).
+  - Observed vs expected correct rate per θ band, flags, retiring families with a < 0.6, and a girth recalibration job. BE schedules it in Celery beat and exposes `GET /lab/families`.
+  - **Done:** `apps/assessment/engine/monitor.py` (`analyze_family`, `recalibrate_family`, `monitor_families`: observed vs expected 3PL rates across 4 θ bands with standardized residuals, anomaly detection for `leak_suspected`, `content_drift`, and `low_discrimination`, MAP recalibration of IRT parameters, status recommendation active/flagged/retired, and JSON export for `GET /lab/families`). Tests in `tests/ml/test_monitor.py` (6 tests).
 - [ ] **ML-12 · Test Twins and screening blueprints** (AI-14). Turn a position into a blueprint and generate two instances of the same blueprint; FE2 renders them side by side.
 - [ ] **ML-13 · Content to final** (AI-15). At least 40 families per spec, a promotion blueprint, and retirement of weak families.
 - [ ] **ML-14 · Pilot and annotation analysis** (AI-16). Known grade vs result, retest, κ on 300 pairs, oracle-vs-human Spearman, all into the report.
