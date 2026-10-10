@@ -209,15 +209,19 @@ def compute_pool_facets(queryset) -> dict[str, Any]:
         )
     )
 
-    agg = queryset.annotate(
-        _has_fsp=fsp_exists,
-        _has_confirmed=confirmed_exists,
-    ).aggregate(
-        remote=Count("pk", filter=Q(work_formats__contains=["remote"])),
-        hybrid=Count("pk", filter=Q(work_formats__contains=["hybrid"])),
-        office=Count("pk", filter=Q(work_formats__contains=["office"])),
-        fsp=Count("pk", filter=Q(_has_fsp=True)),
-        confirmed=Count("pk", filter=Q(_has_confirmed=True)),
+    agg = (
+        queryset.order_by()
+        .annotate(
+            _has_fsp=fsp_exists,
+            _has_confirmed=confirmed_exists,
+        )
+        .aggregate(
+            remote=Count("pk", filter=Q(work_formats__contains=["remote"])),
+            hybrid=Count("pk", filter=Q(work_formats__contains=["hybrid"])),
+            office=Count("pk", filter=Q(work_formats__contains=["office"])),
+            fsp=Count("pk", filter=Q(_has_fsp=True)),
+            confirmed=Count("pk", filter=Q(_has_confirmed=True)),
+        )
     )
 
     format_counts = {}

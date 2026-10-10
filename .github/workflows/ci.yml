@@ -8,6 +8,7 @@ jobs:
   backend-checks:
     name: Backend Lint, Test & OpenAPI Drift Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
