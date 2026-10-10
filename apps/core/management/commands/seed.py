@@ -7,11 +7,12 @@ Generates:
 - 4 FSP achievement profiles with verified results
 """
 
+import hashlib
 import json
 import uuid
 from pathlib import Path
 
-from assessment.models import LeagueMembership
+from assessment.models import AssessmentSession, LeagueMembership
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -24,12 +25,17 @@ from profiles.models import CandidateContact, CandidateProfile, CandidateSkill, 
 
 from core.demo_data import SEEDED_CANDIDATES
 from core.enums import (
+    AssessmentKind,
+    AssessmentMode,
+    AssessmentStatus,
     ConsentType,
     Discipline,
     EvidenceSource,
+    FspEventFormat,
     Grade,
     LeagueStatus,
     PlacementTier,
+    PositionStatus,
     SalaryType,
     Specialization,
     SportsRank,
@@ -373,10 +379,38 @@ class Command(BaseCommand):
         companies_file = data_dir / "companies.jsonl"
         positions_file = data_dir / "positions.jsonl"
         candidates_file = data_dir / "candidates.jsonl"
+        assessments_file = data_dir / "assessments.jsonl"
+        leagues_file = data_dir / "leagues.jsonl"
+        fsp_registry_file = data_dir / "fsp_registry.jsonl"
 
-        for file_path in [companies_file, positions_file, candidates_file]:
+        for file_path in [
+            companies_file,
+            positions_file,
+            candidates_file,
+            assessments_file,
+            leagues_file,
+            fsp_registry_file,
+        ]:
             if not file_path.exists():
                 raise CommandError(f"Required seed file not found: {file_path}")
+
+        # Verify manifest checksums if present
+        manifest_file = data_dir / "manifest.json"
+        if manifest_file.exists():
+            try:
+                manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+                for name, expected_sha in manifest.get("sha256", {}).items():
+                    fp = data_dir / f"{name}.jsonl"
+                    if fp.exists():
+                        actual_sha = hashlib.sha256(fp.read_bytes()).hexdigest()
+                        if actual_sha != expected_sha:
+                            self.stdout.write(
+                                self.style.WARNING(
+                                    f"Checksum mismatch for {name}.jsonl: {actual_sha} != {expected_sha}"
+                                )
+                            )
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"Manifest verification skipped: {e}"))
 
         # 1. Taxonomy
         sync_taxonomy_to_db()
@@ -389,22 +423,30 @@ class Command(BaseCommand):
                 if not line:
                     continue
                 c_data = json.loads(line)
-                c_id = parse_synthetic_uuid(c_data["id"])
+                c_id = parse_synthetic_uuid(c_data.get("company_id") or c_data.get("id"))
+                domain = c_data.get("domain") or c_data.get("email_domain", "")
                 comp, _ = Company.objects.update_or_create(
                     id=c_id,
                     defaults={
                         "name": c_data["name"],
                         "inn": c_data.get("inn", ""),
-                        "website": c_data.get("website", ""),
-                        "email_domain": c_data.get("email_domain", ""),
+                        "website": c_data.get("website", f"https://{domain}" if domain else ""),
+                        "email_domain": domain,
                         "business_domain": c_data.get("business_domain", ""),
                         "description": c_data.get("description", ""),
-                        "contact_email": c_data.get("contact_email", ""),
+                        "contact_email": c_data.get(
+                            "contact_email", f"hr@{domain}" if domain else ""
+                        ),
                         "trust_level": c_data.get("trust_level", TrustLevel.NONE),
                     },
                 )
                 company_count += 1
-                for member in c_data.get("members", []):
+
+                members = c_data.get("members", [])
+                if not members and domain:
+                    members = [{"email": f"hr@{domain}"}]
+
+                for member in members:
                     m_email = member["email"]
                     emp_user, _ = User.objects.get_or_create(
                         email=m_email,
@@ -426,7 +468,7 @@ class Command(BaseCommand):
                 if not line:
                     continue
                 p_data = json.loads(line)
-                p_id = parse_synthetic_uuid(p_data["id"])
+                p_id = parse_synthetic_uuid(p_data.get("position_id") or p_data.get("id"))
                 c_id = parse_synthetic_uuid(p_data["company_id"])
                 Position.objects.update_or_create(
                     id=p_id,
@@ -444,21 +486,28 @@ class Command(BaseCommand):
                         "salary_type": p_data["salary_type"],
                         "team_context": p_data.get("team_context", ""),
                         "description": p_data.get("description", ""),
+                        "allow_adjacent": p_data.get("allow_adjacent", False),
                         "is_public": p_data.get("is_public", True),
-                        "status": p_data.get("status", "open"),
+                        "status": p_data.get("status", PositionStatus.OPEN),
                     },
                 )
                 pos_count += 1
 
         # 4. Candidates
         cand_count = 0
+        user_by_pid = {}
+        profile_by_pid = {}
+        candidates_raw = []
+        all_skill_ids = set()
+
         with open(candidates_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 cand = json.loads(line)
-                cand_id = parse_synthetic_uuid(cand["id"])
+                pid = cand["public_id"]
+                cand_id = parse_synthetic_uuid(cand.get("id") or pid)
                 email = cand["email"]
 
                 user, _ = User.objects.get_or_create(
@@ -472,16 +521,29 @@ class Command(BaseCommand):
                 )
                 user.set_unusable_password()
                 user.save()
+                user_by_pid[pid] = user
 
-                for consent in cand.get("consents", []):
-                    c_type = consent["type"]
-                    if not Consent.objects.filter(user=user, type=c_type).exists():
-                        Consent.objects.create(
-                            user=user,
-                            type=c_type,
-                            granted=consent.get("granted", True),
-                            version=consent.get("version", "1.0"),
-                        )
+                # Consents
+                consents_data = cand.get("consents", [])
+                if isinstance(consents_data, dict):
+                    for c_type, granted in consents_data.items():
+                        if not Consent.objects.filter(user=user, type=c_type).exists():
+                            Consent.objects.create(
+                                user=user,
+                                type=c_type,
+                                granted=bool(granted),
+                                version="1.0",
+                            )
+                elif isinstance(consents_data, list):
+                    for consent in consents_data:
+                        c_type = consent.get("type")
+                        if c_type and not Consent.objects.filter(user=user, type=c_type).exists():
+                            Consent.objects.create(
+                                user=user,
+                                type=c_type,
+                                granted=consent.get("granted", True),
+                                version=consent.get("version", "1.0"),
+                            )
 
                 blocked = [
                     parse_synthetic_uuid(cid)
@@ -490,7 +552,7 @@ class Command(BaseCommand):
                 profile, _ = CandidateProfile.objects.update_or_create(
                     user=user,
                     defaults={
-                        "public_id": cand["public_id"],
+                        "public_id": pid,
                         "full_name": cand.get("full_name", ""),
                         "city": cand.get("city", ""),
                         "timezone": cand.get("timezone", "Europe/Moscow"),
@@ -506,100 +568,245 @@ class Command(BaseCommand):
                         "open_to_offers": cand.get("open_to_offers", True),
                         "blind_mode": cand.get("blind_mode", False),
                         "blocked_company_ids": blocked,
-                        "about": cand.get("about", ""),
-                        "completeness": cand.get("completeness", 0),
+                        "about": cand.get("cv_text") or cand.get("about", ""),
+                        "completeness": cand.get("completeness", 80),
                     },
                 )
+                profile_by_pid[pid] = profile
 
                 contacts = cand.get("contacts", {})
+                telegram_handle = contacts.get("telegram")
+                if not telegram_handle:
+                    hero_val = cand.get("hero")
+                    telegram_handle = f"@{hero_val}" if hero_val else f"@{pid.lower()}"
+
                 CandidateContact.objects.update_or_create(
                     user=user,
                     defaults={
                         "email": contacts.get("email", user.email),
                         "phone": contacts.get("phone", ""),
-                        "telegram": contacts.get("telegram", ""),
+                        "telegram": telegram_handle,
                     },
                 )
 
+                candidates_raw.append((pid, cand))
                 for s in cand.get("skills", []):
-                    s_id = s["skill_id"]
-                    skill_obj, _ = Skill.objects.get_or_create(
-                        id=s_id,
-                        defaults={"name": s_id.title(), "topic": "general"},
-                    )
-                    source = s.get("source", EvidenceSource.TEST)
-                    level = s.get("level", 0.5)
-                    CandidateSkill.objects.update_or_create(
-                        candidate=profile,
-                        skill=skill_obj,
-                        source=source,
-                        defaults={"level": level},
-                    )
+                    all_skill_ids.add(s["skill_id"])
+                cand_count += 1
 
-                l_data = cand.get("league")
-                if l_data:
-                    spec = l_data.get("specialization", profile.specialization)
-                    status = l_data.get("status", LeagueStatus.CONFIRMED)
-                    confirmed = l_data.get("confirmed", status == LeagueStatus.CONFIRMED)
-                    LeagueMembership.objects.update_or_create(
+        # Bulk create taxonomy skills if missing
+        if all_skill_ids:
+            existing_skills = set(
+                Skill.objects.filter(id__in=all_skill_ids).values_list("id", flat=True)
+            )
+            missing_skills = [
+                Skill(id=sid, name=sid.replace("_", " ").title(), topic="general")
+                for sid in all_skill_ids
+                if sid not in existing_skills
+            ]
+            if missing_skills:
+                Skill.objects.bulk_create(missing_skills, ignore_conflicts=True)
+
+        # Candidate skills
+        existing_cs = set(
+            CandidateSkill.objects.filter(
+                candidate__in=profile_by_pid.values()
+            ).values_list("candidate_id", "skill_id", "source")
+        )
+        cs_to_create = []
+        for pid, cand in candidates_raw:
+            profile = profile_by_pid[pid]
+            for s in cand.get("skills", []):
+                s_id = s["skill_id"]
+                source = s.get("source", EvidenceSource.TEST)
+                if (profile.user_id, s_id, source) not in existing_cs:
+                    existing_cs.add((profile.user_id, s_id, source))
+                    level = s.get("level", 0.8 if source == EvidenceSource.TEST else 0.5)
+                    cs_to_create.append(
+                        CandidateSkill(
+                            candidate=profile,
+                            skill_id=s_id,
+                            source=source,
+                            level=level,
+                        )
+                    )
+        if cs_to_create:
+            CandidateSkill.objects.bulk_create(cs_to_create, batch_size=2000)
+
+        # 5. Assessments
+        existing_sessions = set(
+            AssessmentSession.objects.values_list("candidate_id", "specialization")
+        )
+        sessions_to_create = []
+        with open(assessments_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                a_data = json.loads(line)
+                pid = a_data["public_id"]
+                user = user_by_pid.get(pid)
+                if not user:
+                    continue
+                spec = a_data["specialization"]
+                if (user.id, spec) in existing_sessions:
+                    continue
+                existing_sessions.add((user.id, spec))
+                fin_at = None
+                if a_data.get("finished_at"):
+                    try:
+                        fin_at = timezone.datetime.fromisoformat(a_data["finished_at"])
+                        if timezone.is_naive(fin_at):
+                            fin_at = timezone.make_aware(fin_at)
+                    except Exception:
+                        fin_at = timezone.now()
+                sessions_to_create.append(
+                    AssessmentSession(
                         candidate=user,
                         specialization=spec,
-                        defaults={
-                            "grade": l_data.get("grade", profile.claimed_grade),
-                            "status": status,
-                            "rating": l_data.get("rating", 1000),
-                            "strength": l_data.get("strength", 50.0),
-                            "base_strength": l_data.get(
-                                "base_strength", l_data.get("strength", 50.0)
-                            ),
-                            "fsp_boost": l_data.get("fsp_boost", 0.0),
-                            "confirmed_at": timezone.now() if confirmed else None,
+                        claimed_grade=a_data["claimed_grade"],
+                        kind=a_data.get("kind", AssessmentKind.INITIAL),
+                        mode=a_data.get("mode", AssessmentMode.FULL),
+                        status=(
+                            AssessmentStatus.FINISHED
+                            if a_data.get("complete")
+                            else AssessmentStatus.IN_PROGRESS
+                        ),
+                        theta=a_data.get("theta"),
+                        se=a_data.get("se"),
+                        rating=a_data.get("rating"),
+                        result_grade=a_data.get("result_grade", ""),
+                        decision=a_data.get("decision", ""),
+                        promotion_unlocked=a_data.get("promotion_unlocked", False),
+                        finished_at=fin_at,
+                        state={
+                            "evidence": a_data.get("evidence", []),
+                            "families": a_data.get("families", []),
+                            "stop_reason": a_data.get("stop_reason"),
+                            "topics": a_data.get("topics", []),
                         },
                     )
+                )
+        if sessions_to_create:
+            AssessmentSession.objects.bulk_create(sessions_to_create, batch_size=1000)
 
-                fsp_data = cand.get("fsp")
-                if fsp_data:
-                    sports_rank_raw = fsp_data.get("sports_rank", "")
-                    sports_rank = SPORTS_RANK_MAP.get(sports_rank_raw, sports_rank_raw)
-                    FSPLink.objects.update_or_create(
+        # 6. Leagues
+        existing_leagues = set(
+            LeagueMembership.objects.values_list("candidate_id", "specialization")
+        )
+        leagues_to_create = []
+        with open(leagues_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                l_data = json.loads(line)
+                pid = l_data["public_id"]
+                user = user_by_pid.get(pid)
+                if not user:
+                    continue
+                spec = l_data["specialization"]
+                if (user.id, spec) in existing_leagues:
+                    continue
+                existing_leagues.add((user.id, spec))
+                status = l_data.get("status", LeagueStatus.CONFIRMED)
+                leagues_to_create.append(
+                    LeagueMembership(
                         candidate=user,
-                        defaults={
-                            "participant_id": fsp_data["participant_id"],
-                            "sports_rank": sports_rank,
-                            "sync_status": SyncStatus.OK,
-                            "last_sync_at": timezone.now(),
-                        },
+                        specialization=spec,
+                        grade=l_data["grade"],
+                        status=status,
+                        theta=l_data.get("theta"),
+                        se=l_data.get("se"),
+                        rating=l_data.get("rating"),
+                        percentile=l_data.get("percentile"),
+                        strength=l_data.get("strength", 0.0),
+                        base_strength=l_data.get("base_strength", 0.0),
+                        fsp_boost=l_data.get("fsp_boost", 0.0),
+                        confirmed_at=(
+                            timezone.now() if status == LeagueStatus.CONFIRMED else None
+                        ),
                     )
-                    for res in fsp_data.get("results", []):
-                        disc = DISCIPLINE_MAP.get(
-                            res.get("discipline"), Discipline.ALGORITHMIC
-                        )
-                        raw_tier = res.get("tier", "")
-                        tier = TIER_MAP.get(raw_tier)
-                        if not tier:
-                            place = res.get("placement", 999)
-                            if place == 1:
-                                tier = PlacementTier.WINNER
-                            elif place <= 3:
-                                tier = PlacementTier.PRIZE_WINNER
-                            elif place <= 10:
-                                tier = PlacementTier.FINALIST
-                            else:
-                                tier = PlacementTier.PARTICIPANT
-                        FSPResult.objects.update_or_create(
-                            candidate=user,
-                            event_id=res["event_id"],
-                            defaults={
-                                "event_name": res["event_name"],
-                                "discipline": disc,
-                                "date": res["date"],
-                                "placement": res["placement"],
-                                "tier": tier,
-                                "participants_total": res.get("participants_total", 100),
-                            },
-                        )
+                )
+        if leagues_to_create:
+            LeagueMembership.objects.bulk_create(leagues_to_create, batch_size=1000)
 
-                cand_count += 1
+        # 7. FSP Registry
+        existing_fsp_links = set(FSPLink.objects.values_list("candidate_id", flat=True))
+        existing_fsp_pids = set(FSPLink.objects.values_list("participant_id", flat=True))
+        existing_fsp_results = set(
+            FSPResult.objects.values_list("candidate_id", "event_id")
+        )
+        links_to_create = []
+        results_to_create = []
+        with open(fsp_registry_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                f_data = json.loads(line)
+                pid = f_data["public_id"]
+                user = user_by_pid.get(pid)
+                if not user:
+                    continue
+                part_id = f_data["participant_id"]
+                if user.id not in existing_fsp_links and part_id not in existing_fsp_pids:
+                    existing_fsp_links.add(user.id)
+                    existing_fsp_pids.add(part_id)
+                    sports_rank_raw = f_data.get("rank", "") or ""
+                    sports_rank = SPORTS_RANK_MAP.get(sports_rank_raw, sports_rank_raw)
+                    sr_dict = f_data.get("sports_rank") or {}
+                    awarded = sr_dict.get("awarded_at")
+                    links_to_create.append(
+                        FSPLink(
+                            candidate=user,
+                            participant_id=part_id,
+                            sports_rank=sports_rank,
+                            rank_awarded_at=awarded,
+                            sync_status=SyncStatus.OK,
+                            last_sync_at=timezone.now(),
+                        )
+                    )
+                for res in f_data.get("results", []):
+                    event_id = res["event_id"]
+                    if (user.id, event_id) in existing_fsp_results:
+                        continue
+                    existing_fsp_results.add((user.id, event_id))
+                    disc = DISCIPLINE_MAP.get(
+                        res.get("discipline"), Discipline.ALGORITHMIC
+                    )
+                    tier = TIER_MAP.get(
+                        res.get("placement_tier"), PlacementTier.PARTICIPANT
+                    )
+                    fmt = (
+                        FspEventFormat.TEAM
+                        if res.get("format") == "team"
+                        else FspEventFormat.INDIVIDUAL
+                    )
+                    team_size = (
+                        res.get("team", {}).get("size")
+                        if isinstance(res.get("team"), dict)
+                        else None
+                    )
+                    results_to_create.append(
+                        FSPResult(
+                            candidate=user,
+                            event_id=event_id,
+                            event_name=res["event_name"],
+                            discipline=disc,
+                            date=res["date"],
+                            stage=res.get("stage", ""),
+                            format=fmt,
+                            team_size=team_size,
+                            placement=res["placement"],
+                            tier=tier,
+                            participants_total=res.get("participants_total", 100),
+                        )
+                    )
+        if links_to_create:
+            FSPLink.objects.bulk_create(links_to_create, batch_size=1000)
+        if results_to_create:
+            FSPResult.objects.bulk_create(results_to_create, batch_size=2000)
 
         self.stdout.write(
             self.style.SUCCESS(

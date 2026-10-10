@@ -70,43 +70,44 @@ def test_seed_mode_full():
     call_command("seed", mode="full")
 
     # Check companies from companies.jsonl
-    ozon = Company.objects.get(name="Ozon FinTech")
-    vk = Company.objects.get(name="VK Infrastructure")
-    assert ozon.email_domain == "ozon-mock.ru"
-    assert ozon.members.count() == 1
-    assert vk.members.count() == 1
+    polar = Company.objects.get(name="Полярный код")
+    sever = Company.objects.get(name="Северные системы")
+    assert polar.email_domain == "polar-code.example"
+    assert polar.members.count() == 1
+    assert sever.members.count() == 1
 
     # Check positions from positions.jsonl
-    assert Position.objects.filter(company=ozon).exists()
-    assert Position.objects.filter(company=vk).exists()
+    assert Position.objects.filter(company=polar).exists()
+    assert Position.objects.filter(company=sever).exists()
 
-    # Check candidates from candidates.jsonl
-    ivan = User.objects.get(email="ivan.smirnov@example.com")
-    assert ivan.is_demo is True
-    assert not ivan.has_usable_password()
-    assert ivan.email_verified_at is not None
+    # Check candidates from candidates.jsonl (hero Anna)
+    anna = User.objects.get(email="anna.fsp@example.com")
+    assert anna.is_demo is True
+    assert not anna.has_usable_password()
+    assert anna.email_verified_at is not None
 
-    profile = CandidateProfile.objects.get(user=ivan)
-    assert profile.public_id == "C-A1000001"
+    profile = CandidateProfile.objects.get(user=anna)
+    assert profile.public_id == "C-4325C3A7"
     assert profile.specialization == "backend"
     assert profile.claimed_grade == "senior"
 
     # Contact gating table
-    contact = CandidateContact.objects.get(user=ivan)
-    assert contact.telegram == "@ivan_smirnov"
+    contact = CandidateContact.objects.get(user=anna)
+    assert contact.telegram == "@anna"
 
     # Consents
-    assert ivan.consents.filter(type="publication", granted=True).exists()
+    assert anna.consents.filter(type="publication", granted=True).exists()
+    assert anna.consents.filter(type="fsp_sync", granted=True).exists()
 
     # League
-    league = LeagueMembership.objects.get(candidate=ivan, specialization="backend")
-    assert league.rating == 1400
-    assert league.strength == 90.0
+    league = LeagueMembership.objects.get(candidate=anna, specialization="backend")
+    assert league.rating == 1294
+    assert league.strength == 58.97
 
     # FSP Link & Results
-    fsp_link = FSPLink.objects.get(candidate=ivan)
-    assert fsp_link.participant_id == "FSP-2001"
-    assert FSPResult.objects.filter(candidate=ivan).count() == 1
+    fsp_link = FSPLink.objects.get(candidate=anna)
+    assert fsp_link.participant_id == "FSP-111778"
+    assert FSPResult.objects.filter(candidate=anna).count() == 2
 
     counts_first = {
         "users": User.objects.count(),
