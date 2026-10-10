@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "seed": 2026,
+  "as_of": "2026-10-10T12:00:00+00:00",
+  "counts": {
+    "candidates": 1500,
+    "assessments": 1397,
+    "leagues": 1397,
+    "fsp_registry": 483,
+    "companies": 12,
+    "positions": 60
+  },
+  "sha256": {
+    "candidates": "b3ba9ea793130f144a2eeb09da1c7e99d5ceffafd575b98366c777a6ff47386c",
+    "assessments": "945e81f2194c0caeef0aa6a2d5be089bf4d47bb22052e8c6d25d1890b958fb4f",
+    "leagues": "476642c6c9489d8f6e114af78e556038abc29fbffbd5910e8b6aab669f2594da",
+    "fsp_registry": "04137dca2c7ba35c534648725cfd3e08cc732baf648c029892f6621b1aee7624",
+    "companies": "8758b5b39c50a26f110e4db27506c729fb5cab847954a190dc22704d1f8a953d",
+    "positions": "3fbfafac3d138e0545f85efddeddafe88433b4f385f59947e96110ba3787e71c"
+  },
+  "truth_sha256": "e4ff785a8f218d52fd547957b3603d2361338c81ed1011704ea33370c54f3238"
+}
