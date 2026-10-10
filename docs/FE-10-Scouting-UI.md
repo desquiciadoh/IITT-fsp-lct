@@ -53,11 +53,55 @@ URL (?grades&skills&fsp&formats&salary_max&confirmed_only&preset&page&c)
 | error | `ErrorState` with «Повторить» (refetch) for position, pool, drawer |
 | refetching with data kept | «обновляем…» hint (`placeholderData` keeps previous list) |
 
+## §5 Integration Tests (stage 5)
+
+Two test files cover the scouting feature end to end:
+
+### `scouting-integration.test.ts` (node env — pure logic, real mock seed data)
+- **Client-side fallback (`matchesPoolFilters`)** verified against the actual
+  MSW seed of 8 candidates: grades, skills, fsp tri-state (`any`/`linked`/
+  `prize`), `salary_max`, `confirmed_only`, and combined filters.
+- **Tray resilience**: `collectShortlist` dedupes overlapping cached pool
+  queries by `public_id` (simulated page/filter cache overlap).
+
+### `scouting-dom.test.tsx` (happy-dom + MSW node server — full screen render)
+- Drawer opens directly from `?c=` on a fresh mount (reload restores state);
+  display name resolves asynchronously once pool/detail data settles.
+- Contacts gated: mock returns `contacts=null` (gap G9) → lock message, no
+  contact values anywhere in the drawer.
+- Close via X / backdrop / Esc each removes `?c=` from the URL while other
+  filter keys survive; clicking a row writes `?c=` back.
+- Simulated reload (unmount → remount at the same URL) restores both drawer
+  and filters (`?grades=senior&c=A1B2C3`).
+- Shortlist tray keeps a starred candidate after applying filters that hide
+  them from the list (stateful PUT/DELETE handlers, gap G16); removing from
+  the tray issues DELETE and drops the candidate everywhere.
+- Fallback badge «фильтр в браузере» appears because the mock pool response
+  ships without `facets` (gap G8); client-side filtering actually narrows
+  the visible list (intern shelf → only Сергей Н.).
+
+### Bugs found & fixed by these tests
+1. **URL cleanup on drawer close** (`url-state.ts`): `setCandidate(undefined)`
+   left a stale empty `c=` segment in the query string — closing the drawer
+   unmounted it but the key "stuck" in the URL, so a later reload would not
+   restore the intended state. Fixed: explicit removal of the `c` key when
+   cleared (verified by X/backdrop/Esc tests asserting exact `location.search`).
+2. **Page-reset conflict**: atomic updates that changed both a filter and an
+   explicit `page` reset the page unintentionally. Fixed in `setFilters`.
+3. **Test-harness fixes** (not product bugs): league shelves come from the G7
+   handler in `gaps.ts`, so the DOM test server now mounts `gapHandlers` too;
+   async assertions switched to `waitFor`/`findAllByText` to wait for pool,
+   talent and leagues queries instead of reading synchronously during
+   skeleton state.
+
 ## Verification
 
 - `tsc --noEmit`: clean
-- `eslint src/features/scouting src/app/router.tsx`: clean
-- `vitest run`: 60/60 passed (incl. 13 url-state tests)
+- `eslint src/api src/features/scouting src/mocks src/app`: clean
+  (8 remaining repo-wide errors are pre-existing in FE-05's
+  `test-runner-page.tsx` — rules-of-hooks, untouched by FE-10)
+- `vitest run`: **83/83 passed** (10 files), incl. 36 scouting tests
+  (13 url-state + 7 integration + 10 DOM + 6 mocks/api regressions)
 - `vite build`: success
 
 ## Out of scope (next tasks)

@@ -19,9 +19,12 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { setupServer } from 'msw/node'
 
 import { scoutingHandlers } from '@/mocks/handlers/scouting'
+import { gapHandlers } from '@/mocks/handlers/gaps'
 import { ScoutingPage } from '@/features/scouting/scouting-page'
 
-const server = setupServer(...scoutingHandlers)
+// league shelves come from the G7 handler in gaps.ts — mount it too,
+// otherwise /api/leagues would trip `onUnhandledRequest: 'error'`.
+const server = setupServer(...scoutingHandlers, ...gapHandlers)
 // listen() once per file — happy-dom keeps the msw network object alive
 // between tests, and re-configuring an enabled network throws.
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
@@ -62,8 +65,9 @@ describe('candidate drawer (?c=) — restore & close', () => {
   it('opens directly from the URL on mount (reload restores state)', async () => {
     renderAt('/employer/positions/pos-1?c=A1B2C3')
     const dialog = await screen.findByRole('dialog', { name: 'Карточка кандидата' })
-    // header shows pool-row data instantly, detail fields arrive with G9 payload
-    expect(within(dialog).getByText('Анна К.')).toBeTruthy()
+    // while pool/detail requests settle the header falls back to public_id;
+    // the display name arrives either via the cached row or the G9 payload
+    await waitFor(() => expect(within(dialog).getByText('Анна К.')).toBeTruthy())
     await waitFor(() =>
       expect(within(dialog).getByText(/Senior backend-инженер/)).toBeTruthy(),
     )
@@ -122,7 +126,8 @@ describe('candidate drawer (?c=) — restore & close', () => {
     view.unmount()
     renderAt('/employer/positions/pos-1?grades=senior&c=A1B2C3')
     const dialog = await screen.findByRole('dialog', { name: 'Карточка кандидата' })
-    expect(within(dialog).getByText('Анна К.')).toBeTruthy()
+    // fresh QueryClient → skeleton first, name resolves when data arrives
+    await waitFor(() => expect(within(dialog).getByText('Анна К.')).toBeTruthy())
     expect(locationOf()).toBe('?grades=senior&c=A1B2C3')
   })
 })
@@ -174,10 +179,12 @@ describe('fallback badge (no facets in the pool response, G8)', () => {
   it('client-side filtering actually narrows the visible list', async () => {
     renderAt('/employer/positions/pos-1')
     await screen.findByText('Анна К.')
-    // only Сергей Н. is an intern → pick the shelf button (contains "подтверждено")
+    // wait for league shelves (useLeagues) to render real stats instead of
+    // skeletons — only Сергей Н. is an intern → pick the shelf button
+    await screen.findAllByText(/подтверждено:/)
     const internShelf = screen
       .getAllByRole('button', { pressed: false })
-      .find((b) => b.textContent?.includes('стажёр') && b.textContent?.includes('подтверждено'))
+      .find((b) => b.textContent?.includes('стажёр'))
     expect(internShelf).toBeTruthy()
     fireEvent.click(internShelf!)
     // only Сергей Н. is an intern
