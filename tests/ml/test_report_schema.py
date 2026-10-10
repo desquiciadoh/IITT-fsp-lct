@@ -37,6 +37,16 @@ def test_fixture_is_valid_and_flagged_synthetic():
     assert data["synthetic_fixture"] is True and data["assessment"]["simulees"] == 0
 
 
+def test_real_report_is_valid_if_present():
+    real_report = ROOT / "validation" / "out" / "report.json"
+    if real_report.exists():
+        data = json.loads(real_report.read_text(encoding="utf-8"))
+        assert schema.validate_report(data) == []
+        assert data["synthetic_fixture"] is False
+        assert data["assessment"]["simulees"] >= 1000
+        assert data["git_sha"] != "fixture"
+
+
 @pytest.mark.parametrize("mutate, message", [
     (lambda d: d.pop("git_sha"), "missing ['git_sha']"),
     (lambda d: d.update(extra=1), "unexpected ['extra']"),

@@ -5,6 +5,7 @@ Pure tests: no DB, no network, runs under pytest tests/ml.
 from __future__ import annotations
 
 import random
+
 import pytest
 from assessment.engine import monitor as M
 from assessment.engine.irt import p_3pl
@@ -132,6 +133,28 @@ def test_monitor_families_pool_and_json_serialization():
     assert d["id"] == "be.item.weak.v1"
     assert d["status"] == "retired"
     assert "low_discrimination" in d["flags"]
+    assert d["topic"] == "backend.http"
+    assert d["specs"] == ["backend"]
+    assert d["format"] == "concept_mcq"
+    assert d["time_limit_s"] == 60
+    assert d["exposure_rate"] > 0.0
+    assert d["drift_flag"] is False
     assert len(d["bands"]) == 4
     for b in d["bands"]:
         assert "band" in b and "observed_rate" in b and "expected_rate" in b and "z_score" in b
+
+    # Leaked item has drift_flag True
+    d_leaked = reports[1].to_dict()
+    assert d_leaked["drift_flag"] is True
+
+
+def test_statuses_and_recalibrate_with_girth():
+    assert M.STATUSES == ("active", "flagged", "retired")
+    meta = _meta(a=1.5, b=0.4, c=0.25)
+    resps = _simulate_responses(meta, n_per_band=30, seed=42)
+    import numpy as np
+    thetas = np.array([r.theta for r in resps])
+    u = np.array([1.0 if r.correct else 0.0 for r in resps])
+    a_cal, b_cal = M.recalibrate_with_girth(thetas, u, meta.c, prior_a=meta.a, prior_b=meta.b)
+    assert a_cal == pytest.approx(1.5, abs=0.5)
+    assert b_cal == pytest.approx(0.4, abs=0.5)

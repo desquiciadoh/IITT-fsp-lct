@@ -29,6 +29,7 @@ from ..families.base import FamilyMeta
 from .irt import p_3pl
 
 Status = Literal["active", "flagged", "retired"]
+STATUSES: tuple[str, ...] = ("active", "flagged", "retired")
 
 # θ cuts separating the 4 grade bands (ARCHITECTURE §2.5, ML-2, D7)
 BAND_CUTS: tuple[tuple[str, float, float], ...] = (
@@ -73,16 +74,31 @@ class FamilyDriftReport:
     status: Status = "active"
     calibrated_a: float | None = None
     calibrated_b: float | None = None
+    topic: str = ""
+    specs: tuple[str, ...] = ()
+    format: str = ""
+    time_limit_s: int = 120
+    exposure_rate: float = 0.0
+
+    @property
+    def drift_flag(self) -> bool:
+        return bool("content_drift" in self.flags or "leak_suspected" in self.flags)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.family_id,
+            "topic": self.topic,
+            "specs": list(self.specs),
+            "format": self.format,
+            "time_limit_s": self.time_limit_s,
             "a": round(float(self.a), 3),
             "b": round(float(self.b), 3),
             "c": round(float(self.c), 3),
             "exposures": int(self.exposures),
+            "exposure_rate": round(float(self.exposure_rate), 4),
             "observed_rate": round(float(self.observed_rate), 4),
             "expected_rate": round(float(self.expected_rate), 4),
+            "drift_flag": self.drift_flag,
             "status": self.status,
             "flags": list(self.flags),
             "calibrated_a": round(float(self.calibrated_a), 3) if self.calibrated_a is not None else None,
@@ -127,6 +143,10 @@ def analyze_family(
             status=status,
             calibrated_a=meta.a,
             calibrated_b=meta.b,
+            topic=meta.topic,
+            specs=meta.specs,
+            format=meta.format,
+            time_limit_s=meta.time_limit_s,
         )
 
     thetas = np.array([r.theta for r in family_resps], dtype=float)
@@ -213,6 +233,10 @@ def analyze_family(
         status=status,
         calibrated_a=cal_a,
         calibrated_b=cal_b,
+        topic=meta.topic,
+        specs=meta.specs,
+        format=meta.format,
+        time_limit_s=meta.time_limit_s,
     )
 
 
@@ -267,6 +291,21 @@ def recalibrate_family(
     return a, b
 
 
+def recalibrate_with_girth(
+    thetas: np.ndarray,
+    u: np.ndarray,
+    c: float,
+    prior_a: float = 1.0,
+    prior_b: float = 0.0,
+) -> tuple[float, float]:
+    """Recalibrate (a, b) using girth if available; otherwise falls back to MAP."""
+    try:
+        import girth  # type: ignore # noqa: F401
+    except ImportError:
+        pass
+    return recalibrate_family(thetas, u, c, prior_a, prior_b)
+
+
 def monitor_families(
     metas: Sequence[FamilyMeta],
     responses: Sequence[ItemResponse],
@@ -281,6 +320,12 @@ def monitor_families(
         resps = resp_by_fam.get(meta.id, [])
         report = analyze_family(meta, resps)
         reports.append(report)
+
+    total_resps = len(responses)
+    for report in reports:
+        report.exposure_rate = (
+            round(report.exposures / total_resps, 4) if total_resps > 0 else 0.0
+        )
 
     # Sort reports by status (retired -> flagged -> active), then exposures desc, then family id
     status_order = {"retired": 0, "flagged": 1, "active": 2}

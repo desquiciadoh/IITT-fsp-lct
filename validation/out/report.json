@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-10-10T18:35:26.114889+00:00",
+  "git_sha": "137c8a5e6b7a477207e8726ea2c147b877eb00aa",
+  "synthetic_fixture": false,
+  "assessment": {
+    "simulees": 10000,
+    "exact_acc": 0.626,
+    "adjacent_acc": 0.9924,
+    "qwk": 0.7638,
+    "retest_same_grade": 0.5368,
+    "retest_r": 0.7541,
+    "median_len": 20.0,
+    "max_family_exposure": 0.91,
+    "collision_rate": 0.0,
+    "generator_errors": 0,
+    "confusion": [
+      [
+        793,
+        738,
+        33,
+        0
+      ],
+      [
+        391,
+        2084,
+        948,
+        10
+      ],
+      [
+        11,
+        704,
+        2270,
+        452
+      ],
+      [
+        0,
+        22,
+        431,
+        1113
+      ]
+    ],
+    "tif": {
+      "theta": [
+        -3.0,
+        -2.5,
+        -2.0,
+        -1.5,
+        -1.0,
+        -0.5,
+        0.0,
+        0.5,
+        1.0,
+        1.5,
+        2.0,
+        2.5,
+        3.0
+      ],
+      "info": [
+        0.5231,
+        0.854,
+        1.3402,
+        2.0031,
+        2.8171,
+        3.6583,
+        4.2765,
+        4.3998,
+        3.9428,
+        3.0833,
+        2.1336,
+        1.3419,
+        0.792
+      ]
+    },
+    "leak_attack": [
+      {
+        "leak_share": 0.1,
+        "static_dtheta": 0.1561,
+        "parametric_dtheta": -0.1413
+      },
+      {
+        "leak_share": 0.3,
+        "static_dtheta": 0.7849,
+        "parametric_dtheta": -0.4425
+      },
+      {
+        "leak_share": 0.5,
+        "static_dtheta": 0.8314,
+        "parametric_dtheta": -0.9604
+      }
+    ]
+  },
+  "matching": {
+    "candidates": 1500,
+    "needs": 60,
+    "non_fsp_parity": 0.5766,
+    "pool_p95_ms": 104.3,
+    "systems": [
+      {
+        "name": "keyword",
+        "ndcg10": 0.502,
+        "p10": 0.5283,
+        "r50": 0.1506,
+        "mrr": 0.6269
+      },
+      {
+        "name": "bm25",
+        "ndcg10": 0.4109,
+        "p10": 0.5367,
+        "r50": 0.1465,
+        "mrr": 0.7404
+      },
+      {
+        "name": "embeddings_only",
+        "ndcg10": 0.3272,
+        "p10": 0.4333,
+        "r50": 0.1255,
+        "mrr": 0.6394
+      },
+      {
+        "name": "ours_no_verified",
+        "ndcg10": 0.5337,
+        "p10": 0.69,
+        "r50": 0.2049,
+        "mrr": 0.7939
+      },
+      {
+        "name": "ours",
+        "ndcg10": 0.5742,
+        "p10": 0.7267,
+        "r50": 0.2268,
+        "mrr": 0.8312
+      }
+    ]
+  }
+}
