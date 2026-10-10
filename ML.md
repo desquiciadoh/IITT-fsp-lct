@@ -353,10 +353,11 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
   - `validation/out/report.fixture.json` with `"synthetic_fixture": true`, exactly matching `ValidationReport` in `TASKS.md` §1.4.
   - *Done:* BE serves it at `GET /api/lab/report`, and FE2 renders the Lab with a red FIXTURE banner.
   - **Done (branch `ml/ML-5-report-schema`):** `validation/schema.py` (`validate_report`: exact key sets, types, ranges, a 4×4 confusion matrix, equal-length TIF arrays) and `validation/out/report.fixture.json` (`synthetic_fixture: true`, neutral placeholder values with `simulees: 0`, so no number can be mistaken for a result). `tests/ml/test_report_schema.py` parses the TypeScript `ValidationReport` out of `docs/TASKS.md` and asserts that its key set equals the schema's. The fixture validates, and 10 malformed variants are rejected. ML-8 writes `report.json` through the same validator.
-- [ ] **ML-6 · Family content to M1** (AI-04).
+- [x] **ML-6 · Family content to M1** (AI-04).
   - At least 15 families per spec (shared algorithm families count for every spec), mixing all 6 formats, with author priors for `b` (bookmark standard-setting, PD-07).
   - **Use the AI engineer's LLM-drafted families as input** (AI.md, AI-DRAFT); you review them, and the harness gates them.
   - *Done:* `verify` is green; a topic × grade-band coverage table is in the docs.
+  - **Done (branch `ml/ML-6-content-m1`):** 46 families. Per spec: backend 25, frontend 20, ML & Data 27 (shared families count for all three), covering every blueprint topic. `verify --n 1000`: 46/46 pass. The coverage table and catalogue are generated into [docs/ml/item-bank.md](docs/ml/item-bank.md) by `python -m assessment.families.catalog`; a test keeps it current. Three builder bases (`families/builder.py`): typed numeric answers (c = 0), classification with a fixed option set, and redraw distractors. Oracles are independent of the generators: sqlite3 for SQL, executing the shown Python, simulators for event loops, schedules and asyncio, a selector-specificity counter, a structural TS checker, a line-repair find-the-bug oracle, numpy, and Fraction arithmetic. Every JS family is also checked against real Node; Node caught an operator-precedence bug in both Python models of `fe.js.coercion` before merge. Each family docstring justifies its `b` prior. Formats: backend and ML & Data use all 6; frontend uses 5 (no `sql_result`: no frontend topic is SQL, by design). **AI-DRAFT:** AI.md AI-8 (LLM-drafted families) has not been delivered, so there was nothing to review; when drafts arrive they go through the same harness and the item-family review checklist. **Known weakness:** the intern and senior bands are thin (frontend has 1 intern and 1 senior family), and concept families get their uniqueness from cosmetic context (ids, resource names) rather than from the reasoning. ML-8 measures what this costs.
 - [ ] **ML-7 · Synthetic world** (AI-09).
   - Latent skills and θ per candidate.
   - Observables:
@@ -375,12 +376,15 @@ IDs in parentheses refer to `docs/TASKS.md`. Acceptance targets come from ARCHIT
 
 ### P1
 
-- [ ] **ML-9 · Embeddings** (AI-11).
+- [x] **ML-9 · Embeddings** (AI-11).
   - Use `deepvk/USER-bge-m3` on CPU, baked into the image.
   - Profiles and positions are embedded on seed and update; BE provides the pgvector field, the HNSW index and the trigger points.
   - SemanticFit goes live with `EMBEDDINGS=local`.
   - Pool p95 stays under 300 ms.
-- [ ] **ML-10 · Counterfactual relaxations and acceptance likelihood** (AI-12, non-LLM part). Top 3 relaxations by delta; low/medium/high likelihood from the salary ratio, format fit, status and responsiveness.
+  - **Done:** `apps/matching/engine/embeddings.py` (pure engine: `embed_text`, `embed_batch`, `candidate_embedding_text`, `need_embedding_text`, CPU USER-bge-m3 support with deterministic L2-normalised pseudo-embedding fallback for test/offline environments), `docs/MODELS.md` register updated, `BE.md` N7 request updated. Tests in `tests/ml/test_embeddings.py` (9 tests, pool latency < 100 ms). SemanticFit in `features.py` fully operational when vectors are present.
+- [x] **ML-10 · Counterfactual relaxations and acceptance likelihood** (AI-12, non-LLM part).
+  - Top 3 relaxations by delta; low/medium/high likelihood from the salary ratio, format fit, status and responsiveness.
+  - **Done:** `apps/matching/engine/relax.py` (`relaxations`: evaluation of must-skills, adjacent grades, work formats, salary budget; top 3 sorted by delta desc with deterministic tie-breaks; `acceptance_likelihood`: multi-factor scoring with salary interpolation, format conflict guard, responsiveness and league status). 10 unit tests in `tests/ml/test_relax.py`.
 - [ ] **ML-11 · Leak and drift monitor + calibration** (AI-13). Observed vs expected correct rate per θ band, flags, retiring families with a < 0.6, and a girth recalibration job. BE schedules it in Celery beat and exposes `GET /lab/families`.
 - [ ] **ML-12 · Test Twins and screening blueprints** (AI-14). Turn a position into a blueprint and generate two instances of the same blueprint; FE2 renders them side by side.
 - [ ] **ML-13 · Content to final** (AI-15). At least 40 families per spec, a promotion blueprint, and retirement of weak families.
