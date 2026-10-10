@@ -1,2 +1,4 @@
 """frontend item families (one module per family)."""
-FAMILIES: list = []
+from .js_event_loop import FAMILY as _js_event_loop
+
+FAMILIES = [_js_event_loop]
