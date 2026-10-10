@@ -88,15 +88,28 @@ export type ScoreComponentsDict = Partial<
   Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
 >
 
-export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
+/** gap G8 target — pool skills carry a verification source once BE serves them. */
+export type PoolSkill = { name: string; source: Source | string }
+
+/** TalentShort as served today: the schema flattens `skills` to `string`. */
+type TalentShortServed = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
   public_id: string
   /** present at runtime; the schema does not declare it */
   display_name?: string
   league?: League | null
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
-  /** the schema flattens this nested list to `string` */
-  skills?: string[]
+  /** the schema flattens this nested list to `string`; FE serves either shape */
+  skills?: (string | PoolSkill)[]
 }
+
+/**
+ * Public view of a talent row: `skills` is normalized to objects with an
+ * explicit `source`, so consumers never have to handle the legacy `string[]`
+ * shape (gap G8). Normalization happens in `normalizePoolItem` / talent hooks.
+ */
+export type TalentShortView = Omit<TalentShortServed, 'skills'> & { skills?: PoolSkill[] }
+
+export type TalentShort = TalentShortServed
 
 export type Offer = Omit<
   GeneratedOffer,

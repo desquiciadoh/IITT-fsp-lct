@@ -6,6 +6,7 @@ import { LoginPage } from '@/features/auth/login-page'
 import { RegisterPage } from '@/features/auth/register-page'
 import { VerifyPage } from '@/features/auth/verify-page'
 import { JuryPage } from '@/features/jury/jury-page'
+import { ScoutingPage } from '@/features/scouting/scouting-page'
 import { OnboardingPage } from '@/features/onboarding/onboarding-page'
 import { ResultPage } from '@/features/result/result-page'
 import { DashboardPage } from '@/features/candidate/dashboard-page'
@@ -93,7 +94,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: '/employer/positions/:id',
-                element: ph('Вакансия (детально)', 'FE2', 'FE-14'),
+                element: <ScoutingPage />,
               },
               { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
               { path: '/employer/offers', element: <OffersBoardPage /> },

@@ -7,6 +7,7 @@ import { assessmentHandlers } from '@/mocks/handlers/assessments'
 import { qualificationHandlers } from '@/mocks/handlers/qualification'
 import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
+import { scoutingHandlers } from '@/mocks/handlers/scouting'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)

@@ -42,14 +42,21 @@ export const gapHandlers = [
       ],
     }),
   ),
+  /**
+   * gap G7 — scouting league shelves. Real backend serves the candidate's own
+   * league; FE-10 needs per-grade counts (FE2.md §FE-10):
+   * `[{specialization, grade, confirmed, unconfirmed, median_expectation?}]`.
+   */
   http.get('*/api/leagues', ({ request }) => {
-    const spec = new URL(request.url).searchParams.get('specialization')
+    const spec = new URL(request.url).searchParams.get('specialization') ?? 'backend'
     return json({
       items: [
-        { specialization: spec ?? 'backend', grade: 'middle', status: 'confirmed', rating: 1842 },
-        { specialization: spec ?? 'backend', grade: 'senior', status: 'pending' },
+        { specialization: spec, grade: 'intern', confirmed: 3, unconfirmed: 9, median_expectation: 100000 },
+        { specialization: spec, grade: 'junior', confirmed: 14, unconfirmed: 21, median_expectation: 150000 },
+        { specialization: spec, grade: 'middle', confirmed: 27, unconfirmed: 18, median_expectation: 250000 },
+        { specialization: spec, grade: 'senior', confirmed: 12, unconfirmed: 7, median_expectation: 360000 },
       ],
-      total: 2,
+      total: 4,
       page: 1,
     })
   }),

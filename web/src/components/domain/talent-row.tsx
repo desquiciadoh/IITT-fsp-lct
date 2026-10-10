@@ -1,15 +1,17 @@
-import { Star, Trophy } from 'lucide-react'
+import { AlertTriangle, Star, Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LeagueBadge, type Grade, type LeagueStatus, type Spec } from '@/components/domain/league-badge'
 import { SalaryTag } from '@/components/domain/salary-tag'
 import { ReasonChips } from '@/components/domain/reason-chips'
 import { WORK_FORMAT_LABEL } from '@/lib/labels'
-import type { Reason, TalentShort } from '@/api/types'
+import type { PoolSkill, Reason, TalentShortView } from '@/api/types'
 
 export type TalentRowProps = {
-  talent: TalentShort
+  talent: TalentShortView
   score?: number
   reasons?: Reason[]
+  /** gap G8 target — explicit weakness list; derived from minus-reasons until BE serves it */
+  gaps?: string[]
   shortlisted?: boolean
   onToggleShortlist?: (publicId: string) => void
   className?: string
@@ -19,6 +21,7 @@ export function TalentRow({
   talent,
   score,
   reasons = [],
+  gaps,
   shortlisted = false,
   onToggleShortlist,
   className,
@@ -61,6 +64,17 @@ export function TalentRow({
           ))}
         </div>
         {reasons.length > 0 && <ReasonChips reasons={reasons} />}
+        {/* gaps (weaknesses) — derived from minus-reasons until BE serves them (G8) */}
+        {(gaps?.length ?? 0) > 0 && (
+          <ul className="flex flex-col gap-1" aria-label="Зоны роста">
+            {gaps!.map((g, i) => (
+              <li key={i} className="flex items-center gap-1.5 text-xs text-warn">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {g}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <SalaryTag
@@ -77,7 +91,11 @@ export function TalentRow({
               type="button"
               aria-pressed={shortlisted}
               aria-label={shortlisted ? 'Убрать из избранного' : 'В избранное'}
-              onClick={() => onToggleShortlist(talent.public_id)}
+              onClick={(e) => {
+                // keep row-level click handlers (drawer) from firing on star toggle
+                e.stopPropagation()
+                onToggleShortlist(talent.public_id)
+              }}
               className="rounded-md p-1 text-muted-foreground transition-colors hover:text-primary"
             >
               <Star

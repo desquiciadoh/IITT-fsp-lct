@@ -98,3 +98,27 @@ export const PLACEMENT_TIER_LABEL: Record<string, string> = {
   finalist: 'финалист',
   participant: 'участник',
 }
+
+/** FSP result tier → Russian label (FE-10 drawer, section «ФСП»). */
+export const FSP_TIER_LABEL: Record<string, string> = {
+  gold: 'золото',
+  silver: 'серебро',
+  bronze: 'бронза',
+  winner: 'победитель',
+  prize_winner: 'призёр',
+  finalist: 'финалист',
+  participant: 'участник',
+}
+
+/** Assessment kind → Russian label (FE-10 drawer, gap G9). */
+export const ASSESSMENT_KIND_LABEL: Record<string, string> = {
+  qualification: 'квалификация',
+  microtask: 'микрозадача',
+  interview: 'интервью',
+}
+
+/** Verified-vs-self-reported grouping for skills (FE-10 drawer, gap G8). */
+export const SKILL_SOURCE_GROUP_LABEL: Record<'verified' | 'self', string> = {
+  verified: 'Подтверждённые',
+  self: 'Заявленные кандидатом',
+}
