@@ -157,8 +157,10 @@ def test_late_answer_is_recorded_wrong_and_test_continues(cand, client):
     assert res.json()["done"] is False
     second_id = res.json()["next"]["item_id"]
     first.refresh_from_db()
-    assert first.correct is False
-    assert first.answer == {"value": None, "timed_out": True, "late": True}
+    # The right answer submitted after the deadline is credited (correct=True)
+    # but flagged late; the engine scores it incorrect for theta (D1/ML §3).
+    assert first.correct is True
+    assert first.answer["late"] is True
     session.refresh_from_db()
     assert session.status == AssessmentStatus.IN_PROGRESS
 
@@ -206,7 +208,9 @@ def test_late_last_item_finalizes_session(cand, client):
     assert session.finished_at is not None
     last_item = answered[-1]
     last_item.refresh_from_db()
-    assert last_item.correct is False
+    # Correct answer submitted late: credited on the row, flagged late; the
+    # engine scores it incorrect for theta (D1/ML §3).
+    assert last_item.correct is True
     assert last_item.answer["late"] is True
     # All other answers correct -> high theta (EAP) >= Senior cut -> confirmed
     assert session.theta > 1.0
