@@ -8,6 +8,7 @@ import type {
   PoolResponse,
   Spec,
   TalentDetail,
+  TalentSearchResponse,
   TalentShort,
 } from '@/api/types'
 
@@ -220,5 +221,21 @@ export function useTalent(publicId: string | null) {
     queryKey: keys.talent(publicId ?? ''),
     queryFn: () => customFetch<TalentDetail>(`/api/talent/${encodeURIComponent(publicId!)}`),
     enabled: Boolean(publicId),
+  })
+}
+
+/**
+ * FE-12 · GET /api/talent/search — plain talent search (no position context).
+ * Same filter wire format as the pool (filtersToParams). The response shape is
+ * {items: TalentShort[], total, page}; `pages`/`facets` are gaps G8/G14 — the
+ * caller detects them and falls back to client-side filtering/facet counting.
+ */
+export function useTalentSearch(filters: PoolFilters, enabled = true) {
+  const query = filtersToParams(filters).toString()
+  return useQuery({
+    queryKey: [...keys.talentSearch, query],
+    queryFn: () =>
+      customFetch<TalentSearchResponse>(`/api/talent/search${query ? `?${query}` : ''}`),
+    enabled,
   })
 }

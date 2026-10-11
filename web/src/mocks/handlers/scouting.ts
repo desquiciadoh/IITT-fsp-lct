@@ -265,7 +265,8 @@ export const scoutingHandlers = [
       if (formats.length && !(t.work_formats ?? []).some((f) => formats.includes(f))) return false
       if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false
       if (confirmedOnly && t.league.status !== 'confirmed') return false
-      if (skills.length && !skills.some((s) => (t.skills ?? []).map(String).includes(s))) return false
+      // AND across chips — matches the BE pool selector semantics.
+      if (skills.length && !skills.every((s) => (t.skills ?? []).map(String).includes(s))) return false
       if (fsp === 'linked' && !t.fsp.linked) return false
       if (fsp === 'prize' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
       if (preset === 'fsp_stars' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
@@ -312,6 +313,69 @@ export const scoutingHandlers = [
         confirmed_only: filtered.filter(({ talent: t }) => t.league.status === 'confirmed').length,
       },
       relaxations: ['Уберите must-have «kafka» → +2 кандидата'],
+    })
+  }),
+
+  // FE-12 · G8/G14 — plain talent search: same filters/facets/pagination as
+  // the pool, minus scoring. Registered BEFORE */api/talent/:publicId (MSW is
+  // first-match-wins, otherwise "search" would be swallowed as a public id).
+  http.get('*/api/talent/search', ({ request }) => {
+    const sp = new URL(request.url).searchParams
+    const csv = (k: string) => (sp.get(k) ? sp.get(k)!.split(',').filter(Boolean) : [])
+    const grades = csv('grades')
+    const skills = csv('skills')
+    const formats = csv('formats')
+    const fsp = sp.get('fsp')
+    const salaryMax = Number(sp.get('salary_max'))
+    const confirmedOnly = sp.get('confirmed_only') === 'true'
+    const preset = sp.get('preset')
+
+    const filtered = talentSeed.filter((t) => {
+      if (grades.length && !grades.includes(t.league.grade ?? '')) return false
+      if (formats.length && !(t.work_formats ?? []).some((f) => formats.includes(f))) return false
+      if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false
+      if (confirmedOnly && t.league.status !== 'confirmed') return false
+      if (preset === 'confirmed' && t.league.status !== 'confirmed') return false
+      // AND across chips — same semantics as the pool handler and the BE
+      // selector (apps/matching/selectors.py filter_candidate_profiles).
+      if (skills.length && !skills.every((s) => (t.skills ?? []).map(String).includes(s))) return false
+      if (fsp === 'linked' && !t.fsp.linked) return false
+      const prize = t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? '')
+      if (fsp === 'prize' && !prize) return false
+      if (preset === 'fsp_stars' && !prize) return false
+      return true
+    })
+
+    const page = Math.max(1, Number(sp.get('page')) || 1)
+    const total = filtered.length
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    const items: TalentShort[] = filtered
+      .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+      .map((t) => ({ ...t, skills: t.skillsList.map((s) => s.name) }))
+
+    return stub({
+      items,
+      total,
+      page,
+      pages,
+      facets: {
+        grades: filtered.reduce<Record<string, number>>((acc, t) => {
+          const g = t.league.grade ?? 'junior'
+          acc[g] = (acc[g] ?? 0) + 1
+          return acc
+        }, {}),
+        formats: filtered.reduce<Record<string, number>>((acc, t) => {
+          for (const f of t.work_formats ?? []) acc[f] = (acc[f] ?? 0) + 1
+          return acc
+        }, {}),
+        fsp: {
+          linked: filtered.filter((t) => t.fsp.linked).length,
+          prize: filtered.filter((t) => t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? '')).length,
+        },
+        confirmed_only: {
+          true: filtered.filter((t) => t.league.status === 'confirmed').length,
+        },
+      },
     })
   }),
 

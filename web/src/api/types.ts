@@ -94,6 +94,8 @@ export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'f
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
   /** the schema flattens this nested list to `string` */
   skills?: string[]
+  /** FE-12 · search payload carries the shortlist flag on the talent itself. */
+  shortlisted?: boolean
 }
 
 export type Offer = Omit<
@@ -371,6 +373,20 @@ export type LeagueShelf = {
  * Until then the tray is built from `shortlisted: true` pool items.
  */
 export type ShortlistEntry = TalentShort
+
+/**
+ * FE-12 · GET /api/talent/search — plain talent search (no position scoring).
+ * The generated schema declares only {items,total,page}; `pages` and `facets`
+ * are BE gaps G8/G14 — optional so the UI can detect the capability instead of
+ * hardcoding it (client-side facet counting + filter fallback when absent).
+ */
+export type TalentSearchResponse = {
+  items: TalentShort[]
+  total: number
+  page: number
+  pages?: number
+  facets?: Record<string, Record<string, number>>
+}
 
 /**
  * GET /api/talent/{public_id} — talent fields plus about/experience_text and
