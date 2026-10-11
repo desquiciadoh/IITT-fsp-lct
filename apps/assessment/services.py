@@ -268,7 +268,9 @@ class AssessmentService:
                 400,
             )
 
-        current_item = session.items.filter(answered_at__isnull=True).order_by("seq").first()
+        current_item = session.items.select_related("family").filter(
+            answered_at__isnull=True
+        ).order_by("seq").first()
         if not current_item or str(current_item.id) != str(item_id):
             raise ItemNotCurrent()
 
@@ -285,9 +287,9 @@ class AssessmentService:
             current_item.correct = False
         else:
             current_item.answer = {"value": answer_val}
-            current_item.correct = engine_adapter.is_correct(
-                current_item.family_id, current_item.key, answer_val
-            )
+            # Type-aware grading through the owning family's typed checker
+            # (option ids vs number/text values).
+            current_item.correct = engine_adapter.grade_answer(current_item, answer_val)
         current_item.answered_at = now_real
         current_item.integrity = integrity or {}
         current_item.save()
@@ -325,6 +327,12 @@ class AssessmentService:
         """Make `item` current: its clock starts now."""
         time_limit_s = (item.view or {}).get("time_limit_s") or item.family.time_limit_s
         item.served_at = now
+        # ML.md §3: the family's own time limit wins over the DB row copy —
+        # a recalibrated registry meta must govern the live deadline.
+        try:
+            time_limit_s = engine_adapter.family_meta(item.family_id).time_limit_s
+        except ValueError:
+            pass
         item.deadline_at = now + timedelta(seconds=time_limit_s)
         item.save(update_fields=["served_at", "deadline_at"])
 

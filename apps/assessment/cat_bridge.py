@@ -156,7 +156,13 @@ def generate_instance(family_id: str, rng: random.Random):
 
 
 def is_correct(family_id: str, key: Any, answer: Any) -> bool:
-    """Grade an answer through the owning family's typed checker."""
+    """Grade an answer through the owning family's typed checker.
+
+    ``answer`` may be a bare string (option id or typed value) or a dict;
+    it is routed into the family protocol shape {"option_id": ...} |
+    {"value": ...} so number/text checkers don't accidentally compare
+    against the option-id slot.
+    """
     fam = _registry().get(family_id)
     if fam is not None:
         if isinstance(answer, str):
@@ -175,6 +181,30 @@ def is_correct(family_id: str, key: Any, answer: Any) -> bool:
     else:
         val = answer
     return str(val) == str(key)
+
+
+def grade_answer(item, answer_val: str) -> bool:
+    """Type-aware grading of a submitted answer for a served AssessmentItem.
+
+    The API sends the candidate's pick either as ``option_id`` (choice items)
+    or as ``value`` (number/text items); views collapse both into one string.
+    Reconstruct the protocol payload from the item's rendered input kind so
+    the family's typed checker receives the right slot.
+    """
+    view = item.view or {}
+    payload: dict
+    if view.get("options") and any(o.get("id") == answer_val for o in view["options"]):
+        payload = {"option_id": answer_val}
+    else:
+        payload = {"value": answer_val}
+    fam = _registry().get(item.family_id)
+    if fam is not None:
+        try:
+            return bool(fam.is_correct(item.key, payload))
+        except Exception:
+            return False
+    val = payload.get("option_id") or payload.get("value")
+    return str(val) == str(item.key)
 
 
 # --- CatEngine facade (same call shapes as engine_adapter) ------------------
@@ -220,13 +250,40 @@ def next_family(state: CatState, pool=None, rng=None):
     )
 
 
-def record(state: CatState, family_id: str, correct: bool, late: bool = False) -> CatState:
+def record(
+    state: CatState,
+    family_id: str,
+    correct: bool,
+    late: bool = False,
+    *,
+    params: dict | None = None,
+) -> CatState:
+    """Score the pending entry of `family_id` through the real engine.
+
+    ``params`` (optional dict with a/b/topic) overrides the values stored on
+    the pending entry — replay paths (finalize recovery, fallback rebuild)
+    must grade with the *served* item parameters persisted on AssessmentItem,
+    which can differ from the current registry meta after a re-calibration.
+    """
     # Replaying a response for an already-scored entry (legacy rebuild paths)
-    # must not blow up: reset it to pending first.
+    # must not blow up: reset the LAST scored entry of this family to pending
+    # so the engine's record() finds it (duplicate families are replayed in
+    # order; the last one is always the one being re-graded).
+    pending = None
     for x in state.administered:
-        if x["family_id"] == family_id and x["correct"] is not None:
-            x["correct"] = None
+        if x["family_id"] == family_id and x["correct"] is None:
+            pending = x
             break
+    if pending is None:
+        for x in reversed(state.administered):
+            if x["family_id"] == family_id:
+                x["correct"] = None
+                pending = x
+                break
+    if pending is not None and params:
+        for k in ("a", "b", "topic"):
+            if params.get(k) is not None:
+                pending[k] = params[k]
     # Rebuild/replay paths (fallback eligibility, finalize recovery) append
     # every answered item onto a fresh state; the engine's stop rules would
     # otherwise freeze the administered list once the window is reached.
@@ -234,6 +291,38 @@ def record(state: CatState, family_id: str, correct: bool, late: bool = False) -
     if not any(x["correct"] is None for x in state.administered):
         state.max_items = max(state.max_items, len(state.administered) + 1)
     return ENGINE.record(state, family_id, correct, late)
+
+
+def replay_session(session, *, relax_window: bool = True) -> "CatState":
+    """Rebuild an engine state by replaying a session's answered items.
+
+    Uses the parameters persisted on each AssessmentItem (via ``record``'s
+    ``params`` override) so theta/se are derived exactly as during the live
+    test. Unanswered (pending) items are skipped. When ``relax_window`` is
+    set, the stop-rule window is widened so every replayed entry is scored
+    (replay appends onto a fresh state whose max_items may be smaller than
+    the number of served items, e.g. express sessions finished via /finish).
+    """
+    state = start(
+        spec=session.specialization,
+        claimed=session.claimed_grade,
+        mode=session.mode,
+        kind=session.kind,
+    )
+    if relax_window:
+        state.max_items = max(state.max_items, session.items.count() + 5)
+    for it in session.items.order_by("seq"):
+        if it.answered_at is None:
+            continue
+        late = bool(isinstance(it.answer, dict) and it.answer.get("late"))
+        state = record(
+            state,
+            it.family_id,
+            correct=bool(it.correct),
+            late=late,
+            params={"a": it.family.a, "b": it.family.b, "topic": it.family.topic},
+        )
+    return state
 
 
 def result(state: CatState) -> CatResult:
