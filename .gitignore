@@ -46,3 +46,12 @@ backups/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local dev tooling (not shipped)
+.agents/
+.claude/
+.github/
+AGENTS.md
+CLAUDE.md
+.pre-commit-config.yaml
+tools/
