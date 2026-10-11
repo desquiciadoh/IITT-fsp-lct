@@ -105,7 +105,10 @@ export function matchesFilters(talent: TalentShort, f: PoolFilters): boolean {
     const names = (talent.skills ?? []).map((s: unknown) =>
       String(typeof s === 'string' ? s : (s as { name?: string }).name ?? '').toLowerCase(),
     )
-    if (!f.skills.some((skill) => names.includes(skill.toLowerCase()))) return false
+    // ANY-of would make multi-skill filters nearly useless in the UI (one
+    // chip ≈ no filter). Match the backend pool semantics: every selected
+    // skill must be present (AND across chips, OR within a CSV param).
+    if (!f.skills.every((skill) => names.includes(skill.toLowerCase()))) return false
   }
   const fsp = talent.fsp as { linked?: boolean; best_tier?: string } | undefined
   if (f.fsp === 'linked' && !fsp?.linked) return false

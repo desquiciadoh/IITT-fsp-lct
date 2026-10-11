@@ -111,7 +111,9 @@ export function matchesSearchFilters(talent: TalentShort, f: PoolFilters): boole
     const names = (talent.skills ?? []).map((s: unknown) =>
       String(typeof s === 'string' ? s : ((s as { name?: string }).name ?? '')).toLowerCase(),
     )
-    if (!f.skills.some((skill) => names.includes(skill.toLowerCase()))) return false
+    // AND across chips — same semantics as the BE pool selector and FE-10's
+    // matchesFilters (see there for the rationale).
+    if (!f.skills.every((skill) => names.includes(skill.toLowerCase()))) return false
   }
   if (f.fsp === 'linked' && !talent.fsp?.linked) return false
   if (f.fsp === 'prize' && !isPrizeWinner(talent)) return false

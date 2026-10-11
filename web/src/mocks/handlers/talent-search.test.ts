@@ -194,8 +194,8 @@ describe('GET /api/talent/search (mock ↔ target contract)', () => {
     const f: PoolFilters = { ...EMPTY_FILTERS, fsp: 'prize', skills: ['python', 'django'] }
     const qs = filtersToParams(f).toString()
     const body = await req<TalentSearchResponse>(`/api/talent/search?${qs}`)
-    // Seed prize winners: t-001 (winner, django), t-002 (prize, fastapi),
-    // t-005 (winner, react). Skills filter is ANY-of → only t-001 matches.
+    // t-001 is the only prize winner carrying BOTH python and django
+    // (t-002 → fastapi/kafka, t-005 → react). Skills chips are AND-of-stack.
     expect(body.items.map((t) => t.public_id)).toEqual(['t-001'])
     expect(body.total).toBe(1)
   })

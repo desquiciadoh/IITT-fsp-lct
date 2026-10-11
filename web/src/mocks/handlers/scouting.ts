@@ -265,7 +265,8 @@ export const scoutingHandlers = [
       if (formats.length && !(t.work_formats ?? []).some((f) => formats.includes(f))) return false
       if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false
       if (confirmedOnly && t.league.status !== 'confirmed') return false
-      if (skills.length && !skills.some((s) => (t.skills ?? []).map(String).includes(s))) return false
+      // AND across chips — matches the BE pool selector semantics.
+      if (skills.length && !skills.every((s) => (t.skills ?? []).map(String).includes(s))) return false
       if (fsp === 'linked' && !t.fsp.linked) return false
       if (fsp === 'prize' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
       if (preset === 'fsp_stars' && !(t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? ''))) return false
@@ -335,7 +336,9 @@ export const scoutingHandlers = [
       if (Number.isFinite(salaryMax) && salaryMax > 0 && (t.salary_min ?? Infinity) > salaryMax) return false
       if (confirmedOnly && t.league.status !== 'confirmed') return false
       if (preset === 'confirmed' && t.league.status !== 'confirmed') return false
-      if (skills.length && !skills.some((s) => (t.skills ?? []).map(String).includes(s))) return false
+      // AND across chips — same semantics as the pool handler and the BE
+      // selector (apps/matching/selectors.py filter_candidate_profiles).
+      if (skills.length && !skills.every((s) => (t.skills ?? []).map(String).includes(s))) return false
       if (fsp === 'linked' && !t.fsp.linked) return false
       const prize = t.fsp.linked && ['winner', 'prize_winner'].includes(t.fsp.best_tier ?? '')
       if (fsp === 'prize' && !prize) return false
