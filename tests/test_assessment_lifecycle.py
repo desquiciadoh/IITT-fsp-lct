@@ -1,8 +1,12 @@
 """Assessment lifecycle: per-item deadlines, late answers, fallback eligibility, one active session.
 
-Backend bank (engine.py): seq 1 = SQL (b=0.4, 90 s), seq 2 = complexity (b=0.8, 60 s).
-Placeholder scorer: theta = avg_b + (pct - 0.5) * 2 = 0.6 + (pct - 0.5) * 2
-  2/2 correct -> 1.6 (Senior), 1/2 -> 0.6 (Middle), 0/2 -> -0.4 (Intern).
+Rewritten for the real ML CAT engine (N2, IrtCatEngine via cat_bridge):
+- serve-one-item-at-a-time (ML-3): start() creates exactly ONE item; the next
+  item appears only after the previous answer is recorded;
+- theta/se come from EAP on the fixed-c 3PL model, not the legacy placeholder
+  formula; grade assertions below rely on engine `result_grade` semantics
+  (fallback eligibility replays the session's own answers through the engine);
+- family time limits govern live deadlines (ML.md §3).
 """
 
 from datetime import timedelta

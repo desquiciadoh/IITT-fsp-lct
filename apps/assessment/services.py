@@ -295,17 +295,41 @@ class AssessmentService:
         current_item.save()
 
         # Update CAT engine state
+        # The served item's params (a/b/topic) are persisted on its ItemFamily
+        # row; replay paths must grade with the *served* parameters so theta is
+        # derived identically to the live test (ML.md §3).
+        item_params = {
+            "a": current_item.family.a,
+            "b": current_item.family.b,
+            "topic": current_item.family.topic,
+        }
         cat_state = engine_adapter.load_state(session.state)
         if cat_state is None:
-            cat_state = engine_adapter.start(
-                session.specialization, session.claimed_grade, session.mode, session.kind
+            # State lost/corrupt: rebuild from this session's own answers.
+            cat_state = engine_adapter.replay_session(
+                session, exclude_unanswered=True
             )
-        cat_state = engine_adapter.record(
-            cat_state,
-            current_item.family_id,
-            correct=current_item.correct,
-            late=late,
-        )
+            answered_count = session.items.filter(
+                answered_at__isnull=False
+            ).count()
+            if answered_count >= len(cat_state.administered):
+                # The just-recorded answer was not covered by the replay
+                # (it is the newest one): score it explicitly.
+                cat_state = engine_adapter.record(
+                    cat_state,
+                    current_item.family_id,
+                    correct=current_item.correct,
+                    late=late,
+                    params=item_params,
+                )
+        else:
+            cat_state = engine_adapter.record(
+                cat_state,
+                current_item.family_id,
+                correct=current_item.correct,
+                late=late,
+                params=item_params,
+            )
         session.state = cat_state.to_json()
         session.save(update_fields=["state"])
 
@@ -342,16 +366,10 @@ class AssessmentService:
         items = list(session.items.select_related("family").all())
         if not items or AssessmentService._was_abandoned(session):
             return False
-        cat_state = engine_adapter.start(
-            session.specialization, session.claimed_grade, session.mode, session.kind
-        )
-        for it in items:
-            cat_state = engine_adapter.record(
-                cat_state,
-                it.family_id,
-                correct=bool(it.correct),
-                late=bool(it.answer and it.answer.get("late")),
-            )
+        # Replay through the engine with each item's *served* params (ML.md §3);
+        # replay_session() already skips unanswered rows and relaxes the
+        # stop-rule window so every answered entry is scored.
+        cat_state = engine_adapter.replay_session(session)
         cat_res = engine_adapter.result(cat_state)
         achieved = cat_res.result_grade
         return GRADE_ORDER.get(achieved, 0) >= GRADE_ORDER[lower_grade]

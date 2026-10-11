@@ -132,7 +132,9 @@ def family_meta(family_id: str) -> RegistryFamilyMeta:
     fam = _registry().get(family_id)
     if fam is None:
         raise ValueError(f"unknown family: {family_id!r}")
-    return fam
+    # Callers use this as a FamilyMeta (`.time_limit_s`, `.b`, ...); the registry
+    # maps ids to family *instances*, whose meta lives on `.meta`.
+    return getattr(fam, "meta", fam)
 
 
 def active_metas(spec: str) -> list[RegistryFamilyMeta]:
@@ -151,8 +153,14 @@ def item_level(meta_or_b):
 
 
 def generate_instance(family_id: str, rng: random.Random):
-    """Render an item instance with the given rng (registry families)."""
-    return family_meta(family_id).generate(rng)
+    """Render an item instance with the given rng (registry families).
+
+    ``generate`` lives on the family *instance*, not on FamilyMeta.
+    """
+    fam = _registry().get(family_id)
+    if fam is None:
+        raise ValueError(f"unknown family: {family_id!r}")
+    return fam.generate(rng)
 
 
 def is_correct(family_id: str, key: Any, answer: Any) -> bool:
@@ -293,15 +301,18 @@ def record(
     return ENGINE.record(state, family_id, correct, late)
 
 
-def replay_session(session, *, relax_window: bool = True) -> "CatState":
+def replay_session(session, *, relax_window: bool = True, exclude_unanswered: bool = False) -> "CatState":
     """Rebuild an engine state by replaying a session's answered items.
 
     Uses the parameters persisted on each AssessmentItem (via ``record``'s
     ``params`` override) so theta/se are derived exactly as during the live
-    test. Unanswered (pending) items are skipped. When ``relax_window`` is
-    set, the stop-rule window is widened so every replayed entry is scored
-    (replay appends onto a fresh state whose max_items may be smaller than
-    the number of served items, e.g. express sessions finished via /finish).
+    test. Unanswered (pending) items are skipped; with
+    ``exclude_unanswered=True`` the pending entry is dropped from the rebuilt
+    state entirely (used when the caller will record the newest answer itself).
+    When ``relax_window`` is set, the stop-rule window is widened so every
+    replayed entry is scored (replay appends onto a fresh state whose max_items
+    may be smaller than the number of served items, e.g. express sessions
+    finished via /finish).
     """
     state = start(
         spec=session.specialization,
@@ -322,6 +333,11 @@ def replay_session(session, *, relax_window: bool = True) -> "CatState":
             late=late,
             params={"a": it.family.a, "b": it.family.b, "topic": it.family.topic},
         )
+    if exclude_unanswered:
+        # Drop trailing pending entries (record() may reset a scored duplicate
+        # to pending when the same family was served twice).
+        while state.administered and state.administered[-1]["correct"] is None:
+            state.administered.pop()
     return state
 
 
