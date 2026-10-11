@@ -9,34 +9,53 @@
  */
 import type {
   AnswerResponse as GeneratedAnswerResponse,
+  AssessmentEvidence as GeneratedAssessmentEvidence,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
+  AssessmentTopic as GeneratedAssessmentTopic,
   ItemView as GeneratedItemView,
+  CandidateLeague as GeneratedCandidateLeague,
   CandidateProfile as GeneratedCandidateProfile,
+  Company as GeneratedCompany,
   ConsentsResponse,
   ContactChannelEnum,
   DecisionEnum,
   DeclineReasonEnum,
   EligibilityResponse,
   FSPLinkResponse,
-  GradesEnum,
+  GradeEnum,
+  JdBlueprintItem as GeneratedJdBlueprintItem,
+  JdDraft as GeneratedJdDraft,
+  JdParseResult as GeneratedJdParseResult,
   KindEnum,
   MeResponse,
   ModeEnum,
   Offer as GeneratedOffer,
   OfferStatusEnum,
+  PoolComponent as GeneratedPoolComponent,
+  PoolItem as GeneratedPoolItem,
+  Position as GeneratedPosition,
+  PositionPoolResponse as GeneratedPositionPoolResponse,
   ResumeParseResponse,
   SalaryTypeEnum,
   SpecializationEnum,
   Status61dEnum,
+  TalentDetailResponse as GeneratedTalentDetail,
+  TalentSearchResponse as GeneratedTalentSearchResponse,
   TalentShort as GeneratedTalentShort,
+  Taxonomy as GeneratedTaxonomy,
+  TaxonomyDeclineReason as GeneratedTaxonomyDeclineReason,
+  TaxonomyGrade as GeneratedTaxonomyGrade,
+  TaxonomySkill as GeneratedTaxonomySkill,
+  TaxonomySpecialization as GeneratedTaxonomySpecialization,
+  TaxonomyTopic as GeneratedTaxonomyTopic,
   TrustLevelEnum,
   WorkFormatsEnum,
 } from '@/api/generated/models'
 
 // --- enums: single source of truth = the generated schema ---
 export type Spec = SpecializationEnum
-export type Grade = GradesEnum
+export type Grade = GradeEnum
 export type WorkFormat = WorkFormatsEnum
 export type SalaryType = SalaryTypeEnum
 export type OfferStatus = OfferStatusEnum
