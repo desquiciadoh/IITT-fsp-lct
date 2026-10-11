@@ -63,8 +63,11 @@ export function OfferDetailPage() {
           onError: async (err) => {
             const isExpired = err instanceof ApiError && err.code === 'offer_expired'
             if (isExpired) {
+              // R25 — refetch and render the real (expired) status instead of
+              // an error page; only fall back to ErrorState if it's still `sent`.
+              const { data: refreshed } = await refetch()
+              if (refreshed && refreshed.status !== 'sent') return
               setViewError(err)
-              void refetch()
               return
             }
 

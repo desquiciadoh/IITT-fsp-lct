@@ -242,6 +242,35 @@ export const scoutingHandlers = [
     return stub(shelfCounts(spec))
   }),
 
+  // FE-17 · BE-20 — Need Health (decline analytics + diagnosis), fixture shape.
+  http.get('*/api/positions/:id/health', ({ params }) =>
+    stub({
+      position_id: String(params.id),
+      title: 'Backend-разработчик',
+      total_offers: 12,
+      accepted_offers: 4,
+      declined_offers: 6,
+      expired_offers: 2,
+      acceptance_rate: 0.33,
+      decline_rate: 0.5,
+      decline_reasons: {
+        salary: 3,
+        format: 2,
+        stack: 1,
+        company: 0,
+        timing: 0,
+        not_looking: 0,
+        other: 0,
+      },
+      top_decline_reason: 'salary',
+      health_status: 'needs_attention',
+      diagnosis:
+        'Кандидаты чаще всего отклоняют оффер из-за зарплаты. Рекомендуется повысить вилку зарплаты.',
+      credits_remaining: 5,
+      weekly_credits_remaining: 5,
+    }),
+  ),
+
   // G8 — pool with server-side filters, facets, pagination, list components.
   http.get('*/api/positions/:id/pool', ({ request, params }) => {
     const positionId = String(params.id)
@@ -293,6 +322,12 @@ export const scoutingHandlers = [
         reasons,
         gaps,
         shortlisted: listed.has(t.public_id),
+        // FE-17 · ML-10 — acceptance likelihood shown next to "Send".
+        acceptance_likelihood: t.fsp.linked
+          ? 'high'
+          : t.league.status === 'confirmed'
+            ? 'medium'
+            : 'low',
       }))
 
     return stub({

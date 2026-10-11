@@ -11,6 +11,7 @@ import { applyApiErrorToForm } from '@/features/auth/form-errors'
 import { loginSchema, type LoginValues } from '@/features/auth/schemas'
 import { AuthShell } from '@/features/auth/auth-shell'
 import { PERSONAS } from '@/lib/personas'
+import { resolvePostLoginPath } from '@/lib/post-login'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -34,20 +35,7 @@ export function LoginPage() {
     if (data) client.setQueryData(keys.me, data)
     client.invalidateQueries({ queryKey: keys.me })
 
-    const next = searchParams.get('next')
-    if (next && next.startsWith('/') && !next.startsWith('//')) {
-      const role = data?.role
-      const isRoleAllowed =
-        (role === 'candidate' && (next.startsWith('/candidate') || next === '/' || next.startsWith('/jury'))) ||
-        (role === 'employer' && (next.startsWith('/employer') || next === '/' || next.startsWith('/jury'))) ||
-        (role === 'admin')
-      if (isRoleAllowed) {
-        navigate(next, { replace: true })
-        return
-      }
-    }
-
-    navigate('/', { replace: true })
+    navigate(resolvePostLoginPath(searchParams.get('next'), data?.role), { replace: true })
   }
 
   const handleError = (error: unknown) => {

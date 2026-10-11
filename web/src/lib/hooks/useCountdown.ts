@@ -9,7 +9,10 @@ export function useCountdown(deadline?: string | null): {
   remainingMs: number
   expired: boolean
 } {
-  const target = deadline ? new Date(deadline).getTime() : null
+  const parsed = deadline ? new Date(deadline).getTime() : null
+  // An unparseable deadline is treated as absent, never as NaN: NaN would
+  // make `expired` permanently false and the label render "NaN".
+  const target = parsed !== null && Number.isFinite(parsed) ? parsed : null
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {

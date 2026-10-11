@@ -89,6 +89,18 @@ function normalizeFieldErrors(raw: unknown): Record<string, string[]> {
   return out
 }
 
+/**
+ * Is this a problem+json envelope (carries `title`/`code`/`detail` metadata)
+ * rather than a bare DRF field-error map? Distinct so the metadata keys are
+ * never normalized into field errors — otherwise a plain `{detail}` problem
+ * (e.g. bad credentials) applies a phantom field error and the caller's toast
+ * is suppressed, so the user sees nothing.
+ */
+function isProblemEnvelope(body: unknown): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false
+  return ['type', 'title', 'status', 'code', 'detail'].some((k) => k in (body as object))
+}
+
 function toApiError(status: number, body: unknown): ApiError {
   const problem = (body ?? {}) as ProblemBody
   const detail = typeof problem.detail === 'string' ? problem.detail : undefined
@@ -112,7 +124,9 @@ function toApiError(status: number, body: unknown): ApiError {
     code,
     title: problem.title,
     detail: junkDetail ? undefined : detail,
-    fieldErrors: normalizeFieldErrors(problem.errors ?? (junkDetail ? undefined : body)),
+    fieldErrors: normalizeFieldErrors(
+      problem.errors ?? (junkDetail || isProblemEnvelope(body) ? undefined : body),
+    ),
   })
 }
 

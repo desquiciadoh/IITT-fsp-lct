@@ -24,6 +24,9 @@ export function EmployerDashboardPage() {
             <Link to="/employer/offers">Офферы</Link>
           </Button>
           <Button variant="outline" size="sm" asChild>
+            <Link to="/employer/micro-tasks">Микрозадачи</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
             <Link to="/employer/company">Компания</Link>
           </Button>
           <Button size="sm" asChild>

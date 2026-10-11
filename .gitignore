@@ -13,6 +13,12 @@ build/
 # Logs
 *.log
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
 # Editor/IDE
 .vscode/
 .idea/

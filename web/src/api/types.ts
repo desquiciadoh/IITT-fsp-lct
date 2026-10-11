@@ -356,6 +356,8 @@ export type PoolEntry = Omit<GeneratedPoolItem, 'talent' | 'components' | 'reaso
   /** the generated schema renders reasons as loose dicts — narrowed here */
   reasons: Reason[]
   gaps?: string[]
+  /** gap ML-10 — acceptance likelihood shown next to "Send" (FE-17). */
+  acceptance_likelihood?: 'low' | 'medium' | 'high' | null
 }
 
 /**
@@ -384,6 +386,27 @@ export type PoolFilters = {
   confirmed_only: boolean
   preset: string | null
   page: number
+}
+
+/**
+ * gap BE-20 — GET /api/positions/{pk}/health (Need Health). Lives on the
+ * backend today; mocked in `all` mode so the UI can be built without it.
+ */
+export type PositionHealth = {
+  position_id: string
+  title: string
+  total_offers: number
+  accepted_offers: number
+  declined_offers: number
+  expired_offers: number
+  acceptance_rate: number
+  decline_rate: number
+  decline_reasons: Record<string, number>
+  top_decline_reason: string | null
+  health_status: 'good' | 'needs_attention' | 'critical'
+  diagnosis: string
+  credits_remaining: number
+  weekly_credits_remaining: number
 }
 
 /**
@@ -475,4 +498,210 @@ export type AnswerInput = {
 export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
   next?: AssessmentItem
   result?: AssessmentResult
+}
+
+/** gap G11 — test-information function samples (theta vs Fisher info). */
+export type ValidationTif = {
+  theta: number[]
+  info: number[]
+}
+
+/** gap G11 — one point of the answer-leak attack curve. */
+export type ValidationLeakPoint = {
+  leak_share: number
+  static_dtheta: number
+  parametric_dtheta: number
+}
+
+/** gap G11 — skill-assessment quality block of the lab report. */
+export type ValidationAssessment = {
+  simulees: number
+  exact_acc: number
+  adjacent_acc: number
+  qwk: number
+  retest_same_grade: number
+  retest_r: number
+  median_len: number
+  max_family_exposure: number
+  collision_rate: number
+  generator_errors: number
+  confusion: number[][]
+  tif: ValidationTif
+  leak_attack: ValidationLeakPoint[]
+}
+
+/** gap G11 — one matching baseline in the comparison table. */
+export type ValidationSystem = {
+  name: string
+  ndcg10: number
+  p10: number
+  r50: number
+  mrr: number
+}
+
+/** gap G11 — matching/ranking block of the lab report. */
+export type ValidationMatching = {
+  candidates: number
+  needs: number
+  non_fsp_parity: number
+  pool_p95_ms: number
+  systems: ValidationSystem[]
+}
+
+/** gap G11 — GET /api/lab/report (docs/TASKS.md §1.4). */
+export type ValidationReport = {
+  generated_at: string
+  git_sha: string
+  synthetic_fixture: boolean
+  assessment: ValidationAssessment
+  matching: ValidationMatching
+}
+
+/** gap BE-22 — what a candidate sees for one generated instance (never the key). */
+export type TwinInstanceView = {
+  stem_md: string
+  input: 'choice' | 'number' | 'text'
+  code: { lang: string; text: string } | null
+  options: { id: string; text_md: string }[] | null
+}
+
+/** gap BE-22 — one topic slot rendered as two parallel instances. */
+export type LabTwinItem = {
+  family_id: string
+  topic: string
+  level: string
+  b: number
+  time_limit_s: number
+  instance_a: TwinInstanceView
+  instance_b: TwinInstanceView
+}
+
+/** gap BE-22 — GET /api/lab/twins?position_id= | specialization+grade. */
+export type LabTwinsResponse = {
+  position_id?: string | null
+  position_title?: string | null
+  specialization: string
+  grade: string
+  twins: LabTwinItem[]
+}
+
+// --- BE-17 · Vacancies & applications (backend live; client not regenerated) ---
+
+export type ApplicationStatus =
+  | 'applied'
+  | 'reviewing'
+  | 'invited'
+  | 'rejected'
+  | 'hired'
+  | 'withdrawn'
+
+export type VacancyCompany = {
+  id: string
+  name: string
+  trust_level?: TrustLevel
+  website?: string | null
+  description?: string
+}
+
+export type VacancySalary = {
+  min: number
+  max: number
+  type: SalaryType
+  currency: string
+}
+
+export type Vacancy = {
+  id: string
+  title: string
+  company: VacancyCompany
+  specialization: Spec
+  grades: Grade[]
+  must_skills?: string[]
+  nice_skills?: string[]
+  work_formats?: WorkFormat[]
+  location?: string
+  salary_min: number
+  salary_max: number
+  salary_type: SalaryType
+  salary?: VacancySalary
+  team_context?: string
+  description?: string
+  created_at?: string
+}
+
+export type VacancyListResponse = {
+  items: Vacancy[]
+  total: number
+  page: number
+  pages: number
+}
+
+export type ApplicationCandidate = {
+  id: string
+  position: Vacancy
+  status: ApplicationStatus
+  note?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type ApplicationEmployer = {
+  id: string
+  candidate: TalentShort | null
+  status: ApplicationStatus
+  note?: string
+  created_at?: string
+  updated_at?: string
+}
+
+// --- BE-18 · Micro-tasks (backend live; client not regenerated) ---
+
+export type MicroTaskFormat = 'auto' | 'open'
+
+export type MicroTask = {
+  id: string
+  company: VacancyCompany
+  title: string
+  specialization: Spec
+  grades: Grade[]
+  format: MicroTaskFormat
+  family_id?: string | null
+  prompt_md: string
+  deadline?: string | null
+  created_at?: string
+}
+
+export type MicroTaskDropCandidate = {
+  id: string
+  task: MicroTask
+  dropped_at?: string
+  answer?: unknown
+  score?: number | null
+  employer_rating?: number | null
+  submitted_at?: string | null
+}
+
+export type MicroTaskSubmission = {
+  id: string
+  task_id: string
+  candidate?: TalentShort | null
+  dropped_at?: string
+  answer?: unknown
+  score?: number | null
+  employer_rating?: number | null
+  submitted_at?: string | null
+}
+
+export type MicroTaskPrefill = {
+  candidate_id: string
+  candidate_public_id: string
+  candidate_name: string
+  company_id: string
+  company_name: string
+  title: string
+  description: string
+  salary_min: number
+  salary_max: number
+  salary_type: SalaryType
+  contact_channel: string
 }

@@ -1,8 +1,11 @@
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { FlaskConical } from 'lucide-react'
 import { usePosition } from '@/api/employer'
 import { ApiError } from '@/api/client'
 import { PositionForm, positionToForm } from '@/features/employer/position-form'
 import { PoolTab } from '@/features/employer/pool-tab'
+import { PositionApplicantsTab } from '@/features/vacancies/position-applicants-tab'
+import { PublishToggle } from '@/features/vacancies/publish-toggle'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState, EmptyState } from '@/components/domain/states'
@@ -18,6 +21,7 @@ import { cn } from '@/lib/utils'
  */
 const TABS = [
   { key: 'pool', label: 'Пуул' },
+  { key: 'applicants', label: 'Отклики' },
   { key: 'settings', label: 'Настройки' },
 ] as const
 
@@ -44,13 +48,22 @@ export function PositionDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">{position.title}</h1>
         <span className="flex items-center gap-2">
-          <StatusChip status={(position.status ?? 'draft') as never} />
+          <Link
+            to={`/lab?tab=twins&position_id=${position.id}`}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            <FlaskConical className="h-4 w-4" /> Двойники теста
+          </Link>
+          <StatusChip status={position.status ?? 'open'} />
           <SalaryTag min={position.salary_min} max={position.salary_max} type={position.salary_type} emphasize />
+          <PublishToggle positionId={position.id} isPublic={Boolean(position.is_public)} />
         </span>
       </div>
       <PositionTabs current={tab} />
       {tab === 'pool' ? (
         <PoolTab positionId={position.id} specialization={position.specialization} position={position} />
+      ) : tab === 'applicants' ? (
+        <PositionApplicantsTab positionId={position.id} />
       ) : (
         <Card className="mx-auto w-full max-w-2xl">
           <CardHeader>
