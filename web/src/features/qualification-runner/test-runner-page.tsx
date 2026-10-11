@@ -221,7 +221,8 @@ function RunnerBody({
   }, [hasItem])
 
   /**
-   * Confirmed early finish: POST /api/assessments/{id}/finish (G5, mocked).
+   * Confirmed early finish: POST /api/assessments/{id}/finish (G5 shipped on
+   * the BE; stateful mock in qualification.ts for `all` mode).
    * The draft answer for the unsent current item is intentionally dropped —
    * the backend treats the unanswered tail as incorrect; <50% answered →
    * `not_enough_answers` (attempt abandoned, BE.md R9) — we still hand off

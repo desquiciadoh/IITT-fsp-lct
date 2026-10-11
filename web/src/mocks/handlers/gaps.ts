@@ -10,12 +10,13 @@ const problem = (status: number, code: string, detail: string, errors?: unknown)
     headers: { 'Content-Type': 'application/problem+json', 'X-Stub': 'true' },
   })
 
-/** G5 (shipped) — `POST /api/assessments/:id/finish` is live on the backend.
- *  In `all` mode the stateful store in qualification.ts serves it; MSW picks
- *  the FIRST matching handler, so gapHandlers must stay first in that list
- *  only for endpoints without a real mock. For finish we want the stateful
- *  one to win, hence it is registered via qualificationHandlers below and
- *  this fallback stays scoped to `missing` mode. */
+/**
+ * Dev-only `all`-mode fixtures for endpoints the stateful mocks do not cover.
+ * All former gaps G1–G8/G16/G17 are live on the backend (see openapi/schema.json),
+ * so nothing here is registered in `missing` mode — browser.ts keeps this list
+ * `all`-only. Shapes follow the current wire contract (object taxonomy, plain
+ * array of shelves).
+ */
 export const gapHandlers = [
   http.get('*/api/auth/csrf', () => json({ detail: 'ok' })),
   http.post('*/api/auth/verify-email', async ({ request }) => {
@@ -59,21 +60,16 @@ export const gapHandlers = [
     }),
   ),
   http.get('*/api/leagues', ({ request }) => {
-    const spec = new URL(request.url).searchParams.get('specialization')
-    return json({
-      items: [
-        { specialization: spec ?? 'backend', grade: 'middle', status: 'confirmed', rating: 1842 },
-        { specialization: spec ?? 'backend', grade: 'senior', status: 'pending' },
-      ],
-      total: 2,
-      page: 1,
-    })
+    const spec = new URL(request.url).searchParams.get('specialization') ?? 'backend'
+    // G7 shipped — wire shape is a plain array of shelves (LeagueShelf[]).
+    return json([
+      { specialization: spec, grade: 'middle', confirmed: 12, unconfirmed: 5 },
+      { specialization: spec, grade: 'senior', confirmed: 7, unconfirmed: 3 },
+    ])
   }),
   // POST /api/positions/parse (G6 shipped) is served by the stateful FE-09 mock
   // in employer.ts — do not shadow it with a static stub here.
-  http.post('*/api/assessments/:id/finish', () =>
-    problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),
-  ),
+  // Lab report (P1, FE-13) has no backend endpoint yet — `/lab` is a stub page.
   http.get('*/api/lab/report', () =>
     json({ id: 'lab-1', summary: 'Черновик отчёта', scores: {} }),
   ),
