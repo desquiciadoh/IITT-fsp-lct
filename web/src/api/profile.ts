@@ -1,7 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
-import type { CandidateProfile, Consents, ResumeParseResult, Taxonomy } from '@/api/types'
+import type {
+  CandidateProfile,
+  Consents,
+  Grade,
+  ResumeParseResult,
+  Spec,
+  Taxonomy,
+  TaxonomyWire,
+} from '@/api/types'
 
 export function useProfile() {
   return useQuery({
@@ -11,20 +19,22 @@ export function useProfile() {
   })
 }
 
+/**
+ * GET /api/taxonomy (gap G3 — shipped). The wire shape is object-based
+ * ({id,name,...} entries); the UI consumes flat string lists, so normalize
+ * here and never let raw objects reach the components.
+ */
 export function useTaxonomy() {
   return useQuery({
     queryKey: keys.taxonomy,
-    queryFn: () => customFetch<Taxonomy>('/api/taxonomy'),
+    queryFn: () => customFetch<TaxonomyWire>('/api/taxonomy'),
     staleTime: 5 * 60_000,
     retry: false,
-    // The backend TaxonomySerializer returns skills as {id, name, aliases, topic}
-    // objects, but the Taxonomy type (and all consumers) expect plain string[].
-    // Normalise here so FilterPanel and other consumers never see raw objects.
     select: (data): Taxonomy => ({
-      ...data,
-      skills: (data.skills ?? []).map((s) =>
-        typeof s === 'string' ? s : (s as unknown as { name: string }).name,
-      ),
+      specs: (data.specializations ?? []).map((s) => s.id as Spec),
+      grades: (data.grades ?? []).map((g) => g.id as Grade),
+      skills: (data.skills ?? []).map((s) => s.name),
+      decline_reasons: data.decline_reasons ?? [],
     }),
   })
 }

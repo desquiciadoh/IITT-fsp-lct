@@ -4,18 +4,24 @@
  * Types that exist in the generated schema are aliased or derived from
  * `@/api/generated/models` (orval output) so they cannot drift from the
  * backend. Hand-written types are limited to shapes drf-spectacular leaves
- * open (nested serializers flattened to `string`/`unknown`) and to gaps
- * still to be shipped, each tagged with a comment.
+ * open (nested serializers flattened to `string`/`unknown`, loose enums
+ * narrowed here) and to view-normalizations of generated payloads. Former
+ * gap comments (G3/G5/G6/G7/G8/G16/G17) were removed once the backend
+ * shipped those fields — only genuinely open gaps stay tagged (e.g. G9).
  */
 import type {
   AnswerResponse as GeneratedAnswerResponse,
   AssessmentEvidence as GeneratedAssessmentEvidence,
+  AssessmentFallback as GeneratedAssessmentFallback,
+  AssessmentModeEnum,
   AssessmentResult as GeneratedAssessmentResult,
   AssessmentSession as GeneratedAssessmentSession,
+  AssessmentStatusEnum,
   AssessmentTopic as GeneratedAssessmentTopic,
-  ItemView as GeneratedItemView,
+  CandidateFSP as GeneratedCandidateFSP,
   CandidateLeague as GeneratedCandidateLeague,
   CandidateProfile as GeneratedCandidateProfile,
+  CandidateSkill as GeneratedCandidateSkill,
   Company as GeneratedCompany,
   ConsentsResponse,
   ContactChannelEnum,
@@ -24,12 +30,13 @@ import type {
   EligibilityResponse,
   FSPLinkResponse,
   GradeEnum,
-  JdBlueprintItem as GeneratedJdBlueprintItem,
+  ItemView as GeneratedItemView,
   JdDraft as GeneratedJdDraft,
+  JdParseBlueprintItem as GeneratedJdBlueprintItem,
   JdParseResult as GeneratedJdParseResult,
   KindEnum,
+  LeagueShelf as GeneratedLeagueShelf,
   MeResponse,
-  ModeEnum,
   Offer as GeneratedOffer,
   OfferStatusEnum,
   PoolComponent as GeneratedPoolComponent,
@@ -39,8 +46,9 @@ import type {
   ResumeParseResponse,
   SalaryTypeEnum,
   SpecializationEnum,
-  Status61dEnum,
   TalentDetailResponse as GeneratedTalentDetail,
+  TalentFSP as GeneratedTalentFSP,
+  TalentLeague as GeneratedTalentLeague,
   TalentSearchResponse as GeneratedTalentSearchResponse,
   TalentShort as GeneratedTalentShort,
   Taxonomy as GeneratedTaxonomy,
@@ -53,6 +61,33 @@ import type {
   WorkFormatsEnum,
 } from '@/api/generated/models'
 
+// Re-export the generated building blocks so mocks/tests can type payloads
+// without importing from the generated folder directly.
+export type {
+  GeneratedAssessmentEvidence as AssessmentEvidenceDto,
+  GeneratedAssessmentFallback as AssessmentFallbackDto,
+  GeneratedAssessmentTopic as AssessmentTopicDto,
+  GeneratedCandidateFSP,
+  GeneratedCandidateLeague,
+  GeneratedCandidateSkill,
+  GeneratedJdBlueprintItem,
+  GeneratedJdDraft,
+  GeneratedJdParseResult,
+  GeneratedLeagueShelf,
+  GeneratedPoolComponent,
+  GeneratedPoolItem,
+  GeneratedPositionPoolResponse,
+  GeneratedTalentFSP,
+  GeneratedTalentLeague,
+  GeneratedTalentSearchResponse,
+  GeneratedTaxonomy,
+  GeneratedTaxonomyDeclineReason,
+  GeneratedTaxonomyGrade,
+  GeneratedTaxonomySkill,
+  GeneratedTaxonomySpecialization,
+  GeneratedTaxonomyTopic,
+}
+
 // --- enums: single source of truth = the generated schema ---
 export type Spec = SpecializationEnum
 export type Grade = GradeEnum
@@ -60,8 +95,8 @@ export type WorkFormat = WorkFormatsEnum
 export type SalaryType = SalaryTypeEnum
 export type OfferStatus = OfferStatusEnum
 export type AssessmentKind = KindEnum
-export type AssessmentMode = ModeEnum
-export type AssessmentStatus = Status61dEnum
+export type AssessmentMode = AssessmentModeEnum
+export type AssessmentStatus = AssessmentStatusEnum
 export type DeclineReason = (typeof DeclineReasonEnum)[keyof typeof DeclineReasonEnum]
 export type GradeDecision = (typeof DecisionEnum)[keyof typeof DecisionEnum] | ''
 export type ContactChannel = (typeof ContactChannelEnum)[keyof typeof ContactChannelEnum]
@@ -78,14 +113,14 @@ export type Me = Omit<MeResponse, 'role' | 'onboarding_step'> & {
   onboarding_step?: OnboardingStep
 }
 
-/** The schema has no League model (nested serializers flattened to `string`). */
+/** League payload: the schema renders specialization/grade/status as loose strings. */
 export type LeagueStatus = 'pending' | 'confirmed' | 'unconfirmed'
 export type League = {
   specialization: Spec
   grade: Grade
   status: LeagueStatus
   rating?: number
-  percentile?: number
+  percentile?: number | null
   strength?: number | null
 }
 
@@ -94,27 +129,45 @@ export type Source = 'test' | 'fsp' | 'microtask' | 'declared'
 export type ReasonKind = 'plus' | 'minus' | 'info'
 export type Reason = { kind: ReasonKind; text: string; source?: Source }
 
+export type ScoreComponentKey =
+  | 'skill'
+  | 'strength'
+  | 'grade'
+  | 'salary'
+  | 'semantic'
+  | 'freshness'
+  | 'fsp'
+
+/** Generated PoolComponent is {key,value,weight,contribution}; key is a loose string. */
 export type ScoreComponent = {
-  key: 'skill' | 'strength' | 'grade' | 'salary' | 'semantic' | 'freshness' | 'fsp'
+  key: ScoreComponentKey
   contribution: number
   weight?: number
+  value?: number
 }
 
-/** gap G8 — the backend pool returns a flat components dict today. */
-export type ScoreComponentsDict = Partial<
-  Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
->
+/** Legacy dict shape (BE shipped the list form — kept so MSW mocks/tests can still emit it). */
+export type ScoreComponentsDict = Partial<Record<ScoreComponentKey, number>>
+
+/** FSP block on talent payloads (schema TalentFSP has no best_tier/rank fields). */
+export type TalentFspView = {
+  linked: boolean
+  results?: number
+  best_tier?: string
+  rank?: string
+  sports_rank?: string | null
+}
 
 export type TalentShort = Omit<
   GeneratedTalentShort,
-  'public_id' | 'league' | 'fsp' | 'skills' | 'display_name' | 'verified_topics'
+  'public_id' | 'league' | 'fsp' | 'skills' | 'display_name' | 'verified_topics' | 'salary_type'
 > & {
   public_id: string
   /** present at runtime; the schema marks it readOnly */
   display_name?: string
+  salary_type?: SalaryType | ''
   league?: League | null
-  fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
-  /** the schema flattens this nested list to `string` */
+  fsp?: TalentFspView | null
   skills?: string[]
   verified_topics?: readonly string[]
   /** FE-12 · search payload carries the shortlist flag on the talent itself. */
@@ -166,6 +219,12 @@ export type ProfileSkill = {
 
 export type Consents = ConsentsResponse
 
+export type CandidateFspView = GeneratedCandidateFSP & {
+  /** legacy mock shape carried a flat results list; tolerate it */
+  best_tier?: string
+  rank?: string
+}
+
 export type CandidateProfile = Omit<
   GeneratedCandidateProfile,
   | 'specialization'
@@ -173,36 +232,20 @@ export type CandidateProfile = Omit<
   | 'salary_type'
   | 'about'
   | 'experience_text'
-  | 'contacts'
-  | 'skills'
   | 'league'
   | 'fsp'
-  | 'consents'
-  | 'unknown_skills'
 > & {
   specialization?: Spec | '' | null
   claimed_grade?: Grade | '' | null
   salary_type?: SalaryType | '' | null
   about?: string | null
   experience_text?: string | null
-  contacts?: { email?: string; phone?: string; telegram?: string } | null
+  /** the schema marks these readOnly but they arrive as plain objects */
+  contacts?: GeneratedCandidateProfile['contacts'] | null
   skills?: ProfileSkill[]
   unknown_skills?: string[]
   league?: League | null
-  fsp?: {
-    participant_id?: string
-    sports_rank?: string | null
-    sync_status?: string
-    results?: {
-      event_id?: string
-      event_name?: string
-      discipline?: string
-      date?: string
-      placement?: number | null
-      tier?: string | null
-      participants_total?: number | null
-    }[]
-  } | null
+  fsp?: CandidateFspView | null
   consents?: Consents | null
 }
 
@@ -215,26 +258,38 @@ export type ResumeParseResult = Omit<ResumeParseResponse, 'prefill'> & {
   }
 }
 
-/** gap G3 — the taxonomy endpoint is mocked until the backend ships it. */
+/** gap G3 (closed) — the wire Taxonomy is object-based; this is the flat view type. */
+export type TaxonomyWire = GeneratedTaxonomy
+
+/**
+ * View model consumed by the UI: plain string lists (specs/grades/skills are
+ * `{id,name}` objects on the wire — normalized in useTaxonomy().select).
+ * `work_formats`/`strength_topics` are not part of the taxonomy endpoint yet,
+ * so they stay optional with static fallbacks in the consumers.
+ */
 export type Taxonomy = {
   specs: Spec[]
   grades: Grade[]
-  work_formats: WorkFormat[]
-  strength_topics: string[]
+  work_formats?: WorkFormat[]
+  strength_topics?: string[]
   skills: string[]
+  decline_reasons?: { id: string; name: string }[]
 }
 
-export type ResultTopic = {
+export type ResultTopic = GeneratedAssessmentTopic & {
+  /** legacy mock key (label); the schema field is `topic` */
   key?: string
-  topic?: string
   label?: string
-  level?: string
   correct?: number
   total?: number
 }
-export type EvidencePoint = { seq: number; level?: string; correct: boolean | null }
+export type EvidencePoint = GeneratedAssessmentEvidence
 
-/** GET /api/assessments/{id}/result. G5 fields are optional (mocked until BE adds them). */
+/**
+ * GET /api/assessments/{id}/result. Enums are optional on the wire and
+ * narrowed to required here; `percentile` is not in the schema (G5 residual)
+ * — it stays only on League, not on the result payload.
+ */
 export type AssessmentResult = Omit<
   GeneratedAssessmentResult,
   | 'kind'
@@ -259,20 +314,27 @@ export type AssessmentResult = Omit<
   result_grade: Grade | ''
   decision: GradeDecision
   started_at: string | null
-  // gap G5 — hidden while the backend omits them
-  rating_ci?: number | null
-  percentile?: number | null
   topics?: ResultTopic[]
   evidence?: EvidencePoint[]
-  fallback?: { kind?: 'instant' | 'short_test'; mode?: string; grade?: string; reason?: string } | null
+  fallback?: GeneratedAssessmentFallback | null
+}
+
+/**
+ * MSW-only fixtures may still emit fields the schema omits (percentile) or
+ * relax readonly optionality (fallback/next_attempt_at/start). Tests cast
+ * payloads through this alias instead of `as unknown as`.
+ */
+export type MockAssessmentResult = AssessmentResult & {
+  percentile?: number | null
+  fallback?: (GeneratedAssessmentFallback & { reason?: string }) | null
   next_attempt_at?: string | null
+  started_at?: string | null
 }
 
 /**
  * GET /api/assessments/eligibility?specialization= (FE-05 start screen).
- * gap G5: `reason` carries the machine code (`cooldown_active`) and
- * `next_attempt_at` the ISO moment when the cooldown ends — the backend
- * returns both today, but the schema marks them optional.
+ * `reason` carries the machine code (`cooldown_active`) and `next_attempt_at`
+ * the ISO moment when the cooldown ends.
  */
 export type Eligibility = Omit<EligibilityResponse, 'next_attempt_at' | 'active_session_id'> & {
   next_attempt_at?: string | null
@@ -285,19 +347,21 @@ export type ItemInputType = 'choice' | 'number' | 'text'
 
 /**
  * GET /api/assessments/{id} → `current` (FE2.md §FE-05).
- * The schema flattens `code`/`options` to `unknown`; the runtime shapes are:
- * `code: {lang, text} | null`, `options: [{id, text_md}] | null`.
- * gap G5: `level` (difficulty) and `max_items` (progress total) are not on
- * the backend yet — optional here, mocked in qualification.ts.
+ * The schema flattens `code`/`options`/`input_type` to loose types; the
+ * runtime shapes are `code: {lang, text} | null`,
+ * `options: [{id, text_md}] | null`.
  */
-export type AssessmentItem = Omit<GeneratedItemView, 'code' | 'options' | 'input_type' | 'level'> & {
+export type AssessmentItem = Omit<
+  GeneratedItemView,
+  'code' | 'options' | 'input_type' | 'level'
+> & {
   code: { lang: string; text: string } | null
   options: { id: string; text_md: string }[] | null
   input_type: ItemInputType
   level?: string | number | null
 }
 
-export type AssessmentSession = Omit<GeneratedAssessmentSession, 'current'> & {
+export type AssessmentSession = Omit<GeneratedAssessmentSession, 'current' | 'max_items'> & {
   /** Served item for the in-progress session; null once finished/expired. */
   current: AssessmentItem | null
   max_items?: number | null
@@ -314,8 +378,6 @@ export type StartAssessmentInput = {
 
 // --- FE-09 · Company & position wizard ---------------------------------------
 
-import type { Company as GeneratedCompany, Position as GeneratedPosition } from '@/api/generated/models'
-
 /** GET/PUT /api/companies/me. `trust_level` is read-only (TrustBadge). */
 export type Company = GeneratedCompany
 /** PUT body: writable subset only (id/trust_level/created_at are readOnly). */
@@ -324,7 +386,7 @@ export type CompanyInput = Pick<
   'name' | 'inn' | 'website' | 'email_domain' | 'business_domain' | 'description' | 'contact_email'
 >
 
-/** gap G17 — company creation endpoint (`company_required` after BE fix B1). */
+/** Company creation payload — same writable subset (G17 shipped on the BE). */
 export type CompanyCreateInput = CompanyInput
 
 /** GET/POST/PUT /api/positions[/{id}]. */
@@ -333,7 +395,7 @@ export type Position = GeneratedPosition
 export type PositionInput = Omit<Position, 'id' | 'company' | 'created_at'>
 
 /**
- * POST /api/positions/parse → JdParseResult (gap G6; mocked in MSW).
+ * POST /api/positions/parse → JdParseResult.
  * The schema renders the draft enums as loose strings — narrowed here.
  */
 export type JdBlueprintItem = { topic: string; weight: number }
@@ -360,28 +422,24 @@ export type JdParseResult = {
 
 // --- FE-10 · Scouting --------------------------------------------------------
 
-import type { PoolItem as GeneratedPoolItem } from '@/api/generated/models/poolItem'
-import type { TalentDetailResponse as GeneratedTalentDetail } from '@/api/generated/models/talentDetailResponse'
-
 /**
- * GET /api/positions/{id}/pool item. `components` is a dict today (skill/
- * grade/strength/fsp/salary, max 35/25/15/15/10) and becomes a list (gap G8);
- * everything renders through normalizeComponents(). `gaps` is target shape
- * (G8) — until then derive them from `kind === 'minus'` reasons.
+ * GET /api/positions/{id}/pool item. `components` ships as a list of
+ * {key,value,weight,contribution}; the legacy dict shape is tolerated by
+ * normalizeComponents() so older mocks keep rendering. `gaps` is required
+ * on the wire; `deriveGaps()` stays as a fallback for dict-era payloads.
  */
 export type PoolEntry = Omit<GeneratedPoolItem, 'talent' | 'components' | 'reasons'> & {
   talent: TalentShort
   components: ScoreComponent[] | ScoreComponentsDict
   /** the generated schema renders reasons as loose dicts — narrowed here */
   reasons: Reason[]
-  gaps?: string[]
+  gaps: string[]
 }
 
 /**
- * The generated schema declares only {items,total,page}. `pages`, `facets`
- * and `relaxations` are BE gap G8 — optional so the UI can detect the
- * capability instead of hardcoding it (client-side filter fallback when
- * `facets` is absent).
+ * Pool page. The generated schema declares pages/facets/relaxations; they
+ * stay optional so the UI can detect the capability instead of hardcoding
+ * it (client-side filter fallback when `facets` is absent in mocks).
  */
 export type PoolResponse = {
   items: PoolEntry[]
@@ -393,7 +451,7 @@ export type PoolResponse = {
 }
 
 /** Pool filters, synced to the URL query string (FE-10). Sent as query params; */
-/** the backend may ignore them today (G8) — see the client-side fallback. */
+/** the backend may ignore them today — see the client-side fallback. */
 export type PoolFilters = {
   grades: Grade[]
   skills: string[]
@@ -406,30 +464,26 @@ export type PoolFilters = {
 }
 
 /**
- * gap G7 — GET /api/leagues?specialization= returns a plain array of shelves
- * `{specialization, grade, confirmed, unconfirmed, median_expectation?}`.
- * The static mock in gaps.ts returns {items,...}; the scouting mock serves the
- * target array shape and wins by registration order.
+ * GET /api/leagues?specialization= returns a plain array of shelves
+ * `{specialization, grade, confirmed, unconfirmed, median_expectation?}`
+ * (schema LeagueShelf with loose spec/grade strings — narrowed here).
  */
-export type LeagueShelf = {
+export type LeagueShelf = Omit<GeneratedLeagueShelf, 'specialization' | 'grade'> & {
   specialization: Spec
   grade: Grade
-  confirmed: number
-  unconfirmed: number
-  median_expectation?: number | null
 }
 
 /**
- * gap G16 — GET /api/positions/{id}/shortlist (list endpoint not shipped).
- * Until then the tray is built from `shortlisted: true` pool items.
+ * Shortlist tray entry. GET /api/positions/{id}/shortlist exists on the BE;
+ * the tray additionally accumulates `shortlisted: true` pool items client-side.
  */
 export type ShortlistEntry = TalentShort
 
 /**
  * FE-12 · GET /api/talent/search — plain talent search (no position scoring).
- * The generated schema declares only {items,total,page}; `pages` and `facets`
- * are BE gaps G8/G14 — optional so the UI can detect the capability instead of
- * hardcoding it (client-side facet counting + filter fallback when absent).
+ * `pages` and `facets` stay optional so the UI can detect the capability
+ * instead of hardcoding it (client-side facet counting + filter fallback
+ * when absent).
  */
 export type TalentSearchResponse = {
   items: TalentShort[]
@@ -465,7 +519,7 @@ export type TalentDetail = Omit<
   last_active_at?: string | null
   salary_type?: SalaryType | string
   league?: League | null
-  fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number } | null
+  fsp?: TalentFspView | null
   skills?: ProfileSkill[]
   contacts?: TalentContacts | null
   // gap G9 — hidden while absent
