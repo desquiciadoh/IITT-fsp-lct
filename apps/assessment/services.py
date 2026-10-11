@@ -199,8 +199,18 @@ class AssessmentService:
 
         item_family_obj = ItemFamily.objects.filter(id=meta.id).first()
         if not item_family_obj:
+            # Self-heal a missing bank row (fresh test DB, or a family added by
+            # a deploy that forgot to run sync_families). The upsert is
+            # idempotent and bounded by the registry size.
             engine_adapter.sync_families_to_db()
-            item_family_obj = ItemFamily.objects.get(id=meta.id)
+            item_family_obj = ItemFamily.objects.filter(id=meta.id).first()
+            if not item_family_obj:
+                raise FSPAPIError(
+                    "no_item_bank",
+                    "No item bank",
+                    f"Item family {meta.id} is missing from the database; run manage.py sync_families",
+                    409,
+                )
 
         item_seed = hmac.new(
             engine_adapter.seed_secret(),

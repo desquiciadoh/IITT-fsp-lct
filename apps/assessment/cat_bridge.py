@@ -188,14 +188,23 @@ def start(
     pool=None,
     seen=None,
     blueprint=None,
+    test_mode=None,
     **kwargs: Any,
 ) -> CatState:
+    """Start an engine session.
+
+    ``mode`` is the *business* mode (AssessmentMode: full | express — stored on
+    the session and shown to FE).  ``test_mode`` optionally overrides the
+    engine-protocol stop-rule window ("full"|"express") for rebuild/replay
+    paths that must be able to append more entries than the real session's
+    window allows; it defaults to ``mode``.
+    """
     final_spec = spec or kwargs.get("specialization", "")
     final_claimed = claimed or kwargs.get("claimed_grade", "")
     return ENGINE.start(
         spec=final_spec,
         claimed=final_claimed,
-        mode=mode,
+        mode=test_mode or mode,
         kind=kind,
         pool=pool if pool is not None else active_metas(final_spec),
         seen=set(seen or ()),
@@ -218,6 +227,12 @@ def record(state: CatState, family_id: str, correct: bool, late: bool = False) -
         if x["family_id"] == family_id and x["correct"] is not None:
             x["correct"] = None
             break
+    # Rebuild/replay paths (fallback eligibility, finalize recovery) append
+    # every answered item onto a fresh state; the engine's stop rules would
+    # otherwise freeze the administered list once the window is reached.
+    # Relax the window so all replayed entries are scored by EAP.
+    if not any(x["correct"] is None for x in state.administered):
+        state.max_items = max(state.max_items, len(state.administered) + 1)
     return ENGINE.record(state, family_id, correct, late)
 
 
