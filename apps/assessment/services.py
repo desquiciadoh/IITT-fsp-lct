@@ -284,7 +284,12 @@ class AssessmentService:
         )
         if late:
             current_item.answer = {"value": None, "timed_out": True, "late": True}
-            current_item.correct = False
+            # D1: a served item that was never answered scores as incorrect.
+            # A candidate who submits the right answer after the deadline is
+            # still credited for knowing it (correct=True) but flagged late;
+            # the engine's record() applies the authoritative rule
+            # (correct AND not late).
+            current_item.correct = engine_adapter.grade_answer(current_item, answer_val)
         else:
             current_item.answer = {"value": answer_val}
             # Type-aware grading through the owning family's typed checker
@@ -562,25 +567,29 @@ class AssessmentService:
             try:
                 cat_state = engine_adapter.load_state(session.state)
                 if cat_state is not None:
+                    # A pending entry (served, never answered) would make the
+                    # engine's result() score it late-incorrect (D1); when the
+                    # session still has its own answer rows, replay them with
+                    # served params instead so theta reflects the real answers.
+                    has_answered = session.items.filter(
+                        answered_at__isnull=False
+                    ).exists()
+                    if has_answered and any(
+                        x["correct"] is None for x in cat_state.administered
+                    ):
+                        cat_state = engine_adapter.replay_session(
+                            session, exclude_unanswered=True
+                        )
                     cat_result = engine_adapter.result(cat_state)
             except Exception:
                 logger.exception("CAT result failed for session %s", session.id)
                 cat_result = None
 
         if cat_result is None:
-            cat_state = engine_adapter.start(
-                session.specialization,
-                session.claimed_grade,
-                session.mode,
-                session.kind,
-            )
-            for it in session.items.select_related("family").all():
-                cat_state = engine_adapter.record(
-                    cat_state,
-                    it.family_id,
-                    correct=bool(it.correct),
-                    late=bool(it.answer and it.answer.get("late")),
-                )
+            # State lost/corrupt: rebuild from the session's own items through
+            # the bridge replay (served params + relaxed stop window), which
+            # self-heals families missing from the rebuilt selection.
+            cat_state = engine_adapter.replay_session(session)
             cat_result = engine_adapter.result(cat_state)
 
         theta = cat_result.theta

@@ -275,6 +275,14 @@ def record(
     the pending entry — replay paths (finalize recovery, fallback rebuild)
     must grade with the *served* item parameters persisted on AssessmentItem,
     which can differ from the current registry meta after a re-calibration.
+
+    Recovery paths (state lost/corrupt) rebuild the state by replaying the
+    session's own answers; when the rebuilt selection diverges from what was
+    actually served, the entry being graded may be missing or belong to a
+    different family. Rather than letting the engine raise ValueError
+    ("family ... is not pending"), append/convert a pending entry for this
+    family using its live registry meta — grading then proceeds through the
+    normal EAP path with the persisted served params.
     """
     # Replaying a response for an already-scored entry (legacy rebuild paths)
     # must not blow up: reset the LAST scored entry of this family to pending
@@ -291,6 +299,25 @@ def record(
                 x["correct"] = None
                 pending = x
                 break
+    if pending is None:
+        # Self-heal: the family is absent from the rebuilt state entirely.
+        try:
+            meta = family_meta(family_id)
+        except ValueError:
+            meta = None
+        if meta is not None:
+            pending = {
+                "family_id": meta.id,
+                "seq": len(state.administered) + 1,
+                "a": float(meta.a),
+                "b": float(meta.b),
+                "c": float(meta.c),
+                "topic": meta.topic,
+                "correct": None,
+                "late": False,
+            }
+            state.administered.append(pending)
+            state.stop_reason = None
     if pending is not None and params:
         for k in ("a", "b", "topic"):
             if params.get(k) is not None:
