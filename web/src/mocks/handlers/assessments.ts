@@ -7,7 +7,7 @@ import type { MockAssessmentResult } from '@/api/types'
  * fixtures must not mix into live data (R4).
  *
  * Fixtures are typed as MockAssessmentResult: `percentile` is legal only on
- * MSW payloads (not in the OpenAPI schema — G5 residual), so the cast stays
+ * MSW payloads (not in the OpenAPI schema), so the cast stays
  * inside this file instead of leaking into the DTO layer.
  */
 

@@ -10,7 +10,7 @@ const problem = (status: number, code: string, detail: string, errors?: unknown)
     headers: { 'Content-Type': 'application/problem+json', 'X-Stub': 'true' },
   })
 
-/** G5 — `POST /api/assessments/:id/finish` is not on the backend yet (503).
+/** G5 (shipped) — `POST /api/assessments/:id/finish` is live on the backend.
  *  In `all` mode the stateful store in qualification.ts serves it; MSW picks
  *  the FIRST matching handler, so gapHandlers must stay first in that list
  *  only for endpoints without a real mock. For finish we want the stateful
@@ -69,7 +69,7 @@ export const gapHandlers = [
       page: 1,
     })
   }),
-  // POST /api/positions/parse (gap G6) is served by the stateful FE-09 mock
+  // POST /api/positions/parse (G6 shipped) is served by the stateful FE-09 mock
   // in employer.ts — do not shadow it with a static stub here.
   http.post('*/api/assessments/:id/finish', () =>
     problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),

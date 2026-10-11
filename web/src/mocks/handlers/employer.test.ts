@@ -5,7 +5,7 @@ import { employerHandlers } from './employer'
 /**
  * FE-09 · Company & position wizard — end-to-end QA of the stateful
  * employer mock (the same handler objects registered in mocks/server.ts
- * and browser.ts). Drives the wire contract for the gaps:
+ * and browser.ts). Drives the wire contract:
  *   G17: GET /companies/me → 403 company_required until POST /companies;
  *   G6 : POST /positions/parse → {draft, unknown_terms, blueprint, source};
  *   salary validation mirrors BE.md B15 (`salary_invalid` error dict);
@@ -72,7 +72,7 @@ type ParseWire = {
 }
 type ProblemWire = { code: string; detail?: string; errors?: Record<string, string[]> }
 
-describe('FE-09 employer mock: company (gap G17)', () => {
+describe('FE-09 employer mock: company (G17 branch)', () => {
   it('403 company_required before the company exists', async () => {
     const { status, body } = await req<ProblemWire>('/api/companies/me')
     expect(status).toBe(403)
@@ -115,7 +115,7 @@ describe('FE-09 employer mock: company (gap G17)', () => {
   })
 })
 
-describe('FE-09 employer mock: JD parse (gap G6)', () => {
+describe('FE-09 employer mock: JD parse (G6 shape)', () => {
   it('parses a sample JD into the target shape', async () => {
     const jd = `Senior Backend Developer
     Обязательны: python, django, postgresql, redis.

@@ -20,7 +20,7 @@ export function useProfile() {
 }
 
 /**
- * GET /api/taxonomy (gap G3 — shipped). The wire shape is object-based
+ * GET /api/taxonomy (live on the BE). The wire shape is object-based
  * ({id,name,...} entries); the UI consumes flat string lists, so normalize
  * here and never let raw objects reach the components.
  */

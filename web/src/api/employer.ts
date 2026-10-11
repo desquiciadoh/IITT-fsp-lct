@@ -6,10 +6,10 @@ import type { Company, CompanyInput, JdParseResult, Position, PositionInput } fr
 /**
  * FE-09 · Company & position wizard — API layer.
  *
- * Endpoints: GET/PUT /api/companies/me, POST /api/companies (gap G17),
+ * Endpoints: GET/PUT /api/companies/me, POST /api/companies (G17 shipped),
  * GET/POST /api/positions, GET/PUT /api/positions/{id},
- * POST /api/positions/parse (gap G6). All gaps are mocked in MSW with the
- * target shape (`X-Stub: true`), so nothing changes when BE ships them.
+ * POST /api/positions/parse (G6 shipped). The `missing` MSW mode still
+ * serves them in the contract shape (`X-Stub: true`) for backend-less demos.
  */
 
 export function useCompany() {
@@ -37,9 +37,10 @@ export function useSaveCompany() {
 }
 
 /**
- * gap G17 — POST /api/companies for employers without a company. Today the
- * backend auto-creates one (security bug B1); after the fix it answers 403
- * `company_required` and this endpoint creates the company explicitly.
+ * POST /api/companies — explicit company creation for employers without one
+ * (G17 shipped). While the BE auto-creates companies (security bug B1) it
+ * never answers 403 `company_required`, so this mutation stays unused until
+ * B1 is fixed — kept as the forward-compatible path.
  */
 export function useCreateCompany() {
   const client = useQueryClient()
@@ -56,7 +57,7 @@ export function useCreateCompany() {
   })
 }
 
-/** GET /api/positions returns a plain array today; also accept {items} (G14). */
+/** GET /api/positions returns a plain array; also tolerate {items} pages. */
 export function usePositions() {
   return useQuery({
     queryKey: keys.positions,
@@ -111,7 +112,7 @@ export function useUpdatePosition(id: string) {
 }
 
 /**
- * gap G6 — POST /api/positions/parse {text} → JdParseResult.
+ * POST /api/positions/parse {text} → JdParseResult (G6 shipped on the BE).
  * Not a mutation of server state, but a mutation keeps busy/error UX simple.
  */
 export function useParseJd() {

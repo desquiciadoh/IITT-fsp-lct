@@ -24,7 +24,7 @@ import { completeCandidateQualification } from '@/mocks/handlers/core'
  *                                    → {done:false,next} | {done:true,result},
  *                                      409 `item_not_current`,
  *                                      409 `assessment_expired`.
- * - POST /api/assessments/{id}/finish (G5) → finalizes early.
+ * - POST /api/assessments/{id}/finish → finalizes early (G5 shipped on the BE).
  *
  * SECURITY: answers carry no per-item correctness; the key never leaves here.
  */
@@ -254,8 +254,8 @@ export function resetQualificationMock(): void {
 }
 
 /** Items served per mode (FE2.md §FE-05: full/express choice on the start
- *  screen). The backend does not adapt item count yet (gap G5); the mock
- *  truncates its 8-item bank so the runner can be exercised in both modes. */
+ *  screen). The mock truncates its 8-item bank per mode so the runner can be
+ *  exercised in both modes without a full item bank. */
 function maxItemsFor(s: MockSession): number {
   return s.mode === 'express' ? Math.ceil(BANK.length / 2) : BANK.length
 }
@@ -519,8 +519,8 @@ export const qualificationHandlers = [
     return json(outcome)
   }),
 
-  /** G5 — early finish. Real backend returns 503 until it ships; the mock
-   *  lets the runner's "Завершить досрочно" flow be tested end-to-end. */
+  /** Early finish (G5 shipped on the BE). The stateful mock lets the
+   *  runner's "Завершить досрочно" flow be tested end-to-end offline. */
   http.post('*/api/assessments/:id/finish', ({ params }) => {
     const s = sessions.find((x) => x.id === String(params.id))
     if (!s) return problem(404, 'not_found', 'Assessment session not found.')

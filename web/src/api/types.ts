@@ -258,7 +258,7 @@ export type ResumeParseResult = Omit<ResumeParseResponse, 'prefill'> & {
   }
 }
 
-/** gap G3 (closed) — the wire Taxonomy is object-based; this is the flat view type. */
+/** The wire Taxonomy is object-based (G3 shipped); this is the flat view type. */
 export type TaxonomyWire = GeneratedTaxonomy
 
 /**
@@ -296,7 +296,7 @@ export type EvidencePoint = GeneratedAssessmentEvidence
 
 /**
  * GET /api/assessments/{id}/result. Enums are optional on the wire and
- * narrowed to required here; `percentile` is not in the schema (G5 residual)
+ * narrowed to required here; `percentile` is not in the schema
  * — it stays only on League, not on the result payload.
  */
 export type AssessmentResult = Omit<

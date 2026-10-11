@@ -74,7 +74,7 @@ export function activeFilterCount(f: PoolFilters): number {
   return n
 }
 
-// --- capability detection & client-side fallback (gap G8) --------------------
+// --- capability detection & client-side fallback (defense-in-depth) ----------
 
 /**
  * The backend ignores filters today. If the response carries `facets`, server
@@ -124,7 +124,7 @@ export function matchesFilters(talent: TalentShort, f: PoolFilters): boolean {
 
 /**
  * Fallback pipeline: filter → sort by score desc → paginate (20/page), so the
- * UI behaves identically to the target server contract (G8).
+ * UI behaves identically to the server contract (G8 shipped).
  */
 export const POOL_PAGE_SIZE = 20
 
@@ -145,7 +145,7 @@ export function applyClientFilters(
   }
 }
 
-/** Keep the tray cache in sync with every pool batch we render (gap G16). */
+/** Keep the tray cache in sync with every pool batch we render (G16). */
 export function useAbsorbShortlist(
   items: PoolEntry[] | undefined,
   absorb: (items: PoolEntry[]) => void,
@@ -173,9 +173,9 @@ export function deriveGaps(entry: PoolEntry): string[] {
 }
 
 /**
- * Relaxation hints (target G8 `relaxations`). The real BE does not ship them
- * yet — until then, synthesize one hint per uncovered must-have skill from the
- * minus-reasons, so the UI can render the capability when it appears.
+ * Relaxation hints (`relaxations` on the wire, G8 shipped). When a payload
+ * omits them (older deployments / offline fixtures), synthesize one hint per
+ * uncovered must-have skill from the minus-reasons.
  */
 export function deriveRelaxations(entries: PoolEntry[]): string[] {
   const hints = new Set<string>()
@@ -187,7 +187,7 @@ export function deriveRelaxations(entries: PoolEntry[]): string[] {
   return [...hints].slice(0, 3)
 }
 
-// --- league shelves helpers (gap G7) ------------------------------------------
+// --- league shelves helpers ----------------------------------------------------
 
 export type ShelfTotals = { confirmed: number; unconfirmed: number; median: number | null }
 

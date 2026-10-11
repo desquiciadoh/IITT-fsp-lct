@@ -13,13 +13,17 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 /**
- * One-line switch to the OIDC flow once BE ships gap G15:
- * set `USE_OIDC = true` and replace the POST below with
- * `window.location.assign('/api/auth/fsp-id/login?intent=link')`.
+ * OIDC switch (G15): `/api/auth/fsp-id/login` is live on the BE, but the
+ * identity provider itself is not provisioned for demos yet — keep manual
+ * participant_id linking as the primary flow and fall back to OIDC when the
+ * backend answers `fsp_oidc_required`. Set `USE_OIDC = true` to make the
+ * redirect the default path once the IdP ships.
  */
 const USE_OIDC = false
 
-/** Mock company picker — real lookup endpoint is gap G17; ids must be UUIDs (backend constraint). */
+/** Offline-demo picker for the blocklist (used only in `all` mock mode; the
+ *  real lookup is GET /api/companies?q= via useSearchCompanies below).
+ *  Ids must be UUIDs (backend constraint). */
 const MOCK_COMPANIES = [
   { id: '00000000-0000-4000-8000-000000000001', name: 'Yandex Tech' },
   { id: '00000000-0000-4000-8000-000000000002', name: 'Ozon' },

@@ -26,9 +26,9 @@ import { ApiError } from '@/api/client'
 /**
  * FE-10 · Scouting pool tab of `/employer/positions/:id`.
  *
- * Layout: league shelves (G7) → filter panel (URL-synced) → ranked rows
- * (TalentRow + ScoreBar + ReasonChips, gaps derived per G8) → pagination →
- * relaxation hints. The shortlist tray (G16) lives in the sidebar and
+ * Layout: league shelves → filter panel (URL-synced) → ranked rows
+ * (TalentRow + ScoreBar + ReasonChips, gaps from the wire) → pagination →
+ * relaxation hints. The shortlist tray lives in the sidebar and
  * survives filter changes; the candidate drawer opens via `?c=<public_id>`,
  * so a reload restores filters + drawer from the URL alone.
  *
@@ -44,8 +44,8 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
   const toggle = useToggleShortlist(positionId)
   const { tray, absorb, reconcile, remove } = useShortlistTray(positionId)
 
-  // Server ignores filters today (G8): detect by absent `facets` and fall
-  // back to client-side filtering with the same semantics + pagination.
+  // Detect server filtering by the presence of `facets`; payloads without
+  // them fall back to client-side filtering with the same semantics.
   const fallback = needsClientFiltering(pool.data?.facets, filters)
   const view = fallback ? applyClientFilters(pool.data, filters) : null
   const items = view ? view.items : (pool.data?.items ?? [])
@@ -109,7 +109,7 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
           <>
             <p className="text-xs text-muted-foreground" role="status">
               Найдено кандидатов: {total}
-              {fallback && ' · фильтры применены на клиенте (бэкенд ещё не поддерживает G8)'}
+              {fallback && ' · фильтры применены на клиенте (ответ без facets)'}
             </p>
             <ul className="flex flex-col gap-3">
               {items.map((entry) => {

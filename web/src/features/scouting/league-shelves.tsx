@@ -7,7 +7,7 @@ import { formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
- * FE-10 · League shelves (gap G7).
+ * FE-10 · League shelves (G7 shipped).
  * GET /api/leagues?specialization= → [{specialization, grade, confirmed,
  * unconfirmed, median_expectation?}]. Rendered as compact stat tiles; the
  * component tolerates both a plain array and an {items} envelope upstream.
