@@ -21,7 +21,9 @@ import {
   needsClientFiltering,
   summarizeShelves,
 } from '@/features/scouting/filters'
-import type { LeagueShelf, PoolEntry, PoolFilters, PoolResponse } from '@/api/types'
+import type { LeagueShelf, PoolEntry, PoolFilters, PoolResponse, TalentShort } from '@/api/types'
+import { QueryClient } from '@tanstack/react-query'
+import { keys } from '@/api/keys'
 import { scoutingHandlers, seedShortlist } from '@/mocks/handlers/scouting'
 
 const server = setupServer(...scoutingHandlers)
@@ -215,6 +217,57 @@ describe('scouting MSW mock (target shapes)', () => {
     expect(del.status).toBe(204)
     const tray2 = await getJson<Array<{ public_id: string }>>('/api/positions/p1/shortlist')
     expect(tray2.body.map((t) => t.public_id)).not.toContain('t-001')
+  })
+
+  it('shortlist optimistic mutation does not crash when tray array is in query cache', () => {
+    const client = new QueryClient()
+    const positionId = 'p1'
+    const publicId = 't-001'
+    client.setQueryData(keys.shortlist(positionId), [] as TalentShort[])
+    client.setQueryData(keys.poolQuery(positionId, ''), {
+      items: [
+        {
+          talent: { public_id: publicId, display_name: 'Test Talent' },
+          shortlisted: false,
+          score: 80,
+          components: {},
+          reasons: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+    })
+
+    const poolEntries = client.getQueriesData<PoolResponse>({
+      queryKey: ['pool', positionId, 'query'],
+    })
+    let foundTalent: TalentShort | undefined
+    for (const [, data] of poolEntries) {
+      foundTalent ??= data?.items?.find((i) => i.talent.public_id === publicId)?.talent
+    }
+    expect(foundTalent?.public_id).toBe(publicId)
+
+    client.setQueryData(keys.shortlist(positionId), [foundTalent!])
+
+    client.setQueriesData<PoolResponse>(
+      { queryKey: ['pool', positionId, 'query'] },
+      (data) =>
+        data && Array.isArray(data.items)
+          ? {
+              ...data,
+              items: data.items.map((i) =>
+                i.talent.public_id === publicId ? { ...i, shortlisted: true } : i,
+              ),
+            }
+          : data,
+    )
+
+    const tray = client.getQueryData<TalentShort[]>(keys.shortlist(positionId))
+    expect(tray).toHaveLength(1)
+    expect(tray?.[0].public_id).toBe(publicId)
+
+    const poolData = client.getQueryData<PoolResponse>(keys.poolQuery(positionId, ''))
+    expect(poolData?.items[0].shortlisted).toBe(true)
   })
 
   it('G9 — talent detail gates contacts by grant; 404 problem for unknown ids', async () => {

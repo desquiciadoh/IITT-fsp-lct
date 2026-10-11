@@ -196,21 +196,7 @@ export function OfferDetailPage() {
       </section>
 
       <section className="flex flex-wrap items-center gap-3">
-        {viewError && (
-          <div className="w-full">
-            <ErrorState
-              title="Не удалось открыть оффер"
-              code={viewError.code}
-              description={errorMessage(viewError.code, viewError.detail)}
-              onRetry={() => {
-                viewRetries.current = 0
-                autoViewed.current = null
-                setViewError(null)
-              }}
-            />
-          </div>
-        )}
-        {!viewError && offer.status === 'viewed' && (
+        {offer.status === 'viewed' && (
           <>
             <Button
               onClick={() => accept.mutate({ id: offer.id, body: { version: offer.version } }, { onError })}

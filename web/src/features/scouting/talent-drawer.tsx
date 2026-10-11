@@ -3,10 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Link2, Mail, Phone, Send, Star, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { useQueryClient } from '@tanstack/react-query'
-import { useToggleShortlist, useTalent } from '@/api/scouting'
-import type { SalaryType, TalentDetail, TalentShort } from '@/api/types'
-import { keys } from '@/api/keys'
+import { useShortlistTray, useToggleShortlist, useTalent } from '@/api/scouting'
+import type { SalaryType, TalentDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/domain/states'
@@ -242,6 +240,7 @@ function DrawerBody({
         <ShortlistToggle
           positionId={positionId}
           publicId={talent.public_id}
+          talent={talent}
           busy={shortlistBusy}
           setBusy={setShortlistBusy}
         />
@@ -253,28 +252,31 @@ function DrawerBody({
 function ShortlistToggle({
   positionId,
   publicId,
+  talent,
   busy,
   setBusy,
 }: {
   positionId: string
   publicId: string
+  talent?: TalentDetail
   busy: boolean
   setBusy: (v: boolean) => void
 }) {
-  // The tray cache tells whether this candidate is already shortlisted.
-  const tray = useQueryClient().getQueryData<TalentShort[]>(keys.shortlist(positionId))
-  const inTray = Boolean(tray?.some((t) => t.public_id === publicId))
+  const { tray } = useShortlistTray(positionId)
+  const inTray = Boolean(tray.data?.some((t) => t.public_id === publicId))
   const toggle = useToggleShortlist(positionId)
 
   return (
     <Button
       variant="outline"
-      disabled={busy}
+      disabled={busy || !positionId}
       aria-pressed={inTray}
+      title={!positionId ? 'Выберите вакансию для добавления в шорт-лист' : undefined}
       onClick={() => {
+        if (!positionId) return
         setBusy(true)
         toggle.mutate(
-          { publicId, add: !inTray },
+          { publicId, add: !inTray, talent },
           { onSettled: () => setBusy(false) },
         )
       }}

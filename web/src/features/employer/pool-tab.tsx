@@ -77,7 +77,8 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
   const offerCandidate = poolCandidate ?? trayCandidate ?? (offerPublicId ? { public_id: offerPublicId } : null)
   const onToggle = (publicId: string) => {
     const entry = items.find((i) => i.talent.public_id === publicId)
-    toggle.mutate({ publicId, add: !entry?.shortlisted })
+    const inShortlist = tray.data?.some((t) => t.public_id === publicId) ?? entry?.shortlisted ?? false
+    toggle.mutate({ publicId, add: !inShortlist, talent: entry?.talent })
   }
   const relaxations = pool.data?.relaxations ?? deriveRelaxations(items)
 
@@ -113,24 +114,32 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
             <ul className="flex flex-col gap-3">
               {items.map((entry) => {
                 const gaps = deriveGaps(entry)
+                const isShortlisted = tray.data?.some((t) => t.public_id === entry.talent.public_id) ?? entry.shortlisted
                 return (
                   <li key={entry.talent.public_id}>
                     <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-1 transition-colors hover:border-primary/40">
-                      <button
-                        type="button"
-                        className="text-left"
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="cursor-pointer text-left"
                         onClick={() => openCandidate(entry.talent.public_id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            openCandidate(entry.talent.public_id)
+                          }
+                        }}
                         aria-label={`Открыть карточку ${entry.talent.display_name ?? entry.talent.public_id}`}
                       >
                         <TalentRow
                           talent={entry.talent}
                           score={entry.score}
                           reasons={entry.reasons}
-                          shortlisted={entry.shortlisted}
+                          shortlisted={isShortlisted}
                           onToggleShortlist={onToggle}
                           className="border-0 hover:bg-transparent"
                         />
-                      </button>
+                      </div>
                       <div className="px-3 pb-2">
                         <ScoreBar score={entry.score} components={entry.components} />
                         {gaps.length > 0 && (

@@ -6,10 +6,12 @@ import type {
   PoolEntry,
   PoolFilters,
   PoolResponse,
+  SalaryType,
   Spec,
   TalentDetail,
   TalentSearchResponse,
   TalentShort,
+  WorkFormat,
 } from '@/api/types'
 
 /**
@@ -107,16 +109,49 @@ export function usePool(positionId: string, filters: PoolFilters, enabled = true
  * mock already serves the target shape), the same key refreshes from the
  * server — capability detection, not hardcoding.
  */
+export function talentDetailToShort(detail: TalentDetail): TalentShort {
+  return {
+    public_id: detail.public_id,
+    display_name: detail.display_name,
+    city: detail.city,
+    work_formats: (detail.work_formats ?? []) as WorkFormat[],
+    salary_min: detail.salary_min,
+    salary_max: detail.salary_max,
+    salary_type: (detail.salary_type as SalaryType) || undefined,
+    league: detail.league,
+    fsp: detail.fsp
+      ? {
+          linked: Boolean(detail.fsp.linked),
+          best_tier: detail.fsp.best_tier,
+          rank: detail.fsp.rank,
+          results: detail.fsp.results,
+        }
+      : undefined,
+    skills: (detail.skills ?? []).map((s) => (typeof s === 'string' ? s : s.name)),
+  }
+}
+
+export type ToggleShortlistArgs = {
+  publicId: string
+  add: boolean
+  talent?: TalentShort | TalentDetail
+}
+
+/**
+ * Shortlist tray. gap G16: there is no "list shortlist" endpoint on older
+ * mocks; we maintain the tray in TanStack Query and sync with GET /api/positions/{id}/shortlist
+ * when available.
+ */
 export function useShortlistTray(positionId: string) {
   const client = useQueryClient()
 
   /** Merge newly seen shortlisted entries into the tray cache. */
   const absorb = (items: PoolEntry[]) => {
     if (!positionId) return
-    const seen = items.filter((i) => i.shortlisted).map((i) => i.talent)
+    const seen = (items ?? []).filter((i) => i.shortlisted).map((i) => i.talent)
     client.setQueryData(keys.shortlist(positionId), (prev: TalentShort[] = []) => {
       const map = new Map<string, TalentShort>()
-      for (const t of prev) map.set(t.public_id, t)
+      for (const t of prev ?? []) map.set(t.public_id, t)
       for (const t of seen) map.set(t.public_id, t)
       return [...map.values()]
     })
@@ -126,8 +161,8 @@ export function useShortlistTray(positionId: string) {
   const reconcile = (items: PoolEntry[]) => {
     if (!positionId) return
     client.setQueryData(keys.shortlist(positionId), (prev: TalentShort[] = []) => {
-      let next = prev
-      for (const i of items) {
+      let next = prev ?? []
+      for (const i of items ?? []) {
         if (!i.shortlisted) next = next.filter((t) => t.public_id !== i.talent.public_id)
       }
       return next
@@ -136,7 +171,7 @@ export function useShortlistTray(positionId: string) {
 
   const remove = (publicId: string) => {
     client.setQueryData(keys.shortlist(positionId), (prev: TalentShort[] = []) =>
-      prev.filter((t) => t.public_id !== publicId),
+      (prev ?? []).filter((t) => t.public_id !== publicId),
     )
   }
 
@@ -144,20 +179,21 @@ export function useShortlistTray(positionId: string) {
     queryKey: keys.shortlist(positionId),
     queryFn: async () => {
       try {
-        // Gap G16 target shape: plain array of talents. Absent on the real
-        // BE today → keep whatever the pool flags have accumulated.
-        const data = await customFetch<TalentShort[]>(
+        const data = await customFetch<TalentShort[] | { items?: TalentShort[] }>(
           `/api/positions/${positionId}/shortlist`,
         )
-        return Array.isArray(data) ? data : []
+        if (Array.isArray(data)) return data
+        if (data && Array.isArray((data as { items?: TalentShort[] }).items)) {
+          return (data as { items: TalentShort[] }).items
+        }
+        return []
       } catch {
         return (
           client.getQueryData<TalentShort[]>(keys.shortlist(positionId)) ?? []
         )
       }
     },
-    initialData: [] as TalentShort[],
-    staleTime: Infinity, // the pool-driven cache is authoritative until G16 ships
+    staleTime: 30_000,
     enabled: Boolean(positionId),
   })
 
@@ -168,22 +204,44 @@ export function useShortlistTray(positionId: string) {
 export function useToggleShortlist(positionId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ publicId, add }: { publicId: string; add: boolean }) =>
+    mutationFn: ({ publicId, add }: ToggleShortlistArgs) =>
       customFetch<void>(
         `/api/positions/${positionId}/shortlist/${encodeURIComponent(publicId)}`,
         { method: add ? 'PUT' : 'DELETE' },
       ),
-    onMutate: async ({ publicId, add }) => {
+    onMutate: async ({ publicId, add, talent: passedTalent }) => {
       const shortlistKey = keys.shortlist(positionId)
       await client.cancelQueries({ queryKey: shortlistKey })
-      const prev = client.getQueryData<PoolEntry['talent'][]>(shortlistKey) ?? []
+      const prev = client.getQueryData<TalentShort[]>(shortlistKey) ?? []
       if (add) {
-        const poolEntries = client.getQueriesData<PoolResponse>({ queryKey: keys.pool(positionId) })
-        let talent: PoolEntry['talent'] | undefined
-        for (const [, data] of poolEntries) {
-          talent ??= data?.items.find((i) => i.talent.public_id === publicId)?.talent
+        let talent: TalentShort | undefined = passedTalent
+          ? ('contacts' in passedTalent || 'about' in passedTalent
+              ? talentDetailToShort(passedTalent as TalentDetail)
+              : (passedTalent as TalentShort))
+          : undefined
+        if (!talent) {
+          const poolEntries = client.getQueriesData<PoolResponse>({
+            queryKey: ['pool', positionId, 'query'],
+          })
+          for (const [, data] of poolEntries) {
+            talent ??= data?.items?.find((i) => i.talent.public_id === publicId)?.talent
+          }
         }
-        if (talent && !prev.some((t) => t.public_id === talent.public_id)) {
+        if (!talent) {
+          const searchEntries = client.getQueriesData<TalentSearchResponse>({
+            queryKey: keys.talentSearch,
+          })
+          for (const [, data] of searchEntries) {
+            talent ??= data?.items?.find((t) => t.public_id === publicId)
+          }
+        }
+        if (!talent) {
+          const detail = client.getQueryData<TalentDetail>(keys.talent(publicId))
+          if (detail) {
+            talent = talentDetailToShort(detail)
+          }
+        }
+        if (talent && !prev.some((t) => t.public_id === talent!.public_id)) {
           client.setQueryData(shortlistKey, [...prev, talent])
         }
       } else {
@@ -192,25 +250,42 @@ export function useToggleShortlist(positionId: string) {
           prev.filter((t) => t.public_id !== publicId),
         )
       }
-      // Flip the flag in every cached pool page of this position too.
-      client.setQueriesData<PoolResponse>({ queryKey: keys.pool(positionId) }, (data) =>
-        data
-          ? {
-              ...data,
-              items: data.items.map((i) =>
-                i.talent.public_id === publicId ? { ...i, shortlisted: add } : i,
-              ),
-            }
-          : data,
+      // Flip the flag in every cached pool page of this position (queryKey prefix ['pool', positionId, 'query']).
+      client.setQueriesData<PoolResponse>(
+        { queryKey: ['pool', positionId, 'query'] },
+        (data) =>
+          data && Array.isArray(data.items)
+            ? {
+                ...data,
+                items: data.items.map((i) =>
+                  i.talent.public_id === publicId ? { ...i, shortlisted: add } : i,
+                ),
+              }
+            : data,
+      )
+      // Flip the flag in search cache if present.
+      client.setQueriesData<TalentSearchResponse>(
+        { queryKey: keys.talentSearch },
+        (data) =>
+          data && Array.isArray(data.items)
+            ? {
+                ...data,
+                items: data.items.map((i) =>
+                  i.public_id === publicId ? { ...i, shortlisted: add } : i,
+                ),
+              }
+            : data,
       )
       return { prev }
     },
     onError: (_err, _vars, ctx) => {
       if (ctx) client.setQueryData(keys.shortlist(positionId), ctx.prev)
-      void client.invalidateQueries({ queryKey: keys.pool(positionId) })
+      void client.invalidateQueries({ queryKey: ['pool', positionId, 'query'] })
+      void client.invalidateQueries({ queryKey: keys.shortlist(positionId) })
     },
     onSettled: () => {
-      void client.invalidateQueries({ queryKey: keys.pool(positionId) })
+      void client.invalidateQueries({ queryKey: ['pool', positionId, 'query'] })
+      void client.invalidateQueries({ queryKey: keys.shortlist(positionId) })
     },
   })
 }

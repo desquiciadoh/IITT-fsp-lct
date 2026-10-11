@@ -61,20 +61,17 @@ export function TalentSearchPage() {
     view ? view.pages : (search.data?.pages ?? Math.max(1, Math.ceil(total / POOL_PAGE_SIZE)))
   const facets = resolveFacets(search.data, items)
 
-  // Search payload carries `shortlisted` on the talent itself (no PoolEntry
-  // wrapper like the pool has) — mirror those flags into the tray cache so it
-  // survives filter changes exactly like FE-10's useAbsorbShortlist does.
+  // Mirror any candidates explicitly flagged as shortlisted into the tray cache
+  // without dropping existing candidates (talent search has no position context).
   const shortlistedIds = items.filter((t) => t.shortlisted).map((t) => t.public_id).join('|')
   useEffect(() => {
     if (!positionId || !search.data) return
-    const flagged = new Map(items.map((t) => [t.public_id, Boolean(t.shortlisted)]))
+    const explicitlyShortlisted = items.filter((t) => t.shortlisted === true)
+    if (explicitlyShortlisted.length === 0) return
     client.setQueryData(keys.shortlist(positionId), (prev: TalentShort[] = []) => {
-      let next = prev.filter((t) => flagged.get(t.public_id) !== false)
-      const known = new Set(next.map((t) => t.public_id))
-      for (const t of items) {
-        if (t.shortlisted && !known.has(t.public_id)) next = [...next, t]
-      }
-      return next
+      const known = new Set(prev.map((t) => t.public_id))
+      const toAdd = explicitlyShortlisted.filter((t) => !known.has(t.public_id))
+      return toAdd.length > 0 ? [...prev, ...toAdd] : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionId, shortlistedIds, search.data])
@@ -133,10 +130,17 @@ export function TalentSearchPage() {
                 {items.map((talent) => (
                   <li key={talent.public_id}>
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left"
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="min-w-0 flex-1 text-left cursor-pointer"
                         onClick={() => setParam('c', talent.public_id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setParam('c', talent.public_id)
+                          }
+                        }}
                         aria-label={`Открыть карточку ${talent.display_name ?? talent.public_id}`}
                       >
                         <TalentRow
@@ -146,13 +150,13 @@ export function TalentSearchPage() {
                             positionId
                               ? (publicId) => {
                                   const listed = tray.data?.some((t) => t.public_id === publicId)
-                                  toggle.mutate({ publicId, add: !listed })
+                                  toggle.mutate({ publicId, add: !listed, talent })
                                 }
                               : undefined
                           }
                           className="border-0 hover:bg-transparent"
                         />
-                      </button>
+                      </div>
                       {positionId && (
                         <Button
                           variant="outline"
