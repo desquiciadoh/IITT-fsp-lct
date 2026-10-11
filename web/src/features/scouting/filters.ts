@@ -161,15 +161,14 @@ export function useAbsorbShortlist(
   }, [signature])
 }
 
-// --- derived gaps (FE2.md §FE-10: target `gaps` is gap G8) -------------------
+// --- derived gaps (FE2.md §FE-10) --------------------------------------------
 
 /**
- * Until the backend ships explicit `gaps`, derive them from the reasons:
- * every `kind === 'minus'` reason is a gap. Entries already carrying `gaps`
- * (target shape) pass through untouched — capability detection, not hardcoding.
+ * `gaps` is a required wire field since G8 closed; the minus-reason fallback
+ * stays only as defense-in-depth for legacy dict-era payloads that omit it.
  */
 export function deriveGaps(entry: PoolEntry): string[] {
-  if (entry.gaps) return entry.gaps
+  if (entry.gaps?.length) return entry.gaps
   return entry.reasons.filter((r) => r.kind === 'minus').map((r) => r.text)
 }
 

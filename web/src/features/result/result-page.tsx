@@ -279,11 +279,7 @@ export function ResultPage() {
           </div>
           {result.rating != null && (
             <div className="text-right">
-              <RatingBadge
-                rating={result.rating}
-                ci={result.rating_ci ?? undefined}
-                percentile={result.percentile ?? undefined}
-              />
+              <RatingBadge rating={result.rating} ci={result.rating_ci ?? undefined} />
               <div className="text-xs text-muted-foreground">
                 итоговый грейд:{' '}
                 <span className="font-semibold text-foreground">

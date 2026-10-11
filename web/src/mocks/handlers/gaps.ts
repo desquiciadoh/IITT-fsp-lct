@@ -23,22 +23,38 @@ export const gapHandlers = [
     if (!body.token) return problem(400, 'token_invalid', 'Token is required.')
     return json({ detail: 'ok' })
   }),
+  // G3 (closed) — the wire taxonomy is object-based ({id, name, ...});
+  // useTaxonomy().select normalizes it to the flat view type.
   http.get('*/api/taxonomy', () =>
     json({
-      specs: ['backend', 'frontend', 'ml_data'],
-      grades: ['intern', 'junior', 'middle', 'senior'],
-      work_formats: ['office', 'hybrid', 'remote'],
-      strength_topics: [
-        'architecture',
-        'performance',
-        'testing',
-        'security',
-        'product_thinking',
-        'mentoring',
+      specializations: [
+        { id: 'backend', name: 'Backend', topics: ['python', 'sql', 'system_design'] },
+        { id: 'frontend', name: 'Frontend', topics: ['javascript', 'react'] },
+        { id: 'ml_data', name: 'ML/Data', topics: ['python', 'statistics'] },
+      ],
+      grades: [
+        { id: 'intern', name: 'Intern', descriptor: 'Learning the fundamentals', rating_cut: 0 },
+        { id: 'junior', name: 'Junior', descriptor: 'Solves tasks under supervision', rating_cut: 800 },
+        { id: 'middle', name: 'Middle', descriptor: 'Delivers independently', rating_cut: 1400 },
+        { id: 'senior', name: 'Senior', descriptor: 'Owns architecture and mentoring', rating_cut: 1900 },
       ],
       skills: [
-        'python', 'django', 'fastapi', 'postgresql', 'redis', 'kafka',
-        'typescript', 'react', 'node.js', 'pytorch', 'pandas',
+        { id: 'python', name: 'Python', aliases: ['py'], topic: 'python' },
+        { id: 'django', name: 'Django', aliases: [], topic: 'python' },
+        { id: 'fastapi', name: 'FastAPI', aliases: [], topic: 'python' },
+        { id: 'postgresql', name: 'PostgreSQL', aliases: ['postgres'], topic: 'sql' },
+        { id: 'redis', name: 'Redis', aliases: [], topic: 'system_design' },
+        { id: 'kafka', name: 'Kafka', aliases: [], topic: 'system_design' },
+        { id: 'typescript', name: 'TypeScript', aliases: ['ts'], topic: 'javascript' },
+        { id: 'react', name: 'React', aliases: [], topic: 'react' },
+        { id: 'nodejs', name: 'Node.js', aliases: ['node'], topic: 'javascript' },
+        { id: 'pytorch', name: 'PyTorch', aliases: [], topic: 'ml' },
+        { id: 'pandas', name: 'Pandas', aliases: [], topic: 'ml' },
+      ],
+      decline_reasons: [
+        { id: 'no_time', name: 'Нет времени' },
+        { id: 'salary', name: 'Не подошла зарплата' },
+        { id: 'other', name: 'Другое' },
       ],
     }),
   ),

@@ -2,8 +2,8 @@ import { http, HttpResponse } from 'msw'
 import type {
   AnswerOutcome,
   AssessmentItem,
-  AssessmentResult,
   AssessmentSession,
+  MockAssessmentResult,
 } from '@/api/types'
 import { completeCandidateQualification } from '@/mocks/handlers/core'
 
@@ -58,7 +58,15 @@ const problemWith = (
 
 // --- item bank (sample families: python loop / sql group-by / js event loop) ---
 
-type BankItem = Omit<AssessmentItem, 'deadline_at' | 'served_at'>
+/** Wire shape of a served item (schema ItemView): `format` and
+`max_items` are readonly on the schema — the mock keeps them so the
+fixtures match the generated contract. */
+type BankItem = Omit<AssessmentItem, 'deadline_at' | 'served_at'> & {
+  /** item family label from the BE bank (python/sql/javascript) */
+  format: string
+  /** total items in this session mode; mirrors GET session.max_items */
+  max_items: number
+}
 
 const BANK: BankItem[] = [
   {
@@ -74,6 +82,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 1,
+    format: 'python',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-py-2',
@@ -88,6 +98,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 1,
+    format: 'python',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-sql-1',
@@ -102,6 +114,8 @@ const BANK: BankItem[] = [
     input_type: 'number',
     time_limit_s: 90,
     level: 2,
+    format: 'sql',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-js-1',
@@ -119,6 +133,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 2,
+    format: 'javascript',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-py-3',
@@ -129,6 +145,8 @@ const BANK: BankItem[] = [
     input_type: 'number',
     time_limit_s: 45,
     level: 2,
+    format: 'python',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-sql-2',
@@ -144,6 +162,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 45,
     level: 3,
+    format: 'sql',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-js-2',
@@ -154,6 +174,8 @@ const BANK: BankItem[] = [
     input_type: 'text',
     time_limit_s: 120,
     level: 3,
+    format: 'javascript',
+    max_items: BANK.length,
   },
   {
     item_id: 'q-py-4',
@@ -168,6 +190,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 3,
+    format: 'python',
+    max_items: BANK.length,
   },
 ]
 
@@ -277,7 +301,7 @@ function isCorrect(answer: StoredAnswer): boolean {
 }
 
 /** MK3 scoring: θ = (correct − max/2) / 2; confirmed when θ ≥ 1 for the claim. */
-function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
+function finalize(s: MockSession, now: Date = mockNow()): MockAssessmentResult {
   s.status = 'finished'
   s.finishedAt = now.toISOString()
   completeCandidateQualification()
@@ -321,7 +345,7 @@ function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
     evidence,
     fallback: null,
     next_attempt_at: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
-  } as unknown as AssessmentResult
+  } as unknown as MockAssessmentResult
 }
 
 function gradeAnswer(item: AssessmentItem, optionId?: string, value?: string): boolean {

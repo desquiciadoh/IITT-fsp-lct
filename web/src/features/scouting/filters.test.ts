@@ -88,11 +88,14 @@ const entry = (id: string, score: number, over: Partial<PoolEntry> = {}): PoolEn
     skills: ['python'],
   },
   score,
+  // dict-era shape is still legal (normalizeComponents tolerates it);
+  // `gaps` became required on the wire (G8 closed) — empty by default.
   components: { skill: 20, grade: 20 },
   reasons: [
     { kind: 'plus', text: 'покрыт must-have «python»' },
     { kind: 'minus', text: 'не покрыт must-have «django»' },
   ],
+  gaps: [],
   shortlisted: false,
   ...over,
 })
@@ -133,7 +136,8 @@ describe('client-side fallback (gap G8)', () => {
 })
 
 describe('gaps & relaxations derivation', () => {
-  it('derives gaps from minus-reasons until the target field ships', () => {
+  it('passes wire gaps through; falls back to minus-reasons only when empty (G8 closed)', () => {
+    // gaps is required on the wire now — dict-era fixture (gaps: []) derives from reasons
     expect(deriveGaps(entry('a', 1))).toEqual(['не покрыт must-have «django»'])
     // target shape passes through untouched
     expect(deriveGaps(entry('a', 1, { gaps: ['нет kafka'] }))).toEqual(['нет kafka'])

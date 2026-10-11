@@ -1,9 +1,14 @@
 import { http, HttpResponse } from 'msw'
+import type { MockAssessmentResult } from '@/api/types'
 
 /**
  * `all` mode (no backend): result fixtures, history, eligibility and the
  * Player Card PDF. Real endpoints are never mocked in `missing` mode —
  * fixtures must not mix into live data (R4).
+ *
+ * Fixtures are typed as MockAssessmentResult: `percentile` is legal only on
+ * MSW payloads (not in the OpenAPI schema — G5 residual), so the cast stays
+ * inside this file instead of leaking into the DTO layer.
  */
 
 const stub = (data: unknown, status = 200) =>
@@ -43,16 +48,27 @@ const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
 
 const base = {
   specialization: 'backend',
+  claimed_grade: 'middle',
   kind: 'initial',
   mode: 'full',
   status: 'finished',
+  theta: 0,
   se: 0.18,
+  rating: null,
+  rating_ci: 0,
+  result_grade: 'middle',
+  decision: 'confirmed',
+  promotion_unlocked: false,
+  counts_as_attempt: true,
   started_at: started,
   finished_at: finished,
-  counts_as_attempt: true,
-}
+  topics: TOPICS,
+  evidence: EVIDENCE,
+  fallback: null,
+  next_attempt_at: null,
+} satisfies Omit<MockAssessmentResult, 'id'>
 
-const resultFixtures: Record<string, Record<string, unknown>> = {
+const resultFixtures: Record<string, MockAssessmentResult> = {
   'demo-confirmed': {
     ...base,
     id: 'demo-confirmed',
@@ -83,7 +99,7 @@ const resultFixtures: Record<string, Record<string, unknown>> = {
     promotion_unlocked: false,
     topics: TOPICS,
     evidence: EVIDENCE,
-    fallback: { kind: 'short_test', reason: 'doubtful_se' },
+    fallback: { mode: 'short_test', grade: 'middle', reason: 'doubtful_se' },
     next_attempt_at: in48h,
   },
   'demo-promotion': {

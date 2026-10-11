@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { me } from '@/mocks/fixtures/me'
-import type { CandidateProfile, Me } from '@/api/types'
+import type { CandidateProfile, Consents, Me } from '@/api/types'
 
 const stub = (init: ResponseInit = {}) =>
   new Headers({ 'X-Stub': 'true', ...(init.headers ?? {}) })
@@ -27,6 +27,10 @@ const problem = (
 let currentMe = me.candidate
 const registeredEmails = new Set<string>(['taken@example.com'])
 
+/** The wire always ships a consents object (schema: required, readOnly);
+ *  an un-onboarded candidate has every flag false. */
+const NO_CONSENTS: Consents = { processing: false, publication: false, fsp_sync: false }
+
 const richProfile: CandidateProfile = {
   public_id: 'pub-anna-1',
   full_name: 'Анна ФСП',
@@ -48,6 +52,7 @@ const richProfile: CandidateProfile = {
   experience_text: '',
   completeness: 100,
   contacts: { email: 'anna.fsp@example.com', phone: '', telegram: '' },
+  unknown_skills: [],
   skills: [
     { id: 's1', name: 'Python', source: 'test' },
     { id: 's2', name: 'Django', source: 'fsp' },
@@ -101,10 +106,11 @@ const emptyProfile: CandidateProfile = {
   experience_text: '',
   completeness: 0,
   contacts: { email: 'alex.dev@example.com', phone: '', telegram: '' },
+  unknown_skills: [],
   skills: [],
   league: null,
   fsp: null,
-  consents: null,
+  consents: NO_CONSENTS,
 }
 
 const profileStore = new Map<string, CandidateProfile>([
