@@ -239,35 +239,56 @@ export function PositionForm({
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Специализация</legend>
         <div className="flex flex-wrap gap-3">
-          {specs.map((s) => (
-            <label key={s} className="flex items-center gap-1.5 text-sm capitalize">
-              <input type="radio" value={s} {...register('specialization')} className="accent-[color:var(--fsp-accent)]" />
-              {SPEC_LABEL[s] ?? s}
-            </label>
-          ))}
+          {specs.map((s) => {
+            const specId = typeof s === 'string' ? s : (s as { id: string }).id
+            const specLabel =
+              typeof s === 'object' && (s as { name_ru?: string }).name_ru
+                ? (s as { name_ru: string }).name_ru
+                : SPEC_LABEL[specId] ?? specId
+            return (
+              <label key={specId} className="flex items-center gap-1.5 text-sm capitalize">
+                <input
+                  type="radio"
+                  value={specId}
+                  {...register('specialization')}
+                  className="accent-[color:var(--fsp-accent)]"
+                />
+                {specLabel}
+              </label>
+            )
+          })}
         </div>
       </fieldset>
 
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Грейды</legend>
         <div className="flex flex-wrap gap-3">
-          {gradeOptions.map((g) => (
-            <label key={g} className="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={grades.includes(g)}
-                onChange={(e) =>
-                  setValue(
-                    'grades',
-                    e.target.checked ? [...grades, g] : grades.filter((x) => x !== g),
-                    { shouldDirty: true },
-                  )
-                }
-                className="accent-[color:var(--fsp-accent)]"
-              />
-              {GRADE_LABEL[g] ?? g}
-            </label>
-          ))}
+          {gradeOptions.map((g) => {
+            const gradeId = typeof g === 'string' ? g : (g as { id: string }).id
+            const gradeLabel =
+              typeof g === 'object' && (g as { name_ru?: string }).name_ru
+                ? (g as { name_ru: string }).name_ru
+                : GRADE_LABEL[gradeId] ?? gradeId
+            return (
+              <label key={gradeId} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={grades.includes(gradeId)}
+                  onChange={(e) =>
+                    setValue(
+                      'grades',
+                      e.target.checked
+                        ? [...grades, gradeId]
+                        : grades.filter((x) => x !== gradeId),
+                      { shouldDirty: true },
+                    )
+                  }
+                  className="accent-[color:var(--fsp-accent)]"
+                />
+                {gradeLabel}
+              </label>
+            )
+          })}
         </div>
         {errors.grades?.message && <p role="alert" className="text-xs text-destructive">{errors.grades.message}</p>}
       </fieldset>
@@ -299,23 +320,32 @@ export function PositionForm({
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Формат работы</legend>
         <div className="flex flex-wrap gap-3">
-          {formatOptions.map((f) => (
-            <label key={f} className="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                checked={formats.includes(f)}
-                onChange={(e) =>
-                  setValue(
-                    'work_formats',
-                    e.target.checked ? [...formats, f] : formats.filter((x) => x !== f),
-                    { shouldDirty: true },
-                  )
-                }
-                className="accent-[color:var(--fsp-accent)]"
-              />
-              {WORK_FORMAT_LABEL[f] ?? f}
-            </label>
-          ))}
+          {formatOptions.map((f) => {
+            const formatId = typeof f === 'string' ? f : (f as { id: string }).id
+            const formatLabel =
+              typeof f === 'object' && (f as { name_ru?: string }).name_ru
+                ? (f as { name_ru: string }).name_ru
+                : WORK_FORMAT_LABEL[formatId] ?? formatId
+            return (
+              <label key={formatId} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={formats.includes(formatId)}
+                  onChange={(e) =>
+                    setValue(
+                      'work_formats',
+                      e.target.checked
+                        ? [...formats, formatId]
+                        : formats.filter((x) => x !== formatId),
+                      { shouldDirty: true },
+                    )
+                  }
+                  className="accent-[color:var(--fsp-accent)]"
+                />
+                {formatLabel}
+              </label>
+            )
+          })}
         </div>
         {errors.work_formats?.message && (
           <p role="alert" className="text-xs text-destructive">{errors.work_formats.message}</p>

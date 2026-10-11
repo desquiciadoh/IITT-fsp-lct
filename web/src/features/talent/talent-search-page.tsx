@@ -123,8 +123,7 @@ export function TalentSearchPage() {
             <>
               <p className="text-xs text-muted-foreground" role="status">
                 Найдено кандидатов: {total}
-                {fallback &&
-                  ' · фильтры применены на клиенте (бэкенд ещё не поддерживает G8)'}
+                {fallback && ' · фильтры применены локально'}
               </p>
               <ul className="flex flex-col gap-3">
                 {items.map((talent) => (

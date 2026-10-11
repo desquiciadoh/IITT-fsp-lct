@@ -2,7 +2,7 @@ x-backend-env: &backend-env
   DEBUG: "False"
   DEMO_MODE: "True"
   AUTO_SEED: "True"
-  SECRET_KEY: ${SECRET_KEY}
+  SECRET_KEY: ${SECRET_KEY:-dev-secret-key-for-local-testing-and-verification-fsp-draft-2026}
   ALLOWED_HOSTS: "localhost,127.0.0.1,api,web"
   CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:8000,http://127.0.0.1:8000"
   PUBLIC_BASE_URL: "http://localhost:8000"
@@ -21,7 +21,8 @@ x-backend-env: &backend-env
   CELERY_BROKER_URL: redis://redis:6379/0
   CELERY_RESULT_BACKEND: redis://redis:6379/0
   REDIS_URL: redis://redis:6379/0
-  ITEM_SEED_SECRET: ${ITEM_SEED_SECRET}
+  ITEM_SEED_SECRET: ${ITEM_SEED_SECRET:-dev-item-seed-secret-for-hmac-deterministic-test-seed}
+  CONTACT_ENCRYPTION_KEY: ${CONTACT_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
   SMTP_HOST: mailhog
   SMTP_PORT: 1025
 
@@ -131,6 +132,17 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

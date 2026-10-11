@@ -138,11 +138,17 @@ class AssessmentListCreateView(views.APIView):
             )
 
         data = serializer.validated_data
+        target_items = data.get("target_items")
+        if target_items is None:
+            mode = data.get("mode", "full")
+            target_items = 6 if mode == "express" else 12
+
         session = AssessmentService.start_assessment(
             user=request.user,
             specialization=data["specialization"],
             claimed_grade=data["claimed_grade"],
             mode=data.get("mode", "full"),
+            target_items=target_items,
         )
         serializer = AssessmentSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

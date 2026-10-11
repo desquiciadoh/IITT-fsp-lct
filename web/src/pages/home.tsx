@@ -10,7 +10,7 @@ export function HomePage() {
           /dev/design — дизайн-направления
         </a>
         <a className="underline" href="/dev/ui">
-          /dev/ui — UI-кит (FE-01)
+          /dev/ui — UI-кит
         </a>
         <a className="underline" href="/api/docs/">
           /api/docs/ — Swagger бэкенда

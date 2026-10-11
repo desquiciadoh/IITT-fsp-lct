@@ -87,7 +87,7 @@ function OfferCard({ offer }: { offer: Offer }) {
           {/* G10: no name/avatar in employer payloads — only the public id. */}
           <p className="mt-1 text-xs text-muted-foreground">
             Кандидат:{' '}
-            <code className="rounded bg-muted px-1 py-0.5">{offer.candidate_public_id ?? 'нет в payload (G10)'}</code>
+            <code className="rounded bg-muted px-1 py-0.5">{offer.candidate_public_id ?? 'не указан'}</code>
           </p>
 
           <dl className="mt-1 flex gap-3 text-[11px] text-muted-foreground tabular-nums">

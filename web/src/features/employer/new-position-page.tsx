@@ -80,7 +80,7 @@ export function NewPositionPage() {
             placeholder="Мы ищем backend-разработчика… стек, требования, условия"
             className="w-full rounded-md border border-input bg-background p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button onClick={onParse} disabled={parse.isPending}>
               {parse.isPending ? (
                 <>
@@ -91,6 +91,20 @@ export function NewPositionPage() {
                   <FileSearch className="mr-1 h-4 w-4" /> Распознать
                 </>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() =>
+                setParsed({
+                  draft: {},
+                  unknown_terms: [],
+                  blueprint: [],
+                  source: 'manual',
+                })
+              }
+            >
+              Заполнить вручную
             </Button>
             <span className="text-xs text-muted-foreground">
               Парсер заполнит форму, все поля можно будет отредактировать.

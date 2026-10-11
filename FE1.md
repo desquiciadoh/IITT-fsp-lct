@@ -106,7 +106,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
 | FE-14 Test Twins & Blueprint Builder | S | BE-22, ML-12, AI-14 | ❌ mock it |
 | FE-18 Polish | M | PD-05 copy; FE2's screens merged | partly unblocked |
 
-- [ ] **FE-13 · Validation Lab** (M), route `/lab` (public, inside `AppLayout`, no SSE for anonymous users). Folder `features/lab/`.
+- [x] **FE-13 · Validation Lab** (M), route `/lab` (public, inside `AppLayout`, no SSE for anonymous users). Folder `features/lab/`.
   - `GET /api/lab/report` → `ValidationReport` (shape: `docs/TASKS.md` §1.4, line ~372). The backend serves `validation/out/report.json`, else `report.fixture.json` with `synthetic_fixture: true`.
   - **Red "FIXTURE" banner whenever `synthetic_fixture` is true.** Fake numbers never reach the jury unlabeled.
   - Re-add `recharts` (it was removed in R13; it is now used here) and lazy-load the page. Charts: confusion-matrix heatmap; accuracy / QWK / retest KPI tiles; TIF line chart; leak-attack bars (static vs parametric); systems table with nDCG@10 and P@10 bars; non-FSP parity and pool p95. Show `generated_at` and `git_sha`.
@@ -139,7 +139,7 @@ Start only after R16 is merged. Recommended order: **FE-18 (own screens) → FE-
   - A below-salary-floor warning in the send-offer modal before sending (do not reveal the floor value).
   - *Done:* all five render from fixtures; moving a slider reorders the pool without a request.
 
-- [ ] **FE-14 · Test Twins & Blueprint Builder** (S). JD → blueprint → two unique test instances side by side with the same difficulty profile. Depends on BE-22 (`GET /api/lab/twins?position_id=`), ML-12 and AI-14; mock it. Lives under `/lab` (a "Test Twins" section) and as a link from the position page.
+- [x] **FE-14 · Test Twins & Blueprint Builder** (S). JD → blueprint → two unique test instances side by side with the same difficulty profile. Depends on BE-22 (`GET /api/lab/twins?position_id=`), ML-12 and AI-14; mock it. Lives under `/lab` (a "Test Twins" section) and as a link from the position page.
   - Never show answer keys: render only what `ItemView` exposes.
   - *Done:* two instances render from a fixture with matching difficulty bars.
 

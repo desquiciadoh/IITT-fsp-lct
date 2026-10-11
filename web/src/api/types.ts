@@ -196,13 +196,32 @@ export type ResumeParseResult = Omit<ResumeParseResponse, 'prefill'> & {
   }
 }
 
-/** gap G3 — the taxonomy endpoint is mocked until the backend ships it. */
+export type TaxonomyGrade = {
+  id: Grade
+  name: string
+  name_ru?: string
+  descriptor?: string
+  descriptor_ru?: string
+  theta_cut?: number
+  rating_cut?: number
+}
+
+export type TaxonomySpecialization = {
+  id: Spec
+  name: string
+  name_ru?: string
+  topics?: string[]
+}
+
+/** GET /api/taxonomy */
 export type Taxonomy = {
   specs: Spec[]
   grades: Grade[]
   work_formats: WorkFormat[]
   strength_topics: string[]
   skills: string[]
+  grade_details?: TaxonomyGrade[]
+  specialization_details?: TaxonomySpecialization[]
 }
 
 export type ResultTopic = {
@@ -475,4 +494,94 @@ export type AnswerInput = {
 export type AnswerOutcome = Omit<GeneratedAnswerResponse, 'next' | 'result'> & {
   next?: AssessmentItem
   result?: AssessmentResult
+}
+
+// --- Lab validation & psychometrics (FE-13, FE-14, BE-22) ---
+export type ValidationReport = {
+  generated_at: string
+  git_sha: string
+  synthetic_fixture: boolean
+  assessment: {
+    simulees: number
+    exact_acc: number
+    adjacent_acc: number
+    qwk: number
+    retest_same_grade: number
+    retest_r: number
+    median_len: number
+    max_family_exposure: number
+    collision_rate: number
+    generator_errors: number
+    confusion: number[][]
+    tif: {
+      theta: number[]
+      info: number[]
+    }
+    leak_attack: {
+      leak_share: number
+      static_dtheta: number
+      parametric_dtheta: number
+    }[]
+  }
+  matching: {
+    candidates: number
+    needs: number
+    non_fsp_parity: number
+    pool_p95_ms: number
+    systems: {
+      name: string
+      ndcg10: number
+      p10: number
+      r50: number
+      mrr: number
+    }[]
+  }
+}
+
+export type LabFamily = {
+  id: string
+  version?: number
+  topic: string
+  specs: string[]
+  skills?: string[]
+  format: string
+  a: number
+  b: number
+  c: number
+  time_limit_s: number
+  exposures: number
+  exposure_rate: number
+  correct_rate: number | null
+  expected_p_theta0: number
+  drift_flag: boolean
+}
+
+export type LabFamiliesResponse = {
+  total: number
+  families: LabFamily[]
+}
+
+export type LabTwinInstance = {
+  stem_md: string
+  options?: { id: string; text_md?: string; text?: string }[] | null
+  input?: 'choice' | 'number' | 'text' | string
+  code?: { lang: string; text: string } | null
+}
+
+export type LabTwin = {
+  family_id: string
+  topic: string
+  level: string
+  b: number
+  time_limit_s: number
+  instance_a: LabTwinInstance
+  instance_b: LabTwinInstance
+}
+
+export type LabTwinsResponse = {
+  specialization: string
+  grade?: string
+  position_id?: string
+  position_title?: string
+  twins: LabTwin[]
 }

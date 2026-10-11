@@ -15,6 +15,9 @@ class StartAssessmentSerializer(serializers.Serializer):
     specialization = serializers.ChoiceField(choices=Specialization.choices, required=True)
     claimed_grade = serializers.ChoiceField(choices=Grade.choices, required=True)
     mode = serializers.ChoiceField(choices=AssessmentMode.choices, default=AssessmentMode.FULL)
+    target_items = serializers.IntegerField(
+        required=False, min_value=1, max_value=50, default=None
+    )
 
 
 class ItemViewSerializer(serializers.ModelSerializer):
@@ -66,6 +69,7 @@ class ItemViewSerializer(serializers.ModelSerializer):
 
 class AssessmentSessionSerializer(serializers.ModelSerializer):
     current = serializers.SerializerMethodField()
+    max_items = serializers.SerializerMethodField()
 
     class Meta:
         model = AssessmentSession
@@ -77,6 +81,7 @@ class AssessmentSessionSerializer(serializers.ModelSerializer):
             "mode",
             "status",
             "current",
+            "max_items",
             "theta",
             "se",
             "rating",
@@ -94,6 +99,10 @@ class AssessmentSessionSerializer(serializers.ModelSerializer):
         if item:
             return ItemViewSerializer(item).data
         return None
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_max_items(self, obj):
+        return obj.items.count()
 
 
 class AnswerRequestSerializer(serializers.Serializer):

@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation, useRouteError } from 'react-router-dom'
 import { HomePage } from '@/pages/home'
 import { DevUiPage } from '@/pages/dev-ui'
 import { DesignVariantsPage } from '@/pages/design-variants'
@@ -23,11 +23,26 @@ import { SettingsPage } from '@/features/settings/settings-page'
 import { AppLayout } from '@/app/layouts/app-layout'
 import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
 import { IndexRedirect } from '@/app/index-redirect'
-import { Placeholder } from '@/app/placeholder'
+import { ErrorState } from '@/components/domain/states'
 
-const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
-  <Placeholder title={title} owner={owner} task={task} />
-)
+function RouteErrorBoundary() {
+  const error = useRouteError()
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center p-6">
+      <ErrorState
+        title="Произошла непредвиденная ошибка"
+        description={
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : 'Не удалось отобразить страницу'
+        }
+        onRetry={() => window.location.reload()}
+      />
+    </div>
+  )
+}
 
 function CandidateProfileRedirect() {
   const location = useLocation()
@@ -35,23 +50,31 @@ function CandidateProfileRedirect() {
 }
 
 export const router = createBrowserRouter([
-  { path: '/', element: <IndexRedirect /> },
-  { path: '/home', element: <HomePage /> },
-  { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
-  { path: '/verify', element: <VerifyPage /> },
-  { path: '/dev/ui', element: <DevUiPage /> },
-  { path: '/dev/design', element: <DesignVariantsPage /> },
+  { path: '/', element: <IndexRedirect />, errorElement: <RouteErrorBoundary /> },
+  { path: '/home', element: <HomePage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/login', element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/register', element: <RegisterPage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/verify', element: <VerifyPage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/dev/ui', element: <DevUiPage />, errorElement: <RouteErrorBoundary /> },
+  { path: '/dev/design', element: <DesignVariantsPage />, errorElement: <RouteErrorBoundary /> },
   {
     // Public pages inside the shell (no RequireAuth; no SSE for anonymous users)
     element: <AppLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/jury', element: <JuryPage /> },
-      { path: '/lab', element: ph('Лаборатория', 'FE1', 'FE-13') },
+      {
+        path: '/lab',
+        lazy: async () => {
+          const { LabPage } = await import('@/features/lab/lab-page')
+          return { Component: LabPage }
+        },
+      },
     ],
   },
   {
     element: <RequireAuth />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <AppLayout />,

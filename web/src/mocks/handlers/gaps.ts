@@ -58,7 +58,4 @@ export const gapHandlers = [
   http.post('*/api/assessments/:id/finish', () =>
     problem(503, 'fallback_not_available', 'Finish fallback is not available yet.'),
   ),
-  http.get('*/api/lab/report', () =>
-    json({ id: 'lab-1', summary: 'Черновик отчёта', scores: {} }),
-  ),
 ]

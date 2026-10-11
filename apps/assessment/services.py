@@ -15,6 +15,7 @@ from core.enums import (
     Grade,
     GradeDecision,
     LeagueStatus,
+    Specialization,
 )
 from core.errors import (
     AssessmentInProgress,
@@ -86,6 +87,7 @@ class AssessmentService:
         mode: str = AssessmentMode.FULL,
         kind: str = AssessmentKind.INITIAL,
         counts_as_attempt: bool = True,
+        target_items: int | None = None,
     ) -> AssessmentSession:
         now_real = timezone.now()
         now_demo = get_current_time_for_user(user)
@@ -115,7 +117,7 @@ class AssessmentService:
                 raise AssessmentInProgress()
 
         # 3. Pick families matching the requested specialization only
-        active_metas = engine_adapter.active_metas(specialization)
+        active_metas = engine_adapter.active_metas(specialization, mode=mode)
         if not active_metas:
             raise FSPAPIError(
                 "no_item_bank",
@@ -152,7 +154,22 @@ class AssessmentService:
 
         # 5. Seed items with HMAC
         item_seed_secret = settings.ITEM_SEED_SECRET
-        for seq, family_meta in enumerate(active_metas, start=1):
+        if target_items is None:
+            if specialization == Specialization.BACKEND and mode == AssessmentMode.FULL:
+                target_items = 2
+            elif mode == AssessmentMode.EXPRESS:
+                target_items = 6
+            else:
+                target_items = 12
+
+        selected_metas = engine_adapter.select_assessment_families(
+            specialization,
+            target_items,
+            session_id=str(session.id),
+            secret=item_seed_secret,
+        )
+
+        for seq, family_meta in enumerate(selected_metas, start=1):
             seed_raw = f"{item_seed_secret}:{session.id}:{family_meta.id}:{seq}"
             seed = hmac.new(
                 item_seed_secret.encode("utf-8"),

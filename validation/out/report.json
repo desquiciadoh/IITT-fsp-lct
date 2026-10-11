@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-10-11T16:47:20.201840+00:00",
+  "git_sha": "88f124d0c6353bd69d837d00496d5544179f0079-dirty",
+  "synthetic_fixture": false,
+  "assessment": {
+    "simulees": 10000,
+    "exact_acc": 0.6469,
+    "adjacent_acc": 0.9921,
+    "qwk": 0.7785,
+    "confusion": [
+      [
+        829,
+        720,
+        30,
+        0
+      ],
+      [
+        359,
+        2136,
+        856,
+        14
+      ],
+      [
+        16,
+        654,
+        2336,
+        412
+      ],
+      [
+        0,
+        19,
+        451,
+        1168
+      ]
+    ],
+    "retest_same_grade": 0.5572,
+    "retest_r": 0.7874,
+    "median_len": 20.0,
+    "max_family_exposure": 1.0,
+    "tif": {
+      "theta": [
+        -3.0,
+        -2.5,
+        -2.0,
+        -1.5,
+        -1.0,
+        -0.5,
+        0.0,
+        0.5,
+        1.0,
+        1.5,
+        2.0,
+        2.5,
+        3.0
+      ],
+      "info": [
+        0.5226,
+        0.8692,
+        1.4032,
+        2.1674,
+        3.1428,
+        4.1751,
+        4.9475,
+        5.1172,
+        4.5775,
+        3.5589,
+        2.4487,
+        1.5353,
+        0.9056
+      ]
+    },
+    "collision_rate": 0.0001,
+    "generator_errors": 0,
+    "leak_attack": [
+      {
+        "leak_share": 0.1,
+        "static_dtheta": 0.2481,
+        "parametric_dtheta": 0.0
+      },
+      {
+        "leak_share": 0.3,
+        "static_dtheta": 0.6297,
+        "parametric_dtheta": 0.0
+      },
+      {
+        "leak_share": 0.5,
+        "static_dtheta": 1.1985,
+        "parametric_dtheta": 0.0
+      }
+    ]
+  },
+  "matching": {
+    "candidates": 1500,
+    "needs": 60,
+    "non_fsp_parity": 0.8462,
+    "pool_p95_ms": 83.78,
+    "systems": [
+      {
+        "name": "keyword",
+        "ndcg10": 0.6844,
+        "p10": 0.73,
+        "r50": 0.4778,
+        "mrr": 0.8521
+      },
+      {
+        "name": "bm25",
+        "ndcg10": 0.4898,
+        "p10": 0.5883,
+        "r50": 0.3972,
+        "mrr": 0.7465
+      },
+      {
+        "name": "hashed_ngram",
+        "ndcg10": 0.4326,
+        "p10": 0.5183,
+        "r50": 0.3561,
+        "mrr": 0.7223
+      },
+      {
+        "name": "ours_no_verified",
+        "ndcg10": 0.5978,
+        "p10": 0.69,
+        "r50": 0.4082,
+        "mrr": 0.8354
+      },
+      {
+        "name": "ours",
+        "ndcg10": 0.5364,
+        "p10": 0.6417,
+        "r50": 0.4021,
+        "mrr": 0.7712
+      }
+    ]
+  }
+}

@@ -114,7 +114,7 @@ def phase_lint() -> None:
     if code == 0:
         record("lint", "PASS")
     else:
-        n = len([l for l in out.splitlines() if re.match(r".+:\d+:\d+:", l)])
+        n = len([line for line in out.splitlines() if re.match(r".+:\d+:\d+:", line)])
         record("lint", "WARN", f"{n} issue(s):\n" + tail(out, 30))
 
 

@@ -71,26 +71,37 @@ export function ClaimStep() {
       </div>
 
       <div role="radiogroup" aria-label="Заявленный грейд" className="flex flex-col gap-3">
-        {grades.map((grade) => (
-          <button
-            key={grade}
-            type="button"
-            role="radio"
-            aria-checked={selected === grade}
-            onClick={() => setSelected(grade)}
-            className={cn(
-              'flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors',
-              selected === grade
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/50',
-            )}
-          >
-            <span className="text-sm font-semibold">{GRADE_LABEL[grade] ?? grade}</span>
-            <span className="text-xs leading-relaxed text-muted-foreground">
-              {GRADE_DESCRIPTOR[grade] ?? ''}
-            </span>
-          </button>
-        ))}
+        {grades.map((grade) => {
+          const gradeId = typeof grade === 'string' ? grade : (grade as { id: string }).id
+          const gradeLabel =
+            typeof grade === 'object' && (grade as { name_ru?: string }).name_ru
+              ? (grade as { name_ru: string }).name_ru
+              : GRADE_LABEL[gradeId] ?? gradeId
+          const gradeDescriptor =
+            typeof grade === 'object' && (grade as { descriptor_ru?: string }).descriptor_ru
+              ? (grade as { descriptor_ru: string }).descriptor_ru
+              : GRADE_DESCRIPTOR[gradeId] ?? ''
+          return (
+            <button
+              key={gradeId}
+              type="button"
+              role="radio"
+              aria-checked={selected === gradeId}
+              onClick={() => setSelected(gradeId)}
+              className={cn(
+                'flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors',
+                selected === gradeId
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50',
+              )}
+            >
+              <span className="text-sm font-semibold">{gradeLabel}</span>
+              <span className="text-xs leading-relaxed text-muted-foreground">
+                {gradeDescriptor}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       <Button

@@ -188,3 +188,67 @@ class TestAssessmentServiceUsesAdapter:
         assert finalized.theta is not None
         assert finalized.rating is not None
         assert finalized.decision in [GradeDecision.CONFIRMED, GradeDecision.UNCONFIRMED]
+
+    def test_ml_data_session_lifecycle(self, db):
+        call_command("sync_families")
+
+        user = User.objects.create_user(
+            email="candidate_ml@example.com",
+            password="testpassword123",
+            role="candidate",
+        )
+
+        session = AssessmentService.start_assessment(
+            user=user,
+            specialization=Specialization.ML_DATA,
+            claimed_grade=Grade.SENIOR,
+            mode=AssessmentMode.FULL,
+            kind=AssessmentKind.INITIAL,
+        )
+
+        assert session.state is not None
+        assert session.state["spec"] == Specialization.ML_DATA
+        assert session.items.count() > 0
+
+        # First item is initialized and ready to answer
+        item = session.items.get(seq=1)
+        assert item is not None
+        assert "key" not in item.view
+
+        # Submit answer
+        answered_session, next_item, finished = AssessmentService.submit_answer(
+            user=user,
+            session_id=session.id,
+            item_id=item.id,
+            answer_val=str(item.key),
+        )
+        assert answered_session.state is not None
+        assert len(answered_session.state["administered"]) == 1
+        assert answered_session.state["administered"][0]["correct"] is True
+
+        # Finalize assessment
+        finalized = AssessmentService.finalize_assessment(answered_session, user)
+        assert finalized.theta is not None
+        assert finalized.rating is not None
+        assert finalized.decision in [GradeDecision.CONFIRMED, GradeDecision.UNCONFIRMED]
+
+    def test_ml_data_express_mode_limits_items(self, db):
+        call_command("sync_families")
+
+        user = User.objects.create_user(
+            email="candidate_ml_express@example.com",
+            password="testpassword123",
+            role="candidate",
+        )
+
+        session = AssessmentService.start_assessment(
+            user=user,
+            specialization=Specialization.ML_DATA,
+            claimed_grade=Grade.MIDDLE,
+            mode=AssessmentMode.EXPRESS,
+            kind=AssessmentKind.INITIAL,
+        )
+
+        assert session.items.count() == 6
+
+

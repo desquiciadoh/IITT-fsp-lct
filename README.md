@@ -56,59 +56,80 @@
 
 ---
 
-## 3. Быстрый старт
+## 3. Быстрый старт (Запуск одной командой)
 
-### Требования
-* Python 3.12+ (или утилита `uv`)
-* PostgreSQL 17 + Docker (или локальный сервер PostgreSQL)
+> 🚀 **Подробное руководство по развёртыванию:** см. [docs/DEPLOYMENT_RU.md](docs/DEPLOYMENT_RU.md)
 
-### Шаг 1: Запуск базы данных
+### Вариант 1: Запуск полного стека через Docker Compose (Рекомендуемый)
+
+Для проверяющих и жюри весь стек сервисов (PostgreSQL с pgvector, Redis, Django API, Celery воркеры, MailHog и **Web Frontend**) запускается **ровно одной командой**:
+
 ```bash
-docker run -d --name fsp-postgres -p 5432:5432 \
-  -e POSTGRES_DB=fsp_draft \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  postgres:17
+docker compose up --build
 ```
+*Или с помощью готового скрипта:*
+* **Linux / macOS:** `./start.sh`
+* **Windows (PowerShell):** `.\start.ps1`
 
-### Шаг 2: Создание виртуального окружения и установка зависимостей
-```bash
-# Через uv (рекомендуется):
-uv venv .venv --python 3.12
-uv pip install -r requirements.txt
-
-# Или через стандартный venv:
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Шаг 3: Применение миграций
-```bash
-python manage.py migrate
-```
-
-### Шаг 4: Загрузка демонстрационного стенда (Seed)
-```bash
-python manage.py seed --mode=mini
-```
-*Команда создаст: 6 реалистичных кандидатов (чемпионы ФСП, разработчики со стандартным опытом, неподтвержденный грейд), 2 компании (`Yandex Tech`, `СберТехнологии`), 3 вакансии с обязательными зарплатными вилками, 4 верифицированных профиля турниров ФСП.*
-
-### Шаг 5: Запуск сервера разработки
-```bash
-python manage.py runserver
-```
-* API доступно по адресу: `http://localhost:8000/api/`
-* Интерактивная документация Swagger UI: `http://localhost:8000/api/docs/`
-* OpenAPI 3.0 схема: `http://localhost:8000/api/schema/` (также сохранена в `docs/openapi.json`)
+После завершения сборки и автоматического применения сидов:
+* 🌐 **Веб-интерфейс платформы (React 19 SPA):** [http://localhost:5173](http://localhost:5173)
+* 📡 **REST API:** [http://localhost:8000/api/](http://localhost:8000/api/)
+* 📚 **Интерактивная Swagger/OpenAPI документация:** [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
+* ⚙️ **Django Административная панель:** [http://localhost:8000/admin/](http://localhost:8000/admin/) (Логин: `admin@fsp-draft.local`, Пароль: `admin12345`)
+* 📧 **Почтовый сервер для проверки писем (MailHog):** [http://localhost:8025](http://localhost:8025)
 
 ---
 
-## 4. Запуск тестов (TDD Invariants)
+### Вариант 2: Локальный запуск без Docker
 
-Набор тестов (`pytest-django`) валидирует все ключевые требования ТЗ:
+#### Шаг 1: Подготовка окружения
 ```bash
-pytest -v
+# Копирование переменных окружения
+cp .env.example .env
+
+# Создание и активация venv
+python -m venv .venv
+source .venv/bin/activate    # Linux/macOS
+# .venv\Scripts\activate     # Windows
+
+# Установка зависимостей бэкенда
+pip install -r requirements.txt
+```
+
+#### Шаг 2: Применение миграций и сидирование базы данных
+```bash
+python manage.py migrate
+python manage.py seed
+```
+
+#### Шаг 3: Запуск серверов разработки
+* **Бэкенд:** `python manage.py runserver 0.0.0.0:8000`
+* **Фронтенд:** `cd web && pnpm install && pnpm dev`
+
+Приложение откроется на [http://localhost:5173](http://localhost:5173), проксируя API-запросы на [http://localhost:8000](http://localhost:8000).
+
+---
+
+## 4. Запуск тестов (TDD Invariants & Quality Gates)
+
+### Тесты бэкенда (1060+ тестов):
+```bash
+pytest
+# или:
+make test
+```
+
+### Тесты фронтенда (126 тестов):
+```bash
+cd web && pnpm test
+# или:
+make web-test
+```
+
+### Комплексный прогон всех тестов и линтеров:
+```bash
+make test-all
+make lint
 ```
 
 ### Проверяемые сценарии:

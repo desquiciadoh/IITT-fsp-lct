@@ -191,7 +191,7 @@ export function DesignVariantsPage() {
         <h1 className="text-2xl font-bold">Дизайн-направления</h1>
         <p className="text-muted-foreground">
           Три варианта визуальной темы на одном макете (шапка, герой, лига,
-          оффер). Голосуй за вариант — дальше раскатываем его в токены (FE-01).
+          оффер). Голосуй за вариант — дальше раскатываем его в токены.
         </p>
       </div>
       {VARIANTS.map((v) => (

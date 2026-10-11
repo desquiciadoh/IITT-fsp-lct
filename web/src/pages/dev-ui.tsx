@@ -131,7 +131,7 @@ export function DevUiPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-8 p-8">
       <div>
-        <h1 className="text-2xl font-bold">UI-кит — FE-01</h1>
+        <h1 className="text-2xl font-bold">UI-кит</h1>
         <p className="text-muted-foreground">
           Доменные компоненты, все состояния на фикстурах. Тема: Arena (dark),
           токены в <code className="font-mono text-xs">src/styles/tokens.css</code>.

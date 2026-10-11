@@ -13,39 +13,39 @@
   <text x="287" y="58" text-anchor="middle" class="label">Middle</text>
   <text x="362" y="58" text-anchor="middle" class="label">Senior</text>
   <text x="88" y="111" text-anchor="end" class="label">Intern</text>
-  <rect x="100" y="70" width="75" height="75" rx="4" fill="rgb(177,191,230)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="137" y="108" fill="#1e293b" class="cell-text">793</text>
-  <rect x="175" y="70" width="75" height="75" rx="4" fill="rgb(181,195,232)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="212" y="108" fill="#1e293b" class="cell-text">738</text>
-  <rect x="250" y="70" width="75" height="75" rx="4" fill="rgb(237,241,253)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="287" y="108" fill="#1e293b" class="cell-text">33</text>
+  <rect x="100" y="70" width="75" height="75" rx="4" fill="rgb(176,190,230)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="137" y="108" fill="#1e293b" class="cell-text">829</text>
+  <rect x="175" y="70" width="75" height="75" rx="4" fill="rgb(184,197,233)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="212" y="108" fill="#1e293b" class="cell-text">720</text>
+  <rect x="250" y="70" width="75" height="75" rx="4" fill="rgb(237,242,254)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="287" y="108" fill="#1e293b" class="cell-text">30</text>
   <rect x="325" y="70" width="75" height="75" rx="4" fill="rgb(240,244,255)" stroke="#cbd5e1" stroke-width="1" />
   <text x="362" y="108" fill="#1e293b" class="cell-text">0</text>
   <text x="88" y="186" text-anchor="end" class="label">Junior</text>
-  <rect x="100" y="145" width="75" height="75" rx="4" fill="rgb(208,218,242)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="137" y="183" fill="#1e293b" class="cell-text">391</text>
-  <rect x="175" y="145" width="75" height="75" rx="4" fill="rgb(74,106,190)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="212" y="183" fill="#ffffff" class="cell-text">2084</text>
-  <rect x="250" y="145" width="75" height="75" rx="4" fill="rgb(164,181,225)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="287" y="183" fill="#1e293b" class="cell-text">948</text>
-  <rect x="325" y="145" width="75" height="75" rx="4" fill="rgb(239,243,254)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="362" y="183" fill="#1e293b" class="cell-text">10</text>
+  <rect x="100" y="145" width="75" height="75" rx="4" fill="rgb(212,220,244)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="137" y="183" fill="#1e293b" class="cell-text">359</text>
+  <rect x="175" y="145" width="75" height="75" rx="4" fill="rgb(75,106,190)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="212" y="183" fill="#ffffff" class="cell-text">2136</text>
+  <rect x="250" y="145" width="75" height="75" rx="4" fill="rgb(174,189,229)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="287" y="183" fill="#1e293b" class="cell-text">856</text>
+  <rect x="325" y="145" width="75" height="75" rx="4" fill="rgb(238,243,254)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="362" y="183" fill="#1e293b" class="cell-text">14</text>
   <text x="88" y="261" text-anchor="end" class="label">Middle</text>
-  <rect x="100" y="220" width="75" height="75" rx="4" fill="rgb(239,243,254)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="137" y="258" fill="#1e293b" class="cell-text">11</text>
-  <rect x="175" y="220" width="75" height="75" rx="4" fill="rgb(184,197,233)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="212" y="258" fill="#1e293b" class="cell-text">704</text>
+  <rect x="100" y="220" width="75" height="75" rx="4" fill="rgb(238,242,254)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="137" y="258" fill="#1e293b" class="cell-text">16</text>
+  <rect x="175" y="220" width="75" height="75" rx="4" fill="rgb(189,202,235)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="212" y="258" fill="#1e293b" class="cell-text">654</text>
   <rect x="250" y="220" width="75" height="75" rx="4" fill="rgb(60,94,185)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="287" y="258" fill="#ffffff" class="cell-text">2270</text>
-  <rect x="325" y="220" width="75" height="75" rx="4" fill="rgb(204,214,241)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="362" y="258" fill="#1e293b" class="cell-text">452</text>
+  <text x="287" y="258" fill="#ffffff" class="cell-text">2336</text>
+  <rect x="325" y="220" width="75" height="75" rx="4" fill="rgb(208,217,242)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="362" y="258" fill="#1e293b" class="cell-text">412</text>
   <text x="88" y="336" text-anchor="end" class="label">Senior</text>
   <rect x="100" y="295" width="75" height="75" rx="4" fill="rgb(240,244,255)" stroke="#cbd5e1" stroke-width="1" />
   <text x="137" y="333" fill="#1e293b" class="cell-text">0</text>
   <rect x="175" y="295" width="75" height="75" rx="4" fill="rgb(238,242,254)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="212" y="333" fill="#1e293b" class="cell-text">22</text>
+  <text x="212" y="333" fill="#1e293b" class="cell-text">19</text>
   <rect x="250" y="295" width="75" height="75" rx="4" fill="rgb(205,215,241)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="287" y="333" fill="#1e293b" class="cell-text">431</text>
-  <rect x="325" y="295" width="75" height="75" rx="4" fill="rgb(151,170,220)" stroke="#cbd5e1" stroke-width="1" />
-  <text x="362" y="333" fill="#1e293b" class="cell-text">1113</text>
+  <text x="287" y="333" fill="#1e293b" class="cell-text">451</text>
+  <rect x="325" y="295" width="75" height="75" rx="4" fill="rgb(150,169,220)" stroke="#cbd5e1" stroke-width="1" />
+  <text x="362" y="333" fill="#1e293b" class="cell-text">1168</text>
 </svg>

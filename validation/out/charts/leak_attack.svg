@@ -13,18 +13,18 @@
   <line x1="70" y1="190" x2="530" y2="190" stroke="#94a3b8" stroke-width="1.5" />
   <text x="60" y="194" text-anchor="end" class="label">Δθ = 0</text>
   <text x="146.66666666666669" y="325" text-anchor="middle" class="label">10% утечки</text>
-  <rect x="110.66666666666669" y="171.268" width="32" height="18.732" rx="3" class="bar-static" />
-  <text x="126.66666666666669" y="165.268" text-anchor="middle" class="val-text" fill="#b91c1c">+0.16</text>
-  <rect x="150.66666666666669" y="190" width="32" height="16.956" rx="3" class="bar-param" />
-  <text x="166.66666666666669" y="220.956" text-anchor="middle" class="val-text" fill="#047857">-0.14</text>
+  <rect x="110.66666666666669" y="160.228" width="32" height="29.772" rx="3" class="bar-static" />
+  <text x="126.66666666666669" y="154.228" text-anchor="middle" class="val-text" fill="#b91c1c">+0.25</text>
+  <rect x="150.66666666666669" y="190.0" width="32" height="2.0" rx="3" class="bar-param" />
+  <text x="166.66666666666669" y="184.0" text-anchor="middle" class="val-text" fill="#047857">+0.00</text>
   <text x="300.0" y="325" text-anchor="middle" class="label">30% утечки</text>
-  <rect x="264.0" y="95.812" width="32" height="94.188" rx="3" class="bar-static" />
-  <text x="280.0" y="89.812" text-anchor="middle" class="val-text" fill="#b91c1c">+0.78</text>
-  <rect x="304.0" y="190" width="32" height="53.1" rx="3" class="bar-param" />
-  <text x="320.0" y="257.1" text-anchor="middle" class="val-text" fill="#047857">-0.44</text>
+  <rect x="264.0" y="114.43599999999999" width="32" height="75.56400000000001" rx="3" class="bar-static" />
+  <text x="280.0" y="108.43599999999999" text-anchor="middle" class="val-text" fill="#b91c1c">+0.63</text>
+  <rect x="304.0" y="190.0" width="32" height="2.0" rx="3" class="bar-param" />
+  <text x="320.0" y="184.0" text-anchor="middle" class="val-text" fill="#047857">+0.00</text>
   <text x="453.33333333333337" y="325" text-anchor="middle" class="label">50% утечки</text>
-  <rect x="417.33333333333337" y="90.232" width="32" height="99.768" rx="3" class="bar-static" />
-  <text x="433.33333333333337" y="84.232" text-anchor="middle" class="val-text" fill="#b91c1c">+0.83</text>
-  <rect x="457.33333333333337" y="190" width="32" height="115.248" rx="3" class="bar-param" />
-  <text x="473.33333333333337" y="319.248" text-anchor="middle" class="val-text" fill="#047857">-0.96</text>
+  <rect x="417.33333333333337" y="46.18000000000001" width="32" height="143.82" rx="3" class="bar-static" />
+  <text x="433.33333333333337" y="40.18000000000001" text-anchor="middle" class="val-text" fill="#b91c1c">+1.20</text>
+  <rect x="457.33333333333337" y="190.0" width="32" height="2.0" rx="3" class="bar-param" />
+  <text x="473.33333333333337" y="184.0" text-anchor="middle" class="val-text" fill="#047857">+0.00</text>
 </svg>

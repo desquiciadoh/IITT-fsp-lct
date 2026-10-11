@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-10-11T16:47:20.201840+00:00",
+  "git_sha": "88f124d0c6353bd69d837d00496d5544179f0079-dirty",
+  "seed": 2026,
+  "runtime_s": {
+    "assessment": 267.6,
+    "matching": 6.6
+  },
+  "targets": [
+    {
+      "metric": "generator errors",
+      "value": 0,
+      "target": "= 0",
+      "status": "PASS"
+    },
+    {
+      "metric": "instance collision rate (parametric families)",
+      "value": 0.0001,
+      "target": "<= 0.001",
+      "status": "PASS"
+    },
+    {
+      "metric": "exact grade accuracy",
+      "value": 0.6469,
+      "target": ">= 0.80",
+      "status": "MISS"
+    },
+    {
+      "metric": "adjacent grade accuracy",
+      "value": 0.9921,
+      "target": ">= 0.98",
+      "status": "PASS"
+    },
+    {
+      "metric": "retest same grade",
+      "value": 0.5572,
+      "target": ">= 0.80",
+      "status": "MISS"
+    },
+    {
+      "metric": "retest r",
+      "value": 0.7874,
+      "target": ">= 0.85",
+      "status": "MISS"
+    },
+    {
+      "metric": "leak: parametric |dtheta| at every share",
+      "value": 0.0,
+      "target": "<= 0.10 (static large)",
+      "status": "PASS"
+    },
+    {
+      "metric": "median test length",
+      "value": 20.0,
+      "target": "<= 14",
+      "status": "MISS"
+    },
+    {
+      "metric": "max family exposure (per spec)",
+      "value": 1.0,
+      "target": "<= 0.5",
+      "status": "MISS"
+    },
+    {
+      "metric": "nDCG@10 (ours)",
+      "value": 0.5364,
+      "target": ">= 0.80",
+      "status": "MISS"
+    },
+    {
+      "metric": "P@10 (ours)",
+      "value": 0.6417,
+      "target": ">= 0.80",
+      "status": "MISS"
+    },
+    {
+      "metric": "lift over keyword (nDCG@10)",
+      "value": -0.148,
+      "target": "> 0",
+      "status": "MISS"
+    },
+    {
+      "metric": "ablation: verified evidence on - off (nDCG@10)",
+      "value": -0.0614,
+      "target": "> 0",
+      "status": "MISS"
+    },
+    {
+      "metric": "non-FSP exposure parity",
+      "value": 0.8462,
+      "target": ">= 0.80",
+      "status": "PASS"
+    },
+    {
+      "metric": "pool scoring p95, ms (engine only)",
+      "value": 83.78,
+      "target": "< 300",
+      "status": "PASS"
+    }
+  ],
+  "assessment": {
+    "grades": {
+      "retest_n": 2500,
+      "exposure_by_spec": {
+        "backend": 0.972645047429958,
+        "frontend": 1.0,
+        "ml_data": 0.928928928928929
+      },
+      "share_at_max_items": 0.6334,
+      "stop_reasons": {
+        "ci": 3666,
+        "max_items": 6334
+      }
+    },
+    "bank": {
+      "n_per_family": 1000,
+      "families": 63,
+      "failing_families": [],
+      "concept_collision_rates": {
+        "be.db.isolation_anomaly.v1": 0.992,
+        "be.http.method.v1": 0.99,
+        "be.http.status_code.v1": 0.984,
+        "be.sec.vuln_class.v1": 0.988,
+        "fe.sec.xss_sink.v1": 0.198,
+        "fe.ts.assignability.v1": 0.006,
+        "fe.web.cache_control.v1": 0.035,
+        "ml.models.fit_diagnosis.v1": 0.746,
+        "sh.code.find_bug.v1": 0.414,
+        "sh.ds.op_cost.v1": 0.98
+      },
+      "max_parametric_collision_rate": 0.001
+    },
+    "leak": {
+      "spec": "backend",
+      "simulees": 300,
+      "draws": 2,
+      "per_share": [
+        {
+          "leak_share": 0.1,
+          "sessions": 600,
+          "static_dtheta_se": 0.011918110373324286,
+          "parametric_dtheta_se": 0.0,
+          "over_graded_honest": 0.12333333333333334,
+          "over_graded_static": 0.24833333333333332,
+          "over_graded_parametric": 0.12333333333333334
+        },
+        {
+          "leak_share": 0.3,
+          "sessions": 600,
+          "static_dtheta_se": 0.01793296019333946,
+          "parametric_dtheta_se": 0.0,
+          "over_graded_honest": 0.12333333333333334,
+          "over_graded_static": 0.5016666666666667,
+          "over_graded_parametric": 0.12333333333333334
+        },
+        {
+          "leak_share": 0.5,
+          "sessions": 600,
+          "static_dtheta_se": 0.02646049545739438,
+          "parametric_dtheta_se": 0.0,
+          "over_graded_honest": 0.12333333333333334,
+          "over_graded_static": 0.7583333333333333,
+          "over_graded_parametric": 0.12333333333333334
+        }
+      ],
+      "leaked_instances_per_family": 20,
+      "same_question_probability": {
+        "be.async.gather_time.v1": 0.0,
+        "be.async.semaphore_time.v1": 0.0,
+        "be.db.lost_update.v1": 0.0,
+        "be.http.retry_backoff.v1": 0.0,
+        "be.http.token_bucket.v1": 0.0,
+        "be.sec.lockout.v1": 0.0,
+        "be.sec.token_expiry.v1": 0.0,
+        "be.sql.group_having.v2": 0.0,
+        "be.sys.cache_latency.v1": 0.0,
+        "be.sys.littles_law.v1": 0.0,
+        "bm.py.floor_mod.v1": 0.0,
+        "bm.py.late_binding.v2": 0.0,
+        "bm.py.mutable_default.v2": 0.0,
+        "bm.py.slicing.v1": 0.0,
+        "bm.sql.left_join_count.v2": 0.0,
+        "bm.sql.not_in_null.v2": 0.0,
+        "bm.sql.null_aggregates.v1": 0.0,
+        "sh.algo.complexity.v2": 0.0,
+        "sh.code.binary_search_steps.v2": 0.0,
+        "sh.code.collatz_steps.v1": 0.0,
+        "sh.code.find_bug.v1": 0.065,
+        "sh.code.gcd_trace.v1": 0.0,
+        "sh.code.loop_trace.v1": 0.0,
+        "sh.code.prefix_sums.v1": 0.0,
+        "sh.code.recurrence.v1": 0.0,
+        "sh.code.recursion_calls.v2": 0.0,
+        "sh.code.stack_queue.v1": 0.0,
+        "sh.code.word_lengths.v1": 0.0,
+        "sh.ds.bfs_distance.v1": 0.0,
+        "sh.ds.bst_depth.v1": 0.0,
+        "sh.ds.bubble_moved.v1": 0.0,
+        "sh.ds.counter_squares.v1": 0.0,
+        "sh.ds.heap_order.v2": 0.0,
+        "sh.ds.linear_probing.v1": 0.0,
+        "sh.ds.lru_evicted.v1": 0.0
+      }
+    },
+    "calibration": [
+      {
+        "families": 58,
+        "n_responses": 200,
+        "theta_se": 0.35,
+        "rmse_a_prior": 0.13253858756778203,
+        "rmse_b_prior": 0.2123020587546925,
+        "rmse_a_calibrated": 0.1901353368704689,
+        "rmse_b_calibrated": 0.19052831304634713,
+        "converged": 58
+      },
+      {
+        "families": 58,
+        "n_responses": 600,
+        "theta_se": 0.35,
+        "rmse_a_prior": 0.13253858756778203,
+        "rmse_b_prior": 0.2123020587546925,
+        "rmse_a_calibrated": 0.15179495908940988,
+        "rmse_b_calibrated": 0.09658132607428763,
+        "converged": 58
+      },
+      {
+        "families": 58,
+        "n_responses": 2000,
+        "theta_se": 0.35,
+        "rmse_a_prior": 0.13253858756778203,
+        "rmse_b_prior": 0.2123020587546925,
+        "rmse_a_calibrated": 0.06645853236861379,
+        "rmse_b_calibrated": 0.06412802771026532,
+        "converged": 58
+      }
+    ]
+  },
+  "matching": {
+    "embedding_backend": "hash",
+    "embedding_model": "hash-ngram-1024-v1",
+    "pool_size_median": 183.0,
+    "relevant_in_pool_median": 84.0,
+    "relevant_share_in_pool": 0.44757601286666154,
+    "relevant_removed_by_hard_filter_share": 0.33973562309343575,
+    "top10_exposure_rate_relevant": {
+      "fsp": 0.07194244604316546,
+      "non_fsp": 0.060880424601935684
+    },
+    "latency_ms_median": 27.6074499997776
+  },
+  "pilot": {
+    "assessments": {
+      "status": "no_data"
+    },
+    "annotations": {
+      "status": "no_data",
+      "target_pairs": 300
+    }
+  }
+}

@@ -10,7 +10,7 @@
     .legend { font-family: system-ui, sans-serif; font-size: 11px; fill: #334155; }
   </style>
   <text x="280" y="25" text-anchor="middle" class="title">Функция информации теста (TIF curve)</text>
-  <text x="280" y="42" text-anchor="middle" class="subtitle">Максимум информации на границах грейдов (θ = -1.0, 0.0, +1.0)</text>
+  <text x="280" y="42" text-anchor="middle" class="subtitle">Средняя информация заданий, выданных в сессиях; пунктир — границы грейдов</text>
   <line x1="136.7" y1="60" x2="136.7" y2="310" class="grid" />
   <text x="136.7" y="326" text-anchor="middle" class="tick-text">-2.0</text>
   <line x1="213.3" y1="60" x2="213.3" y2="310" class="grid" />
@@ -27,18 +27,18 @@
   <text x="290.0" y="54" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">Mid cut</text>
   <line x1="366.7" y1="60" x2="366.7" y2="310" class="cut-line" />
   <text x="366.7" y="54" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">Sen cut</text>
-  <polyline fill="none" stroke="#2563eb" stroke-width="3" points="60.0,284.2 98.3,267.8 136.7,243.8 175.0,211.0 213.3,170.8 251.7,129.2 290.0,98.7 328.3,92.6 366.7,115.2 405.0,157.7 443.3,204.6 481.7,243.7 520.0,270.9" />
-  <circle cx="60.0" cy="284.2" r="3.5" fill="#1d4ed8" />
-  <circle cx="98.3" cy="267.8" r="3.5" fill="#1d4ed8" />
-  <circle cx="136.7" cy="243.8" r="3.5" fill="#1d4ed8" />
-  <circle cx="175.0" cy="211.0" r="3.5" fill="#1d4ed8" />
-  <circle cx="213.3" cy="170.8" r="3.5" fill="#1d4ed8" />
-  <circle cx="251.7" cy="129.2" r="3.5" fill="#1d4ed8" />
-  <circle cx="290.0" cy="98.7" r="3.5" fill="#1d4ed8" />
+  <polyline fill="none" stroke="#2563eb" stroke-width="3" points="60.0,287.8 98.3,273.1 136.7,250.4 175.0,217.9 213.3,176.5 251.7,132.6 290.0,99.8 328.3,92.6 366.7,115.5 405.0,158.8 443.3,206.0 481.7,244.8 520.0,271.5" />
+  <circle cx="60.0" cy="287.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="98.3" cy="273.1" r="3.5" fill="#1d4ed8" />
+  <circle cx="136.7" cy="250.4" r="3.5" fill="#1d4ed8" />
+  <circle cx="175.0" cy="217.9" r="3.5" fill="#1d4ed8" />
+  <circle cx="213.3" cy="176.5" r="3.5" fill="#1d4ed8" />
+  <circle cx="251.7" cy="132.6" r="3.5" fill="#1d4ed8" />
+  <circle cx="290.0" cy="99.8" r="3.5" fill="#1d4ed8" />
   <circle cx="328.3" cy="92.6" r="3.5" fill="#1d4ed8" />
-  <circle cx="366.7" cy="115.2" r="3.5" fill="#1d4ed8" />
-  <circle cx="405.0" cy="157.7" r="3.5" fill="#1d4ed8" />
-  <circle cx="443.3" cy="204.6" r="3.5" fill="#1d4ed8" />
-  <circle cx="481.7" cy="243.7" r="3.5" fill="#1d4ed8" />
-  <circle cx="520.0" cy="270.9" r="3.5" fill="#1d4ed8" />
+  <circle cx="366.7" cy="115.5" r="3.5" fill="#1d4ed8" />
+  <circle cx="405.0" cy="158.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="443.3" cy="206.0" r="3.5" fill="#1d4ed8" />
+  <circle cx="481.7" cy="244.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="520.0" cy="271.5" r="3.5" fill="#1d4ed8" />
 </svg>

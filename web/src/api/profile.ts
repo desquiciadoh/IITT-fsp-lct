@@ -1,7 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
-import type { CandidateProfile, Consents, ResumeParseResult, Taxonomy } from '@/api/types'
+import type {
+  CandidateProfile,
+  Consents,
+  Grade,
+  ResumeParseResult,
+  Spec,
+  Taxonomy,
+  TaxonomyGrade,
+  TaxonomySpecialization,
+  WorkFormat,
+} from '@/api/types'
 
 export function useProfile() {
   return useQuery({
@@ -11,21 +21,74 @@ export function useProfile() {
   })
 }
 
+export function normalizeTaxonomy(data: unknown): Taxonomy {
+  const d = (data ?? {}) as Record<string, unknown>
+  const rawGrades = (d.grades ?? []) as Array<string | { id: string }>
+  const grades = (Array.isArray(rawGrades) ? rawGrades : [])
+    .map((g) => (typeof g === 'string' ? g : g?.id))
+    .filter(Boolean) as Grade[]
+
+  const rawSpecsList: Array<string | { id?: string }> =
+    (d.specs as Array<string | { id?: string }>) ??
+    (d.specializations as Array<string | { id?: string }>) ??
+    []
+  const specs = (Array.isArray(rawSpecsList) ? rawSpecsList : [])
+    .map((s) => (typeof s === 'string' ? s : s?.id))
+    .filter(Boolean) as Spec[]
+
+  const rawSkills = (d.skills ?? []) as Array<string | { name?: string; id?: string }>
+  const skills = (Array.isArray(rawSkills) ? rawSkills : [])
+    .map((s) =>
+      typeof s === 'string'
+        ? s
+        : s?.name ?? s?.id,
+    )
+    .filter(Boolean) as string[]
+
+  const rawFormats = (d.work_formats ?? []) as Array<string | { id?: string }>
+  const work_formats = (
+    Array.isArray(rawFormats) && rawFormats.length > 0
+      ? rawFormats.map((f) => (typeof f === 'string' ? f : f?.id)).filter(Boolean)
+      : ['office', 'hybrid', 'remote']
+  ) as WorkFormat[]
+
+  const rawTopics =
+    (d.strength_topics as Array<string | { id?: string }>) ??
+    (d.topics as Array<string | { id?: string }>) ??
+    []
+  const strength_topics = (Array.isArray(rawTopics) ? rawTopics : [])
+    .map((t) => (typeof t === 'string' ? t : t?.id))
+    .filter(Boolean) as string[]
+
+  return {
+    ...(d as unknown as Taxonomy),
+    specs: specs.length > 0 ? specs : (['backend', 'frontend', 'ml_data'] as Spec[]),
+    grades: grades.length > 0 ? grades : (['intern', 'junior', 'middle', 'senior'] as Grade[]),
+    work_formats,
+    skills,
+    strength_topics,
+    grade_details:
+      Array.isArray(rawGrades) && rawGrades.length > 0 && typeof rawGrades[0] === 'object'
+        ? (rawGrades as unknown as TaxonomyGrade[])
+        : undefined,
+    specialization_details:
+      Array.isArray(d.specializations)
+        ? (d.specializations as TaxonomySpecialization[])
+        : undefined,
+  }
+}
+
 export function useTaxonomy() {
   return useQuery({
     queryKey: keys.taxonomy,
     queryFn: () => customFetch<Taxonomy>('/api/taxonomy'),
     staleTime: 5 * 60_000,
     retry: false,
-    // The backend TaxonomySerializer returns skills as {id, name, aliases, topic}
-    // objects, but the Taxonomy type (and all consumers) expect plain string[].
-    // Normalise here so FilterPanel and other consumers never see raw objects.
-    select: (data): Taxonomy => ({
-      ...data,
-      skills: (data.skills ?? []).map((s) =>
-        typeof s === 'string' ? s : (s as unknown as { name: string }).name,
-      ),
-    }),
+    // The backend TaxonomySerializer returns skills, grades, and specializations
+    // as objects (e.g. {id, name, name_ru, descriptor, descriptor_ru, theta_cut, rating_cut}).
+    // The frontend Taxonomy type (and form consumers) expect plain string arrays for specs, grades, and skills.
+    // Normalise here so PositionForm, ClaimStep, FilterPanel, and other consumers never receive raw objects.
+    select: normalizeTaxonomy,
   })
 }
 

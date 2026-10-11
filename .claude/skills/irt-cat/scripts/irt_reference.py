@@ -29,7 +29,7 @@ def info3pl(theta, a, b, c):
 def posterior(items: list[tuple[float, float, float]], responses: list[bool]) -> np.ndarray:
     """Posterior over GRID with the neutral N(0,1) prior, computed in log space."""
     loglik = np.zeros_like(GRID)
-    for (a, b, c), u in zip(items, responses):
+    for (a, b, c), u in zip(items, responses, strict=True):
         p = np.clip(p3pl(GRID, a, b, c), EPS, 1 - EPS)
         loglik += np.log(p) if u else np.log1p(-p)
     logpost = np.log(PRIOR) + loglik
@@ -78,7 +78,7 @@ def item_level(b: float, cuts=(-1.0, 0.0, 1.0)) -> str:
 def qwk(y_true: list[int], y_pred: list[int], k: int) -> float:
     """Quadratic weighted kappa for ordinal labels 0..k-1."""
     o = np.zeros((k, k))
-    for t, p in zip(y_true, y_pred):
+    for t, p in zip(y_true, y_pred, strict=True):
         o[t, p] += 1
     w = np.array([[(i - j) ** 2 / (k - 1) ** 2 for j in range(k)] for i in range(k)])
     e = np.outer(o.sum(1), o.sum(0)) / o.sum()
