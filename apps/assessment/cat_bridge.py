@@ -301,7 +301,13 @@ def record(
     return ENGINE.record(state, family_id, correct, late)
 
 
-def replay_session(session, *, relax_window: bool = True, exclude_unanswered: bool = False) -> "CatState":
+def replay_session(
+    session,
+    *,
+    relax_window: bool = True,
+    exclude_unanswered: bool = False,
+    serve_pending: bool = False,
+) -> "CatState":
     """Rebuild an engine state by replaying a session's answered items.
 
     Uses the parameters persisted on each AssessmentItem (via ``record``'s
@@ -309,6 +315,10 @@ def replay_session(session, *, relax_window: bool = True, exclude_unanswered: bo
     test. Unanswered (pending) items are skipped; with
     ``exclude_unanswered=True`` the pending entry is dropped from the rebuilt
     state entirely (used when the caller will record the newest answer itself).
+    With ``serve_pending=True`` the engine is asked to re-select the next
+    family after the replay so the rebuilt state ends with a *pending* entry
+    matching the currently unanswered item — submit_answer can then score it
+    through the normal ``record`` path even when the persisted state was lost.
     When ``relax_window`` is set, the stop-rule window is widened so every
     replayed entry is scored (replay appends onto a fresh state whose max_items
     may be smaller than the number of served items, e.g. express sessions
@@ -338,6 +348,32 @@ def replay_session(session, *, relax_window: bool = True, exclude_unanswered: bo
         # to pending when the same family was served twice).
         while state.administered and state.administered[-1]["correct"] is None:
             state.administered.pop()
+    elif serve_pending:
+        # Re-open a pending entry for the session's current unanswered item so
+        # submit_answer's record() call finds it. The selection rng is the same
+        # HMAC-seeded stream used live, but replay may pick a different family
+        # than the stored one; force the entry to the actual pending item's
+        # family so grading stays consistent with AssessmentItem rows.
+        pending_item = (
+            session.items.filter(answered_at__isnull=True).order_by("seq").first()
+        )
+        if pending_item is not None and not any(
+            x["correct"] is None for x in state.administered
+        ):
+            state.stop_reason = None
+            meta = family_meta(pending_item.family_id)
+            state.administered.append(
+                {
+                    "family_id": meta.id,
+                    "seq": len(state.administered) + 1,
+                    "a": float(pending_item.family.a),
+                    "b": float(pending_item.family.b),
+                    "c": float(meta.c),
+                    "topic": pending_item.family.topic,
+                    "correct": None,
+                    "late": False,
+                }
+            )
     return state
 
 

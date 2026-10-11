@@ -305,23 +305,18 @@ class AssessmentService:
         }
         cat_state = engine_adapter.load_state(session.state)
         if cat_state is None:
-            # State lost/corrupt: rebuild from this session's own answers.
-            cat_state = engine_adapter.replay_session(
-                session, exclude_unanswered=True
+            # State lost/corrupt: rebuild from this session's own answers and
+            # re-open a pending entry for the current item, then score it
+            # through the normal record() path (fallback-recovery via
+            # replay_session instead of an inline record loop).
+            cat_state = engine_adapter.replay_session(session, serve_pending=True)
+            cat_state = engine_adapter.record(
+                cat_state,
+                current_item.family_id,
+                correct=current_item.correct,
+                late=late,
+                params=item_params,
             )
-            answered_count = session.items.filter(
-                answered_at__isnull=False
-            ).count()
-            if answered_count >= len(cat_state.administered):
-                # The just-recorded answer was not covered by the replay
-                # (it is the newest one): score it explicitly.
-                cat_state = engine_adapter.record(
-                    cat_state,
-                    current_item.family_id,
-                    correct=current_item.correct,
-                    late=late,
-                    params=item_params,
-                )
         else:
             cat_state = engine_adapter.record(
                 cat_state,
