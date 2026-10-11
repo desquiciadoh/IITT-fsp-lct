@@ -1,4 +1,4 @@
-.PHONY: help dev up down migrate seed test openapi verify validate
+.PHONY: help dev up down migrate seed test openapi web-schema web-client verify validate
 
 PYTHON ?= python
 MANAGE = $(PYTHON) manage.py
@@ -34,7 +34,13 @@ test:
 	$(PYTHON) -m pytest -v
 
 openapi:
-	$(MANAGE) spectacular --format openapi-json --file docs/openapi.json
+	$(MANAGE) spectacular --file docs/openapi.json
+
+web-schema: openapi
+	cd web && node scripts/fetch-schema.mjs
+
+web-client: web-schema
+	cd web && pnpm api:gen
 
 verify:
 	$(MANAGE) check
