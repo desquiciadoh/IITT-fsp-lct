@@ -22,6 +22,9 @@ dist/
 build/
 web/dist/
 web/node_modules/
+package-lock.json
+web/package-lock.json
+yarn.lock
 
 # Environment files
 .env
