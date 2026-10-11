@@ -56,7 +56,9 @@ pnpm api:gen          # src/api/generated/ из openapi/schema.json
   запросов; при ошибке потока — фолбэк на polling 10 с (бэк сейчас ломает SSE,
   B14), повтор SSE каждые 60 с. `usePollingInterval()` для `refetchInterval`.
 - `src/api/generated/` — orval (**не редактировать руками**): `models/` — схемы,
-  `fSPDraftAPI.ts` — fetch-клиент «на будущее», приложение его не импортирует.
+  `fSPDraftAPI.ts` — сгенерированный fetch-клиент, **мёртвый код**. Импортировать
+  его запрещено (ESLint `no-restricted-imports`, R28): он минует `customFetch`
+  (CSRF, problem+json). Ходите только через `src/api/<feature>.ts`.
 
 ## Роуты и гарды
 
@@ -70,7 +72,7 @@ pnpm api:gen          # src/api/generated/ из openapi/schema.json
 - Гарды: `RequireAuth` → `RequireRole` → `OnboardingGate`
   (`src/app/guards.tsx`). Шаг `qualification` пускает раннер/результат
   (`/candidate/qualification/*`), остальное уводит на `/candidate/qualification/start`;
-  `consent`/`profile` → `/candidate/onboarding/<step>`. Заглушки — `src/app/placeholder.tsx`.
+  `consent`/`profile` → `/candidate/onboarding/<step>`.
 
 ## Моки (MSW v2)
 
@@ -112,7 +114,7 @@ pnpm api:gen          # src/api/generated/ из openapi/schema.json
 ```
 src/
   api/          client, keys, types, me, events, profile, assessments, offers, generated/
-  app/          router, guards, providers, index-redirect, layouts/, placeholder
+  app/          router, guards, providers, index-redirect, layouts/
   components/   ui/ (shadcn-стиль), domain/ (фича-компоненты)
   features/     auth/, onboarding/, result/, candidate/, offers/, settings/, jury/
   i18n/         ru.ts, errors.ts

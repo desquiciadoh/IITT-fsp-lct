@@ -5,7 +5,7 @@ import type {
   TalentShort,
   WorkFormat,
 } from '@/api/types'
-import { POOL_PAGE_SIZE } from '@/features/scouting/filters'
+import { POOL_PAGE_SIZE, isPrizeWinner } from '@/features/scouting/filters'
 
 /**
  * FE-12 · Talent search (`/employer/talent`) — pure logic.
@@ -21,32 +21,9 @@ import { POOL_PAGE_SIZE } from '@/features/scouting/filters'
  * server did the work and we render its answer untouched.
  */
 
-const PRIZE_TIERS = ['winner', 'prize_winner']
-
-/**
- * Is this talent an FSP prize-winner? Primary signal is `best_tier` (mock /
- * target shape); fallback for the current backend payload: linked + at least
- * one verified result + a sports rank. Detect, never hardcode.
- */
-export function isPrizeWinner(talent: TalentShort): boolean {
-  const fsp = talent.fsp as
-    | {
-        linked?: boolean
-        best_tier?: string
-        results?: number
-        results_count?: number
-        sports_rank?: string | null
-        rank?: string | null
-      }
-    | undefined
-  if (!fsp?.linked) return false
-  if (fsp.best_tier != null) return PRIZE_TIERS.includes(fsp.best_tier)
-  const results = fsp.results ?? fsp.results_count ?? 0
-  const rank = fsp.sports_rank ?? fsp.rank
-  return results > 0 && Boolean(rank)
-}
-
 type RawFsp = { linked?: boolean; best_tier?: string; rank?: string; results?: number }
+
+export { isPrizeWinner }
 
 /** Normalize the two wire shapes of `fsp` into one badge-friendly object. */
 export function normalizeFsp(raw: unknown): RawFsp | null {

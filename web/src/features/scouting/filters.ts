@@ -89,6 +89,32 @@ export function needsClientFiltering(
   return activeFilterCount(filters) > 0
 }
 
+const PRIZE_TIERS = ['winner', 'prize_winner']
+
+/**
+ * Is this talent an FSP prize-winner? Primary signal is `best_tier` (mock /
+ * target shape); fallback for the current backend payload: linked + at least
+ * one verified result + a sports rank. Shared by the pool (FE-10) and talent
+ * search (FE-12) so both wire shapes filter identically.
+ */
+export function isPrizeWinner(talent: TalentShort): boolean {
+  const fsp = talent.fsp as
+    | {
+        linked?: boolean
+        best_tier?: string
+        results?: number
+        results_count?: number
+        sports_rank?: string | null
+        rank?: string | null
+      }
+    | undefined
+  if (!fsp?.linked) return false
+  if (fsp.best_tier != null) return PRIZE_TIERS.includes(fsp.best_tier)
+  const results = fsp.results ?? fsp.results_count ?? 0
+  const rank = fsp.sports_rank ?? fsp.rank
+  return results > 0 && Boolean(rank)
+}
+
 export function matchesFilters(talent: TalentShort, f: PoolFilters): boolean {
   const league = talent.league as
     | { grade?: string; status?: string; strength?: number | null }
@@ -110,14 +136,10 @@ export function matchesFilters(talent: TalentShort, f: PoolFilters): boolean {
     // skill must be present (AND across chips, OR within a CSV param).
     if (!f.skills.every((skill) => names.includes(skill.toLowerCase()))) return false
   }
-  const fsp = talent.fsp as { linked?: boolean; best_tier?: string } | undefined
+  const fsp = talent.fsp as { linked?: boolean } | undefined
   if (f.fsp === 'linked' && !fsp?.linked) return false
-  if (f.fsp === 'prize' && !(fsp?.linked && ['winner', 'prize_winner'].includes(fsp.best_tier ?? ''))) {
-    return false
-  }
-  if (f.preset === 'fsp_stars' && !(fsp?.linked && ['winner', 'prize_winner'].includes(fsp.best_tier ?? ''))) {
-    return false
-  }
+  if (f.fsp === 'prize' && !isPrizeWinner(talent)) return false
+  if (f.preset === 'fsp_stars' && !isPrizeWinner(talent)) return false
   if (f.preset === 'confirmed' && league?.status !== 'confirmed') return false
   return true
 }

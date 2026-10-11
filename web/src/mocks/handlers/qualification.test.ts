@@ -121,6 +121,13 @@ describe('qualification mock — FE-05 e2e QA', () => {
     expect(result.decision).toBe('confirmed')
     expect(result.evidence?.every((e) => e.correct)).toBe(true)
 
+    // Per-topic breakdown must bucket every item family (regression: `sql`/`js`
+    // item ids were matched with a 2-char slice, leaving both at 0/0).
+    const topic = (k: string) => result.topics?.find((t) => t.key === k)
+    expect(topic('python')).toMatchObject({ correct: 4, total: 4 })
+    expect(topic('sql')).toMatchObject({ correct: 2, total: 2 })
+    expect(topic('javascript')).toMatchObject({ correct: 2, total: 2 })
+
     // Eligibility now reports the graded cooldown (FE-05 start screen §2).
     const el = (await req('/api/assessments/eligibility?specialization=backend')) as {
       body: EligibilityBody

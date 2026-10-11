@@ -45,16 +45,20 @@ const FIELD_TO_CODE: Record<string, string> = {
   salary_type: 'salary_invalid',
 }
 
-export function sendOfferDefaults(position?: Position): Partial<OfferFormInput> {
+export function sendOfferDefaults(
+  position?: Position,
+  defaults?: Partial<OfferFormInput>,
+): Partial<OfferFormInput> {
   return {
     // Prefill from the position; empty when the position has no salary yet.
     title: position?.title ?? '',
     description: position?.description ?? '',
     salary_min: position?.salary_min != null ? String(position.salary_min) : '',
     salary_max: position?.salary_max != null ? String(position.salary_max) : '',
-    // B15: deliberately NO default for salary_type.
+    // B15: deliberately NO default for salary_type (unless overridden by prefill).
     contact_channel: 'platform',
     contact_value: '',
+    ...defaults,
   }
 }
 
@@ -62,14 +66,18 @@ export function SendOfferModal({
   positionId,
   position,
   candidate,
+  defaults,
   open,
   onClose,
   onSent,
 }: {
-  positionId: string
+  /** Optional — a micro-task invite has no position (BE-18 prefill-offer). */
+  positionId?: string
   position?: Position
   /** G10: identity may be missing on the employer payload; the drawer passes it. */
   candidate?: (TalentShort | { public_id: string; display_name?: string }) | null
+  /** FE-16 · micro-task invite: override the position prefill (title/salary/…). */
+  defaults?: Partial<OfferFormInput>
   open: boolean
   onClose: () => void
   onSent?: (offer: Offer) => void
@@ -95,11 +103,20 @@ export function SendOfferModal({
   // Fresh prefill every time the dialog opens (position may have changed).
   useEffect(() => {
     if (open) {
-      reset(sendOfferDefaults(position))
+      reset(sendOfferDefaults(position, defaults))
       setServerCode(null)
       setSalaryFieldError(null)
     }
-  }, [open, position, reset])
+  }, [open, position, defaults, reset])
+
+  // FE-17 · below-salary-floor warning before send — the floor value itself is
+  // never revealed to the employer (ML-10/BE-20).
+  const watchedMax = useWatch({ control, name: 'salary_max' })
+  const knownFloor =
+    typeof (candidate as { salary_min?: number | null } | null)?.salary_min === 'number'
+      ? ((candidate as { salary_min: number }).salary_min as number)
+      : null
+  const belowFloor = knownFloor != null && Number(watchedMax) > 0 && Number(watchedMax) < knownFloor
 
   // zodResolver hands the coerced output to onSubmit; the form itself keeps raw strings.
   const onSubmit = handleSubmit((raw: OfferFormValues) => {
@@ -108,7 +125,8 @@ export function SendOfferModal({
     const input: SendOfferInput = {
       ...toSendOfferInput(raw),
       candidate_public_id: candidate?.public_id ?? '',
-      position_id: positionId,
+      // A micro-task invite has no position → omit position_id entirely.
+      ...(positionId ? { position_id: positionId } : {}),
     }
     send.mutate(input, {
       onSuccess: (offer) => {
@@ -268,6 +286,12 @@ export function SendOfferModal({
           {serverMessage && serverCode !== 'salary_invalid' && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
               {serverMessage}
+            </p>
+          )}
+
+          {belowFloor && (
+            <p className="rounded-md bg-warn/10 px-3 py-2 text-sm text-warn" role="alert">
+              Зарплата ниже ожиданий кандидата — он может отклонить оффер.
             </p>
           )}
 

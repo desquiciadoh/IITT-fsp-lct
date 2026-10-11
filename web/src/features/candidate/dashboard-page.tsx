@@ -3,11 +3,13 @@ import { Trophy, Zap } from 'lucide-react'
 import { useOffers } from '@/api/offers'
 import { useProfile } from '@/api/profile'
 import { useEligibility } from '@/api/assessments'
+import { useMyApplications } from '@/api/vacancies'
 import { useCountdown } from '@/lib/hooks/useCountdown'
 import { formatDuration } from '@/lib/format'
 import { GRADE_LABEL, SPEC_LABEL } from '@/lib/labels'
 import { LeagueBadge } from '@/components/domain/league-badge'
 import { OfferCard } from '@/components/domain/offer-card'
+import { ApplicationStatusChip } from '@/components/domain/application-status-chip'
 import { EmptyState, ErrorState } from '@/components/domain/states'
 import { CardSkeleton, RowSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -28,10 +30,12 @@ export function DashboardPage() {
   const spec = profile?.specialization || 'backend'
   const { data: eligibility } = useEligibility(spec)
   const { data: offers, isLoading, isError, refetch } = useOffers()
+  const { data: applications } = useMyApplications()
 
   const league = profile?.league
   const cooldown = eligibility && !eligibility.can_start ? eligibility.next_attempt_at : null
   const fresh = (offers ?? []).slice(0, 3)
+  const recentApplications = (applications ?? []).slice(0, 3)
 
   return (
     <div className="flex flex-col gap-6">
@@ -111,6 +115,43 @@ export function DashboardPage() {
               <Link key={offer.id} to={`/candidate/offers/${offer.id}`}>
                 <OfferCard offer={offer} viewer="candidate" />
               </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Мои отклики</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/candidate/micro-tasks">Микрозадачи</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/candidate/vacancies">Все вакансии</Link>
+            </Button>
+          </div>
+        </div>
+        {recentApplications.length === 0 ? (
+          <EmptyState
+            title="Откликов пока нет"
+            description="Откликнитесь на вакансию — статус рассмотрения появится здесь."
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {recentApplications.map((application) => (
+              <div
+                key={application.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">{application.position.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {application.position.company?.name}
+                  </span>
+                </div>
+                <ApplicationStatusChip status={application.status} />
+              </div>
             ))}
           </div>
         )}

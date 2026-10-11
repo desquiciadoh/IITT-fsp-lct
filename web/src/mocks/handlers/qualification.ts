@@ -290,8 +290,11 @@ function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
     seq: item.seq,
     correct: s.answers[i] ? s.answers[i].correct : null,
   }))
+  // Item ids use full family slugs (q-py-, q-sql-, q-js-) — `key.slice(0,2)`
+  // produced q-sq-/q-ja- and silently zeroed SQL/JS. Map explicitly.
+  const TOPIC_PREFIX: Record<string, string> = { python: 'py', sql: 'sql', javascript: 'js' }
   const topics = ['python', 'sql', 'javascript'].map((key) => {
-    const own = s.answers.filter((a) => a.itemId.startsWith(`q-${key.slice(0, 2)}-`))
+    const own = s.answers.filter((a) => a.itemId.startsWith(`q-${TOPIC_PREFIX[key]}-`))
     return {
       key,
       label: key === 'python' ? 'Python' : key === 'sql' ? 'SQL' : 'JavaScript',

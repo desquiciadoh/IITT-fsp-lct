@@ -152,7 +152,9 @@ export function SurveyStep() {
             min="0"
             max="50"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            {...register('years_experience', { valueAsNumber: true })}
+            {...register('years_experience', {
+              setValueAs: (v: unknown) => (v === '' || v == null ? null : Number(v)),
+            })}
           />
           {fieldError('years_experience')}
         </label>
@@ -229,7 +231,9 @@ export function SurveyStep() {
             min="0"
             placeholder="Не показывается работодателям"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            {...register('salary_floor', { valueAsNumber: true })}
+            {...register('salary_floor', {
+              setValueAs: (v: unknown) => (v === '' || v == null ? null : Number(v)),
+            })}
           />
           <span className="mt-1 block text-xs text-muted-foreground">
             Виден только вам — фильтр «ниже порога не предлагать».

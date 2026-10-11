@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Position, Spec } from '@/api/types'
@@ -18,10 +19,19 @@ import { TalentDrawer } from '@/features/scouting/talent-drawer'
 import { SendOfferModal } from '@/features/employer/send-offer-modal'
 import { TalentRow } from '@/components/domain/talent-row'
 import { ScoreBar } from '@/components/domain/score-bar'
+import { AcceptanceBadge } from '@/components/domain/acceptance-badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/domain/states'
 import { ApiError } from '@/api/client'
+import { WeightControls } from '@/features/scouting/pool-power/weight-controls'
+import { NeedHealthPanel } from '@/features/scouting/pool-power/need-health-panel'
+import {
+  PRESETS,
+  isBalanced,
+  rerank,
+  type WeightProfile,
+} from '@/features/scouting/pool-power/ranking'
 
 /**
  * FE-10 · Scouting pool tab of `/employer/positions/:id`.
@@ -39,6 +49,10 @@ import { ApiError } from '@/api/client'
 export function PoolTab({ positionId, specialization, position }: { positionId: string; specialization?: Spec; position?: Position }) {
   const [filters, setFilters] = useScoutingFilters()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // FE-17 · live weight-based re-ranking (client-side, no request).
+  const [weights, setWeights] = useState<WeightProfile>({ ...PRESETS[0].weights })
+  const activeRanking = !isBalanced(weights)
 
   const pool = usePool(positionId, filters)
   const toggle = useToggleShortlist(positionId)
@@ -81,12 +95,14 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
     toggle.mutate({ publicId, add: !inShortlist, talent: entry?.talent })
   }
   const relaxations = pool.data?.relaxations ?? deriveRelaxations(items)
+  const ranked = rerank(items, weights)
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <LeagueShelves specialization={specialization} />
         <FilterPanel filters={filters} onChange={setFilters} facets={pool.data?.facets} />
+        <WeightControls weights={weights} onChange={setWeights} />
 
         {pool.isLoading ? (
           <div className="flex flex-col gap-2" aria-busy="true">
@@ -107,12 +123,13 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
           />
         ) : (
           <>
-            <p className="text-xs text-muted-foreground" role="status">
+<p className="text-xs text-muted-foreground" role="status">
               Найдено кандидатов: {total}
+              {activeRanking && ' · пересортировано по весам (без запроса)'}
               {fallback && ' · фильтры применены на клиенте (бэкенд ещё не поддерживает G8)'}
             </p>
             <ul className="flex flex-col gap-3">
-              {items.map((entry) => {
+              {ranked.map(({ entry, score, components }) => {
                 const gaps = deriveGaps(entry)
                 const isShortlisted = tray.data?.some((t) => t.public_id === entry.talent.public_id) ?? entry.shortlisted
                 return (
@@ -133,15 +150,18 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
                       >
                         <TalentRow
                           talent={entry.talent}
-                          score={entry.score}
+                          score={score}
                           reasons={entry.reasons}
                           shortlisted={isShortlisted}
                           onToggleShortlist={onToggle}
                           className="border-0 hover:bg-transparent"
                         />
                       </div>
-                      <div className="px-3 pb-2">
-                        <ScoreBar score={entry.score} components={entry.components} />
+                      <div className="flex flex-col gap-1 px-3 pb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <ScoreBar score={score} components={components} className="flex-1" />
+                          <AcceptanceBadge value={entry.acceptance_likelihood} />
+                        </div>
                         {gaps.length > 0 && (
                           <p className="mt-1.5 text-xs text-muted-foreground">
                             Пробелы: {gaps.join('; ')}
@@ -207,6 +227,7 @@ export function PoolTab({ positionId, specialization, position }: { positionId: 
             remove(publicId)
           }}
         />
+        <NeedHealthPanel positionId={positionId} className="mt-4" />
       </div>
 
       <TalentDrawer positionId={positionId} onOpenOffer={(publicId) => setOfferParam(publicId)} />

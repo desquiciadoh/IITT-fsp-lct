@@ -8,6 +8,8 @@ import { offerHandlers } from '@/mocks/handlers/offers'
 import { fspHandlers } from '@/mocks/handlers/fsp'
 import { scoutingHandlers } from '@/mocks/handlers/scouting'
 import { employerHandlers } from '@/mocks/handlers/employer'
+import { vacanciesHandlers } from '@/mocks/handlers/vacancies'
+import { microTasksHandlers } from '@/mocks/handlers/microtasks'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
@@ -40,6 +42,8 @@ export async function startMocks(): Promise<void> {
           // gaps.ts and employer.ts (MSW is first-match-wins).
           ...scoutingHandlers,
           ...employerHandlers,
+          ...vacanciesHandlers,
+          ...microTasksHandlers,
           ...coreHandlers,
         ]
       : [

@@ -190,7 +190,15 @@ export function PositionForm({
         return
       }
       // BE labels every serializer error `salary_invalid` with a dict of
-      // field messages (FE2.md §FE-09) — map them back onto the fields.
+      // field messages (FE2.md §FE-09). It is a code, not a form field name,
+      // so surface it on the salary field instead of letting a phantom field
+      // error swallow the message.
+      const salaryMsg =
+        error instanceof ApiError ? error.fieldErrors.salary_invalid?.[0] : undefined
+      if (salaryMsg) {
+        setError('salary_min', { type: 'server', message: salaryMsg })
+        return
+      }
       if (!applyApiErrorToForm(error, setError)) {
         toast.error(error instanceof ApiError ? error.message : 'Не удалось сохранить вакансию')
       }

@@ -38,6 +38,28 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // R28: the orval-emitted fetch client (src/api/generated/fSPDraftAPI.ts)
+      // bypasses customFetch (CSRF, problem+json). It is dead code — never import
+      // it; go through the api layer instead.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/api/generated/fSPDraftAPI',
+              message:
+                'Не импортируйте сгенерированный fetch-клиент — используйте customFetch из @/api/client (R28).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/generated/fSPDraftAPI', '**/fSPDraftAPI'],
+              message:
+                'Не импортируйте сгенерированный fetch-клиент — используйте customFetch из @/api/client (R28).',
+            },
+          ],
+        },
+      ],
     },
   },
 )

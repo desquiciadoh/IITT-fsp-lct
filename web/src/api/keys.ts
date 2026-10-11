@@ -24,4 +24,17 @@ export const keys = {
   talent: (publicId: string) => ['talent', publicId] as const,
   companies: (query?: string) => ['companies', query ?? ''] as const,
   labReport: ['lab', 'report'] as const,
+  labTwins: (query: string) => ['lab', 'twins', query] as const,
+  vacancies: (query: string) => ['vacancies', query] as const,
+  vacancy: (id: string) => ['vacancy', id] as const,
+  myApplications: ['applications', 'me'] as const,
+  positionApplications: (positionId: string) =>
+    ['applications', 'position', positionId] as const,
+  /** BE-18 · micro-tasks */
+  microTasks: ['micro-tasks'] as const,
+  microTask: (id: string) => ['micro-tasks', id] as const,
+  microTaskSubmissions: (id: string) => ['micro-tasks', id, 'submissions'] as const,
+  myMicroTasks: ['micro-tasks', 'me'] as const,
+  /** BE-20 · Need Health for a position (FE-17). */
+  positionHealth: (id: string) => ['positions', id, 'health'] as const,
 }

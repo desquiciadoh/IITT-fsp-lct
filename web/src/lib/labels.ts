@@ -43,6 +43,16 @@ export const OFFER_STATUS_LABEL: Record<string, string> = {
   closed: 'закрыт',
 }
 
+/** BE-17 — application pipeline statuses (FE-15). */
+export const APPLICATION_STATUS_LABEL: Record<string, string> = {
+  applied: 'отклик отправлен',
+  reviewing: 'на рассмотрении',
+  invited: 'приглашение',
+  rejected: 'отказ',
+  hired: 'нанят',
+  withdrawn: 'отозван',
+}
+
 export const WORK_FORMAT_LABEL: Record<string, string> = {
   office: 'офис',
   hybrid: 'гибрид',
@@ -52,6 +62,12 @@ export const WORK_FORMAT_LABEL: Record<string, string> = {
 export const SALARY_TYPE_LABEL: Record<string, string> = {
   gross: 'до вычета',
   net: 'на руки',
+}
+
+/** BE-18 — micro-task formats (FE-16). */
+export const MICROTASK_FORMAT_LABEL: Record<string, string> = {
+  auto: 'автопроверка',
+  open: 'ручная проверка',
 }
 
 export const DECLINE_REASON_LABEL: Record<string, string> = {

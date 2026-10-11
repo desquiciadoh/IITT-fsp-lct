@@ -6,6 +6,7 @@ import type {
   PoolEntry,
   PoolFilters,
   PoolResponse,
+  PositionHealth,
   SalaryType,
   Spec,
   TalentDetail,
@@ -312,5 +313,16 @@ export function useTalentSearch(filters: PoolFilters, enabled = true) {
     queryFn: () =>
       customFetch<TalentSearchResponse>(`/api/talent/search${query ? `?${query}` : ''}`),
     enabled,
+  })
+}
+
+// --- FE-17 · Need Health (BE-20) ----------------------------------------------
+
+/** GET /api/positions/{id}/health — decline analytics + diagnosis. */
+export function usePositionHealth(positionId: string) {
+  return useQuery({
+    queryKey: keys.positionHealth(positionId),
+    queryFn: () => customFetch<PositionHealth>(`/api/positions/${positionId}/health`),
+    enabled: Boolean(positionId),
   })
 }

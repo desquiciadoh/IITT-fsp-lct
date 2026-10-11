@@ -180,6 +180,8 @@ export function DevUiPage() {
         <SkillChip name="PostgreSQL" source="fsp" />
         <SkillChip name="Kubernetes" source="declared" />
         <SkillChip name="Go" />
+        {/* FE-16 · reviewed micro-task submission is verified evidence — distinct from declared */}
+        <SkillChip name="Docker Compose" source="microtask" />
       </Section>
 
       <Section title="Скоринг — список компонентов (ScoreBar)">

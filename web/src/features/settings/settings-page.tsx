@@ -7,24 +7,17 @@ import { ApiError, customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
 import { errorMessage } from '@/i18n/errors'
 import { useProfile, useSaveConsents, useSaveProfile, useSearchCompanies } from '@/api/profile'
+import { useMe } from '@/api/me'
 import { formatDate } from '@/lib/format'
 import { PLACEMENT_TIER_LABEL, SPORTS_RANK_LABEL } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 /**
- * One-line switch to the OIDC flow once BE ships gap G15:
- * set `USE_OIDC = true` and replace the POST below with
- * `window.location.assign('/api/auth/fsp-id/login?intent=link')`.
+ * R26 — outside DEMO_MODE `POST /api/fsp/link` returns 403 `fsp_oidc_required`
+ * (`apps/fsp_sync/views.py:29`), so non-demo users are sent straight to the
+ * OIDC flow; demo users keep the manual participant-ID POST.
  */
-const USE_OIDC = false
-
-/** Mock company picker — real lookup endpoint is gap G17; ids must be UUIDs (backend constraint). */
-const MOCK_COMPANIES = [
-  { id: '00000000-0000-4000-8000-000000000001', name: 'Yandex Tech' },
-  { id: '00000000-0000-4000-8000-000000000002', name: 'Ozon' },
-  { id: '00000000-0000-4000-8000-000000000003', name: 'Avito' },
-]
 
 function ToggleRow({
   label,
@@ -60,6 +53,7 @@ export function SettingsPage() {
   const client = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: profile, isLoading } = useProfile()
+  const { data: me } = useMe()
   const saveProfile = useSaveProfile()
   const saveConsents = useSaveConsents()
 
@@ -67,14 +61,11 @@ export function SettingsPage() {
   const [openToOffers, setOpenToOffers] = useState(true)
   const [salaryFloor, setSalaryFloor] = useState('')
   const [blocked, setBlocked] = useState<string[]>([])
-  const [blockPick, setBlockPick] = useState('')
   const [companySearch, setCompanySearch] = useState('')
   const { data: searchResults, isFetching: isSearching } = useSearchCompanies(companySearch)
-  const [companyNames, setCompanyNames] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {}
-    for (const c of MOCK_COMPANIES) map[c.id] = c.name
-    return map
-  })
+  // R27 — names come from the real registry search; ids we haven't seen fall
+  // back to the raw value until the user searches for them.
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>({})
   const [consents, setConsents] = useState({ processing: true, publication: true, fsp_sync: true })
   const [fspId, setFspId] = useState('')
   const [fspPending, setFspPending] = useState(false)
@@ -138,7 +129,7 @@ export function SettingsPage() {
   }
 
   const linkFsp = () => {
-    if (USE_OIDC) {
+    if (!me?.demo) {
       window.location.assign('/api/auth/fsp-id/login?intent=link')
       return
     }
@@ -304,33 +295,6 @@ export function SettingsPage() {
                 )}
               </div>
             )}
-
-            <div className="flex gap-2 pt-1">
-              <select
-                value={blockPick}
-                onChange={(e) => setBlockPick(e.target.value)}
-                aria-label="Выберите компанию для блокировки"
-                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-              >
-                <option value="">— или выбрать из популярных компаний —</option>
-                {MOCK_COMPANIES.filter((c) => !blocked.includes(c.id)).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!blockPick}
-                onClick={() => {
-                  setBlocked([...blocked, blockPick])
-                  setBlockPick('')
-                }}
-              >
-                Заблокировать
-              </Button>
-            </div>
           </div>
           <span className="mt-2 block text-xs text-muted-foreground">
             Компании из черного списка не увидят ваш профиль в поиске и не смогут отправить оффер.
@@ -413,32 +377,49 @@ export function SettingsPage() {
           </>
         ) : (
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-            <label className="text-sm">
-              ID участника ФСП
-              <input
-                type="text"
-                value={fspId}
-                onChange={(e) => setFspId(e.target.value)}
-                placeholder="например, FSP-000123"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={linkFsp} disabled={fspPending}>
-                {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
-              </Button>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => window.location.assign('/api/auth/fsp-id/login?intent=link')}
-              >
-                Через ФСП ID (OIDC)
-              </Button>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.). В боевом режиме
-              подтверждение выполняется через OIDC-провайдер Федерации.
-            </span>
+            {me?.demo ? (
+              <>
+                <label className="text-sm">
+                  ID участника ФСП
+                  <input
+                    type="text"
+                    value={fspId}
+                    onChange={(e) => setFspId(e.target.value)}
+                    placeholder="например, FSP-000123"
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                  />
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={linkFsp} disabled={fspPending}>
+                    {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => window.location.assign('/api/auth/fsp-id/login?intent=link')}
+                  >
+                    Через ФСП ID (OIDC)
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.). В боевом режиме
+                  подтверждение выполняется через OIDC-провайдер Федерации.
+                </span>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Привязка выполняется через ФСП ID (Госуслуги / Федерация спортивного
+                  программирования).
+                </p>
+                <Button
+                  className="self-start"
+                  onClick={() => window.location.assign('/api/auth/fsp-id/login?intent=link')}
+                >
+                  <Link2 className="h-4 w-4" /> Привязать через ФСП ID
+                </Button>
+              </>
+            )}
           </div>
         )}
       </section>

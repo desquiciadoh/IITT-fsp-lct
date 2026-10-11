@@ -69,7 +69,8 @@ export function isOfferConflict(error: unknown): boolean {
  */
 export type SendOfferInput = {
   candidate_public_id: string
-  position_id: string
+  /** Optional: a micro-task invite (FE-16) has no position. */
+  position_id?: string
   title: string
   description: string
   salary_min: number

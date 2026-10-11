@@ -8,6 +8,7 @@ import { Toaster, toast } from 'sonner'
 import { useState, type ReactNode } from 'react'
 import { router } from '@/app/router'
 import { ApiError } from '@/api/client'
+import { shouldRetryRequest } from '@/api/retry'
 import { errorMessage } from '@/i18n/errors'
 
 type Meta = Record<string, unknown> | undefined
@@ -40,8 +41,7 @@ function createQueryClient() {
   const client = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: (n, e) =>
-          !(e instanceof ApiError && (e.status === 401 || e.status === 403)) && n < 1,
+      retry: shouldRetryRequest,
         refetchOnWindowFocus: false,
         staleTime: 15_000,
       },
@@ -57,7 +57,6 @@ function createQueryClient() {
   ref.client = client
   return client
 }
-
 export function AppProviders({ children }: { children: ReactNode }) {
   const [client] = useState(createQueryClient)
   return (
