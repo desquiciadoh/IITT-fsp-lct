@@ -94,6 +94,8 @@ export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'f
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
   /** the schema flattens this nested list to `string` */
   skills?: string[]
+  /** FE-12 · search payload carries the shortlist flag on the talent itself. */
+  shortlisted?: boolean
 }
 
 export type Offer = Omit<

@@ -18,6 +18,7 @@ import { CompanyPage } from '@/features/employer/company-page'
 import { NewPositionPage } from '@/features/employer/new-position-page'
 import { PositionDetailPage } from '@/features/employer/position-detail-page'
 import { OffersBoardPage } from '@/features/employer/offers-board-page'
+import { TalentSearchPage } from '@/features/talent/talent-search-page'
 import { SettingsPage } from '@/features/settings/settings-page'
 import { AppLayout } from '@/app/layouts/app-layout'
 import { RequireAuth, RequireRole, OnboardingGate } from '@/app/guards'
@@ -96,7 +97,7 @@ export const router = createBrowserRouter([
                 path: '/employer/positions/:id',
                 element: <PositionDetailPage />,
               },
-              { path: '/employer/talent', element: ph('Пул талантов', 'FE2', 'FE-15') },
+              { path: '/employer/talent', element: <TalentSearchPage /> },
               { path: '/employer/offers', element: <OffersBoardPage /> },
             ],
           },
