@@ -90,9 +90,8 @@ def test_positions_are_valid_and_reference_known_skills():
 
 
 def test_heroes_are_injected_with_their_story():
-    """In the shipped world (seed 2026). Hero outcomes depend only on the seed, not on the world size.
-    They are not guaranteed for every seed: a true θ = 2.0 senior still fails ~15 % of seeds on the
-    current bank (few hard items; measured in ML-8)."""
+    """The scripted parts of the personas hold in the shipped world (seed 2026): who has FSP
+    history, who is closed to offers, and that Dmitry's inflated senior claim is not confirmed."""
     world = synth.build_world(seed=2026, n_candidates=len(synth.HEROES), n_positions=1)
     by_hero = {c["hero"]: c for c in world.candidates if c["hero"]}
     assert set(by_hero) == {h["key"] for h in synth.HEROES}
@@ -100,9 +99,27 @@ def test_heroes_are_injected_with_their_story():
     fsp = {f["public_id"] for f in world.fsp}
     assert by_hero["anna"]["public_id"] in fsp and by_hero["alex"]["public_id"] not in fsp
     assert leagues[by_hero["dmitry"]["public_id"]]["status"] == "unconfirmed"
-    for key in ("anna", "alex", "elena", "maksim", "ivan"):
-        assert leagues[by_hero[key]["public_id"]]["status"] == "confirmed", key
     assert by_hero["olga"]["open_to_offers"] is False
+
+
+def test_hero_grade_stories_hold_on_most_sessions():
+    """Session outcomes are honest draws, so one seed can be unlucky (a θ = 2.0 senior is confirmed in
+    about 95 % of sessions). The stories must hold on >= 85 % of 60 independent sessions each; the
+    shipped seed is not re-drawn to make a story come true."""
+    from assessment.engine.cat import IrtCatEngine
+    from assessment.families.registry import active_metas
+
+    from validation.simulate import perturbed_params, run_session
+
+    engine = IrtCatEngine()
+    pools = {spec: active_metas(spec) for spec in ("backend", "frontend", "ml_data")}
+    metas = {m.id: m for pool in pools.values() for m in pool}
+    true_params = perturbed_params(list(metas.values()), 2026)
+    for hero in synth.HEROES:
+        outcomes = [run_session(engine, pools[hero["spec"]], true_params, hero["spec"], hero["claim"], hero["theta"],
+                                f"hero|{hero['key']}|{k}").result.decision for k in range(60)]
+        want = "unconfirmed" if hero["key"] == "dmitry" else "confirmed"
+        assert outcomes.count(want) / len(outcomes) >= 0.85, (hero["key"], outcomes.count(want))
 
 
 def test_declared_skills_inflate_and_omit_relative_to_truth():

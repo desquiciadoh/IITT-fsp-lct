@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 360" width="560" height="360">
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <style>
+    .title { font-family: system-ui, sans-serif; font-size: 15px; font-weight: bold; fill: #1e293b; }
+    .subtitle { font-family: system-ui, sans-serif; font-size: 11px; fill: #64748b; }
+    .axis { stroke: #cbd5e1; stroke-width: 1.5; }
+    .grid { stroke: #f1f5f9; stroke-width: 1; }
+    .cut-line { stroke: #e11d48; stroke-dasharray: 4 4; stroke-width: 1.5; }
+    .tick-text { font-family: system-ui, sans-serif; font-size: 10px; fill: #64748b; }
+    .legend { font-family: system-ui, sans-serif; font-size: 11px; fill: #334155; }
+  </style>
+  <text x="280" y="25" text-anchor="middle" class="title">Функция информации теста (TIF curve)</text>
+  <text x="280" y="42" text-anchor="middle" class="subtitle">Максимум информации на границах грейдов (θ = -1.0, 0.0, +1.0)</text>
+  <line x1="136.7" y1="60" x2="136.7" y2="310" class="grid" />
+  <text x="136.7" y="326" text-anchor="middle" class="tick-text">-2.0</text>
+  <line x1="213.3" y1="60" x2="213.3" y2="310" class="grid" />
+  <text x="213.3" y="326" text-anchor="middle" class="tick-text">-1.0</text>
+  <line x1="290.0" y1="60" x2="290.0" y2="310" class="grid" />
+  <text x="290.0" y="326" text-anchor="middle" class="tick-text">+0.0</text>
+  <line x1="366.7" y1="60" x2="366.7" y2="310" class="grid" />
+  <text x="366.7" y="326" text-anchor="middle" class="tick-text">+1.0</text>
+  <line x1="443.3" y1="60" x2="443.3" y2="310" class="grid" />
+  <text x="443.3" y="326" text-anchor="middle" class="tick-text">+2.0</text>
+  <line x1="213.3" y1="60" x2="213.3" y2="310" class="cut-line" />
+  <text x="213.3" y="54" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">Jun cut</text>
+  <line x1="290.0" y1="60" x2="290.0" y2="310" class="cut-line" />
+  <text x="290.0" y="54" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">Mid cut</text>
+  <line x1="366.7" y1="60" x2="366.7" y2="310" class="cut-line" />
+  <text x="366.7" y="54" text-anchor="middle" fill="#e11d48" font-size="10" font-family="sans-serif">Sen cut</text>
+  <polyline fill="none" stroke="#2563eb" stroke-width="3" points="60.0,284.2 98.3,267.8 136.7,243.8 175.0,211.0 213.3,170.8 251.7,129.2 290.0,98.7 328.3,92.6 366.7,115.2 405.0,157.7 443.3,204.6 481.7,243.7 520.0,270.9" />
+  <circle cx="60.0" cy="284.2" r="3.5" fill="#1d4ed8" />
+  <circle cx="98.3" cy="267.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="136.7" cy="243.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="175.0" cy="211.0" r="3.5" fill="#1d4ed8" />
+  <circle cx="213.3" cy="170.8" r="3.5" fill="#1d4ed8" />
+  <circle cx="251.7" cy="129.2" r="3.5" fill="#1d4ed8" />
+  <circle cx="290.0" cy="98.7" r="3.5" fill="#1d4ed8" />
+  <circle cx="328.3" cy="92.6" r="3.5" fill="#1d4ed8" />
+  <circle cx="366.7" cy="115.2" r="3.5" fill="#1d4ed8" />
+  <circle cx="405.0" cy="157.7" r="3.5" fill="#1d4ed8" />
+  <circle cx="443.3" cy="204.6" r="3.5" fill="#1d4ed8" />
+  <circle cx="481.7" cy="243.7" r="3.5" fill="#1d4ed8" />
+  <circle cx="520.0" cy="270.9" r="3.5" fill="#1d4ed8" />
+</svg>

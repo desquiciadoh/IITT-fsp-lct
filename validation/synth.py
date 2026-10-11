@@ -112,6 +112,9 @@ class World:
 
 # ── heroes (README §8 personas + Ivan), injected with fixed latent truth ─────
 
+# Personas are demo scripts with a fixed latent truth; their CAT sessions are honest draws like
+# everyone else's, so an unlucky seed can contradict a script (tests/ml/test_synth.py checks that
+# each story holds on >= 85 % of sessions instead of re-drawing the seed until it does).
 HEROES = [
     {"key": "anna", "name": "Анна Соколова", "email": "anna.fsp@example.com", "spec": "backend", "theta": 2.0,
      "claim": "senior", "fsp": {"rank": "kms", "results": [("prize_winner", "algorithmic", 2), ("winner", "product", 1)]},
@@ -150,6 +153,31 @@ def build_world(seed: int = 2026, n_candidates: int = 1500, n_positions: int = 6
     return world
 
 
+SKILL_EFFECT = 1.0      # θ units between having all of an item's skills and none of them
+
+
+def _exposure(theta: float) -> float:
+    """Probability that a person of ability θ has a given skill of their specialisation at all."""
+    return min(0.9, max(0.15, 0.45 + 0.18 * theta))
+
+
+def _skill_shift(theta: float, proficiency: dict[str, float], spec_skill_set: set[str]):
+    """Items depend on the skills they test, not only on θ: the effective ability for a family is
+    θ + SKILL_EFFECT · (share of its skills the person has − the share expected at θ). The term is
+    zero-mean given θ, so θ stays the general ability the CAT measures, while someone without SQL
+    does worse on SQL items, and a test verifies skills the person has (ML-8 review: with a
+    unidimensional model 56 % of test-verified skills were absent from the latent truth)."""
+    expected = _exposure(theta)
+
+    def shift(meta) -> float:
+        skills = [s for s in meta.skills if s in spec_skill_set]
+        if not skills:
+            return 0.0
+        share = sum(1 for s in skills if s in proficiency) / len(skills)
+        return SKILL_EFFECT * (share - expected)
+    return shift
+
+
 def _public_id(seed: int, key: str) -> str:
     return "C-" + hashlib.sha256(f"{seed}|{key}".encode()).hexdigest()[:8].upper()
 
@@ -167,7 +195,7 @@ def _make_candidate(world: World, person: dict, idx: int, content, engine, pools
     proficiency = {}
     for skill in spec_skills(spec):
         sr = _rng(seed, "skill", person["key"], skill)
-        if sr.random() < min(0.9, max(0.15, 0.45 + 0.18 * theta)):
+        if sr.random() < _exposure(theta):
             proficiency[skill] = round(_sigmoid(1.2 * (theta - sr.gauss(-0.4, 0.7)) + sr.gauss(0, 0.6)), 4)
 
     # declared: omissions for weak-but-real skills, inflation adds skills the person barely has
@@ -188,7 +216,11 @@ def _make_candidate(world: World, person: dict, idx: int, content, engine, pools
     league = None
     verified: list[str] = []
     if tested:
-        out = run_session(engine, pools[spec], true_params, spec, claimed, theta, session_id=public_id)
+        # Heroes are scripted demo personas: their θ is their ability on the whole bank, so their
+        # sessions use the unidimensional model; everyone else answers by θ and skill exposure.
+        shift = None if hero else _skill_shift(theta, proficiency, set(spec_skills(spec)))
+        out = run_session(engine, pools[spec], true_params, spec, claimed, theta, session_id=public_id,
+                          theta_shift=shift)
         res = out.result
         skills_by_family = {m.id: m.skills for m in pools[spec]}
         verified = verified_skills(res.topics, out.state.administered, skills_by_family)

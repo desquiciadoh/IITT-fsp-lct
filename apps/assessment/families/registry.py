@@ -26,11 +26,26 @@ def all_families() -> dict[str, ItemFamily]:
     return {fid: found[fid] for fid in sorted(found)}
 
 
+# Retired families (ML-13): still registered, so a session with one pending can finish and old
+# instances can be re-graded, but never selected again. A family is retired when its answer is
+# guessable from memory: with 20 leaked instances (an answer sheet circulating after a pilot),
+# the chance that a new item repeats a leaked question is >= 0.5 (validation `key_reuse`, run on
+# 2026-10-10 at commit 992c2a04). They are classification families with few distinct questions.
+RETIRED: dict[str, str] = {
+    "be.http.status_code.v1": "few distinct questions: P(repeat | 20 leaked) = 0.65",
+    "be.http.method.v1": "few distinct questions: P(repeat | 20 leaked) = 1.0",
+    "be.sec.vuln_class.v1": "few distinct questions: P(repeat | 20 leaked) = 1.0",
+    "be.db.isolation_anomaly.v1": "few distinct questions: P(repeat | 20 leaked) = 1.0",
+    "sh.ds.op_cost.v1": "few distinct questions: P(repeat | 20 leaked) = 0.64",
+}
+
+
 def active_metas(spec: str) -> list[FamilyMeta]:
-    """Metadata of the families that serve `spec`, in id order. BE syncs these into ItemFamily rows."""
+    """Metadata of the active (not retired) families that serve `spec`, in id order. BE syncs these
+    into ItemFamily rows; a family missing from the list should be set inactive, not deleted."""
     if spec not in SPECS:
         raise ValueError(f"unknown specialization: {spec!r}")
-    return [f.meta for f in all_families().values() if spec in f.meta.specs]
+    return [f.meta for f in all_families().values() if spec in f.meta.specs and f.meta.id not in RETIRED]
 
 
 def make_rng(secret: bytes, session_id: str, purpose: str, n: int) -> random.Random:

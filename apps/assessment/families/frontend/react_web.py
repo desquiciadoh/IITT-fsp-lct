@@ -27,10 +27,15 @@ class StateBatching(TypedNumberFamily):
     SEMANTIC = ("init", "calls")
 
     def draw(self, rng):
-        calls = []
-        for _ in range(rng.randint(3, 5)):
-            kind = rng.choice(("stale", "fn", "fn", "set"))
-            calls.append([kind, rng.randint(1, 9) if kind != "set" else rng.randint(0, 50)])
+        # The last call is never a plain setX(v): its v would be the answer, the last number in
+        # the code (ML-6 re-review: right on 25 % of items without reading the batching rules).
+        while True:
+            calls = []
+            for _ in range(rng.randint(3, 5)):
+                kind = rng.choice(("stale", "fn", "fn", "set"))
+                calls.append([kind, rng.randint(1, 9) if kind != "set" else rng.randint(0, 50)])
+            if calls[-1][0] != "set":
+                break
         return {"init": rng.randint(0, 20), "calls": calls, "name": rng.choice(STATE),
                 "comp": rng.choice(("Counter", "Voter", "Score", "Likes", "Panel"))}
 
@@ -96,7 +101,7 @@ class EffectRuns(TypedNumberFamily):
     DEPS = ("none", "empty", "a", "b", "ab")
 
     def draw(self, rng):
-        n = rng.randint(4, 9)
+        n = rng.randint(5, 12)
         a, b = rng.sample(("userId", "page", "query", "theme", "filter", "tab", "lang", "sort"), 2)
         return {"deps": [rng.choice(self.DEPS) for _ in range(rng.randint(2, 4))],
                 "values": [[rng.randint(1, 3), rng.randint(1, 3)] for _ in range(n)],
@@ -125,7 +130,9 @@ class EffectRuns(TypedNumberFamily):
         code = (f"function {p['comp']}({{ {a}, {b} }}) {{\n{effects}"
                 f"  return <div>{{{a}}} {{{b}}}</div>;\n}}")
         renders = ", ".join(f"({x}, {y})" for x, y in p["values"])
-        return (f"Компонент отрендерился {len(p['values'])} раз подряд (без размонтирования, без StrictMode). "
+        n = len(p["values"])
+        times = "раза" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else "раз"
+        return (f"Компонент отрендерился {n} {times} подряд (без размонтирования, без StrictMode). "
                 f"Значения пропсов (`{a}`, `{b}`) на каждом рендере: {renders}. Сколько всего строк выведут "
                 "эффекты в консоль?", {"lang": "javascript", "text": code})
 

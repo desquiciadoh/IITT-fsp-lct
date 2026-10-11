@@ -31,14 +31,16 @@ TOPIC_SCALE = {"strong": 1.0, "moderate": 0.75, "limited": 0.4}
 
 def verified_skills(topics: list[tuple[str, str]], administered: list[dict],
                     skills_by_family: dict[str, tuple[str, ...]]) -> list[str]:
-    """Skill ids a finished session verifies: the skills of the answered families whose topic
-    came out strong or moderate. BE stores them as CandidateSkill(source="test"); matching then
-    scales the evidence by the topic level. Narrower than the topic's skill list on purpose:
-    a SQL aggregation item verifies `sql`, not every database in the topic."""
+    """Skill ids a finished session verifies: the skills of the families answered *correctly*
+    whose topic came out strong or moderate. BE stores them as CandidateSkill(source="test");
+    matching then scales the evidence by the topic level. Narrower than the topic's skill list on
+    purpose: a SQL aggregation item verifies `sql`, not every database in the topic. A wrong
+    answer verifies nothing, even in a strong topic (ML-8 review: wrongly answered families had
+    granted their skills)."""
     good = {t for t, level in topics if level in ("strong", "moderate")}
     out: set[str] = set()
     for x in administered:
-        if x["correct"] is not None and x["topic"] in good:
+        if x["correct"] is True and x["topic"] in good:
             out.update(skills_by_family.get(x["family_id"], ()))
     return sorted(out)
 

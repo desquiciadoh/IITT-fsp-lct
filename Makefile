@@ -41,4 +41,5 @@ verify:
 	$(MANAGE) makemigrations --check --dry-run
 	$(PYTHON) -m pytest -q
 
-validate: verify
+validate:
+	$(PYTHON) -m validation.run

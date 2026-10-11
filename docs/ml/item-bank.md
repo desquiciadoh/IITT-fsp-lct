@@ -9,34 +9,34 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 
 | Specialization | Families | Formats used |
 |---|---|---|
-| Backend | 25 | code_output, find_bug, sql_result, complexity, numeric_scenario, concept_mcq |
-| Frontend | 20 | code_output, find_bug, complexity, numeric_scenario, concept_mcq |
-| ML & Data | 27 | code_output, find_bug, sql_result, complexity, numeric_scenario, concept_mcq |
+| Backend | 40 | code_output, find_bug, sql_result, complexity, numeric_scenario, concept_mcq |
+| Frontend | 31 | code_output, find_bug, complexity, numeric_scenario, concept_mcq |
+| ML & Data | 38 | code_output, find_bug, sql_result, complexity, numeric_scenario, concept_mcq |
 
 ## Backend: topic × grade band
 
 | Topic | Weight | intern | junior | middle | senior | Total |
 |---|---|---|---|---|---|---|
-| Чтение кода и логика | 0.10 | 0 | 2 | 2 | 0 | 4 |
+| Чтение кода и логика | 0.10 | 0 | 5 | 4 | 0 | 9 |
 | Сложность алгоритмов | 0.10 | 0 | 0 | 1 | 0 | 1 |
-| Структуры данных | 0.10 | 1 | 1 | 1 | 0 | 3 |
+| Структуры данных | 0.10 | 1 | 2 | 6 | 0 | 9 |
 | Конкурентность и асинхронность | 0.08 | 0 | 0 | 1 | 1 | 2 |
 | Транзакции и индексы | 0.10 | 0 | 0 | 2 | 0 | 2 |
-| HTTP и REST API | 0.08 | 2 | 0 | 0 | 0 | 2 |
-| Безопасность бэкенда | 0.05 | 0 | 0 | 1 | 0 | 1 |
+| HTTP и REST API | 0.08 | 2 | 1 | 1 | 0 | 4 |
+| Безопасность бэкенда | 0.05 | 0 | 1 | 2 | 0 | 3 |
 | Нагрузка и масштабирование | 0.05 | 0 | 1 | 1 | 0 | 2 |
 | Python: язык | 0.12 | 0 | 1 | 2 | 1 | 4 |
 | SQL: агрегация и группировка | 0.12 | 0 | 2 | 0 | 0 | 2 |
 | SQL: соединения и подзапросы | 0.10 | 0 | 0 | 1 | 1 | 2 |
-| **Total** | 1.00 | 3 | 7 | 12 | 3 | 25 |
+| **Total** | 1.00 | 3 | 13 | 21 | 3 | 40 |
 
 ## Frontend: topic × grade band
 
 | Topic | Weight | intern | junior | middle | senior | Total |
 |---|---|---|---|---|---|---|
-| Чтение кода и логика | 0.09 | 0 | 2 | 2 | 0 | 4 |
+| Чтение кода и логика | 0.09 | 0 | 5 | 4 | 0 | 9 |
 | Сложность алгоритмов | 0.08 | 0 | 0 | 1 | 0 | 1 |
-| Структуры данных | 0.08 | 1 | 1 | 1 | 0 | 3 |
+| Структуры данных | 0.08 | 1 | 2 | 6 | 0 | 9 |
 | JavaScript: язык | 0.17 | 0 | 1 | 2 | 0 | 3 |
 | JavaScript: асинхронность и event loop | 0.13 | 0 | 0 | 1 | 0 | 1 |
 | Браузер, сеть и производительность | 0.10 | 0 | 0 | 1 | 0 | 1 |
@@ -44,15 +44,15 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | React | 0.13 | 0 | 0 | 2 | 0 | 2 |
 | Безопасность фронтенда | 0.05 | 0 | 1 | 0 | 0 | 1 |
 | TypeScript | 0.05 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | 1.00 | 1 | 6 | 12 | 1 | 20 |
+| **Total** | 1.00 | 1 | 10 | 19 | 1 | 31 |
 
 ## ML & Data: topic × grade band
 
 | Topic | Weight | intern | junior | middle | senior | Total |
 |---|---|---|---|---|---|---|
-| Чтение кода и логика | 0.07 | 0 | 2 | 2 | 0 | 4 |
+| Чтение кода и логика | 0.07 | 0 | 5 | 4 | 0 | 9 |
 | Сложность алгоритмов | 0.07 | 0 | 0 | 1 | 0 | 1 |
-| Структуры данных | 0.06 | 1 | 1 | 1 | 0 | 3 |
+| Структуры данных | 0.06 | 1 | 2 | 6 | 0 | 9 |
 | Обработка данных (pandas, numpy) | 0.09 | 0 | 1 | 1 | 0 | 2 |
 | Глубокое обучение | 0.05 | 0 | 0 | 2 | 0 | 2 |
 | Метрики качества моделей | 0.14 | 0 | 1 | 0 | 1 | 2 |
@@ -61,7 +61,7 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | Python: язык | 0.10 | 0 | 1 | 2 | 1 | 4 |
 | SQL: агрегация и группировка | 0.10 | 0 | 2 | 0 | 0 | 2 |
 | SQL: соединения и подзапросы | 0.05 | 0 | 0 | 1 | 1 | 2 |
-| **Total** | 1.00 | 2 | 10 | 11 | 4 | 27 |
+| **Total** | 1.00 | 2 | 14 | 18 | 4 | 38 |
 
 ## Catalogue
 
@@ -72,23 +72,27 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | `be.db.isolation_anomaly.v1` | backend | backend.databases | concept_mcq | 1.3 | 0.4 | middle | 0.25 | 150 |
 | `be.db.lost_update.v1` | backend | backend.databases | numeric_scenario | 1.3 | 0.5 | middle | 0 | 150 |
 | `be.http.method.v1` | backend | backend.http | concept_mcq | 0.9 | -1.6 | intern | 0.2 | 45 |
+| `be.http.retry_backoff.v1` | backend | backend.http | code_output | 1.1 | -0.3 | junior | 0 | 150 |
 | `be.http.status_code.v1` | backend | backend.http | concept_mcq | 1 | -1.3 | intern | 0.125 | 60 |
+| `be.http.token_bucket.v1` | backend | backend.http | code_output | 1.2 | 0.7 | middle | 0 | 240 |
+| `be.sec.lockout.v1` | backend | backend.security | code_output | 1.2 | 0.3 | middle | 0 | 240 |
+| `be.sec.token_expiry.v1` | backend | backend.security | code_output | 1.1 | -0.1 | junior | 0 | 180 |
 | `be.sec.vuln_class.v1` | backend | backend.security | find_bug | 1.2 | 0 | middle | 0.167 | 90 |
 | `be.sql.group_having.v2` | backend, ml_data | sql.aggregation | sql_result | 1.2 | -0.3 | junior | 0.25 | 120 |
 | `be.sys.cache_latency.v1` | backend | backend.system_design | numeric_scenario | 1 | -0.4 | junior | 0 | 90 |
 | `be.sys.littles_law.v1` | backend | backend.system_design | numeric_scenario | 1.2 | 0.6 | middle | 0 | 120 |
 | `bm.py.floor_mod.v1` | backend, ml_data | python.core | code_output | 1.2 | 0.1 | middle | 0 | 90 |
-| `bm.py.late_binding.v1` | backend, ml_data | python.core | code_output | 1.4 | 1 | senior | 0.25 | 90 |
+| `bm.py.late_binding.v2` | backend, ml_data | python.core | code_output | 1.4 | 1 | senior | 0 | 90 |
 | `bm.py.mutable_default.v2` | backend, ml_data | python.core | code_output | 1.3 | 0.4 | middle | 0 | 90 |
 | `bm.py.slicing.v1` | backend, ml_data | python.core | code_output | 1.1 | -0.6 | junior | 0 | 90 |
 | `bm.sql.left_join_count.v2` | backend, ml_data | sql.joins | sql_result | 1.3 | 0.2 | middle | 0 | 150 |
 | `bm.sql.not_in_null.v2` | backend, ml_data | sql.joins | sql_result | 1.4 | 1.2 | senior | 0 | 180 |
 | `bm.sql.null_aggregates.v1` | backend, ml_data | sql.aggregation | sql_result | 1.2 | -0.2 | junior | 0 | 120 |
-| `fe.css.box_model.v1` | frontend | web.css | numeric_scenario | 1.1 | -0.6 | junior | 0 | 90 |
+| `fe.css.box_model.v2` | frontend | web.css | numeric_scenario | 1.1 | -0.4 | junior | 0 | 120 |
 | `fe.css.flex_grow.v1` | frontend | web.css | numeric_scenario | 1.3 | 1 | senior | 0 | 150 |
 | `fe.css.specificity.v1` | frontend | web.css | code_output | 1.2 | 0.4 | middle | 0.25 | 120 |
 | `fe.js.array_chain.v1` | frontend | js.core | code_output | 1 | -0.9 | junior | 0 | 90 |
-| `fe.js.closure_loop.v1` | frontend | js.core | code_output | 1.3 | 0 | middle | 0.25 | 90 |
+| `fe.js.closure_loop.v2` | frontend | js.core | code_output | 1.3 | 0 | middle | 0 | 90 |
 | `fe.js.coercion.v2` | frontend | js.core | code_output | 1.2 | 0.5 | middle | 0 | 90 |
 | `fe.js.event_loop.v2` | frontend | js.event_loop | code_output | 1.4 | 0.2 | middle | 0.25 | 90 |
 | `fe.react.effect_runs.v2` | frontend | web.react | code_output | 1.1 | 0.1 | middle | 0 | 150 |
@@ -109,9 +113,20 @@ collisions ≤ 0.1 %, answer entropy > 1 bit, option-only guessing ≤ c + max(0
 | `ml.stats.center.v1` | ml_data | ml.statistics | numeric_scenario | 1 | -1.4 | intern | 0 | 90 |
 | `sh.algo.complexity.v2` | backend, frontend, ml_data | algorithms.complexity | complexity | 0.9 | 0 | middle | 0.167 | 90 |
 | `sh.code.binary_search_steps.v2` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.5 | middle | 0 | 180 |
+| `sh.code.collatz_steps.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.1 | -0.2 | junior | 0 | 180 |
 | `sh.code.find_bug.v1` | backend, frontend, ml_data | algorithms.code_reading | find_bug | 1.1 | -0.5 | junior | 0.2 | 120 |
+| `sh.code.gcd_trace.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.1 | 0 | middle | 0 | 150 |
 | `sh.code.loop_trace.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1 | -0.8 | junior | 0 | 180 |
+| `sh.code.prefix_sums.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.1 | -0.4 | junior | 0 | 120 |
+| `sh.code.recurrence.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.1 | 0.2 | middle | 0 | 150 |
 | `sh.code.recursion_calls.v2` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1.2 | 0.5 | middle | 0 | 180 |
 | `sh.code.stack_queue.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.1 | -1.2 | intern | 0 | 120 |
-| `sh.ds.heap_order.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.2 | middle | 0.25 | 120 |
+| `sh.code.word_lengths.v1` | backend, frontend, ml_data | algorithms.code_reading | code_output | 1 | -0.8 | junior | 0 | 90 |
+| `sh.ds.bfs_distance.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.7 | middle | 0 | 240 |
+| `sh.ds.bst_depth.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.1 | 0.5 | middle | 0 | 240 |
+| `sh.ds.bubble_moved.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.1 | 0.4 | middle | 0 | 240 |
+| `sh.ds.counter_squares.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1 | -0.5 | junior | 0 | 120 |
+| `sh.ds.heap_order.v2` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.3 | middle | 0 | 150 |
+| `sh.ds.linear_probing.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.6 | middle | 0 | 240 |
+| `sh.ds.lru_evicted.v1` | backend, frontend, ml_data | algorithms.data_structures | code_output | 1.2 | 0.8 | middle | 0 | 240 |
 | `sh.ds.op_cost.v1` | backend, frontend, ml_data | algorithms.data_structures | concept_mcq | 1 | -0.3 | junior | 0.25 | 60 |

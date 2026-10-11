@@ -1,18 +1,19 @@
-"""Counterfactual relaxations and acceptance likelihood (ML-10, AI-12).
+"""Counterfactual relaxations and acceptance likelihood (ML-10, AI-12). Pure: no Django, no ORM.
 
-Pure engine module: no Django, no ORM, no core.enums.
+Relaxations. A candidate *qualifies* for a need when they pass the hard filters (`score.
+passes_hard_filters`), have direct evidence for every must-have (no `gaps`, the same rule the
+score's gap chips use) and their salary expectation is affordable at all (SalaryFit > 0, i.e. at
+most 125 % of the budget, the point where the score's salary component reaches 0). Each
+counterfactual (drop one must-have, allow adjacent grades, add a work format, raise the budget by
+20 %) is re-counted with the same rule, and the top 3 by added candidates are returned (ties by
+text). One rule for the score, the chips and the counterfactuals: an employer who applies a
+suggestion sees exactly the promised candidates appear.
 
-Relaxations:
-  Evaluates actionable counterfactual changes to a hiring need (removing a must-have skill,
-  allowing adjacent grades, adding remote/hybrid formats, expanding salary budget) and counts
-  how many additional candidates qualify (delta > 0). Returns the top 3 relaxations sorted by delta desc.
-
-Acceptance likelihood:
-  Estimates low/medium/high probability that a candidate will accept a draft offer based on:
-  1. Salary ratio: offer_salary_max vs candidate's expectations (both in gross).
-  2. Format fit: overlap between candidate work formats and need work formats.
-  3. League status: confirmed vs unconfirmed / pending.
-  4. Responsiveness: activity freshness from last_active_at.
+Acceptance likelihood is a transparent heuristic, not a fitted model (there is no offer outcome
+data yet): a weighted score of salary fit (0.40), format fit (0.25), recency of activity (0.20) and
+league status (0.15), mapped to low < 0.45 ≤ medium < 0.78 ≤ high. A format conflict caps the
+result at medium, and an offer more than 25 % below the candidate's minimum is low. Recency is
+measured against the caller's `now`, so the result is reproducible.
 """
 from __future__ import annotations
 
@@ -22,212 +23,102 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from .features import direct_evidence, skill_name
+from .features import salary_fit, skill_fit, skill_name
 from .salary import to_gross
 from .score import passes_hard_filters
-from .types import CandidateCtx, NeedCtx, Weights
+from .types import CandidateCtx, NeedCtx
 
-FORMAT_RU: dict[str, str] = {
-    "remote": "удалённый формат",
-    "hybrid": "гибридный формат",
-    "office": "офисный формат",
-}
+FORMAT_RU: dict[str, str] = {"remote": "удалённый формат", "hybrid": "гибридный формат", "office": "офисный формат"}
+BUDGET_STEP = 0.20
+TOP = 3
 
 
 @dataclass(frozen=True)
 class Relaxation:
-    change: str     # e.g. "убрать Kubernetes из обязательных"
+    change: str     # "убрать Kubernetes из обязательных"
     delta: int      # +23 candidates
 
 
-def _qualifies(need: NeedCtx, c: CandidateCtx) -> bool:
-    """True if candidate passes hard filters, has evidence for all must-skills, and meets budget."""
+def qualifies(need: NeedCtx, c: CandidateCtx) -> bool:
     if not passes_hard_filters(need, c):
         return False
-
-    # 1. Must-have skills: candidate must have direct evidence for all of them
-    for s in need.must_skills:
-        ev, _ = direct_evidence(c, s)
-        if ev <= 0.0:
-            return False
-
-    # 2. Salary affordability: if candidate specifies salary_min, it shouldn't exceed budget max
-    if c.salary_min is not None and need.salary_max > 0:
-        c_min_gross = to_gross(c.salary_min, c.salary_type or "gross")
-        need_max_gross = to_gross(need.salary_max, need.salary_type)
-        if c_min_gross > need_max_gross * 1.05:
-            return False
-
-    return True
+    _, _, gaps = skill_fit(need, c)
+    salary, _ = salary_fit(need, c)
+    return not gaps and salary > 0
 
 
-def relaxations(
-    need: NeedCtx,
-    pool: Sequence[CandidateCtx],
-    weights: Weights | None = None,
-) -> list[Relaxation]:
-    """Top 3 counterfactual relaxations by delta candidates.
+def _count(need: NeedCtx, pool: Sequence[CandidateCtx]) -> int:
+    return sum(1 for c in pool if qualifies(need, c))
 
-    Iterates through potential constraint relaxations:
-    - Removing each must-have skill
-    - Allowing adjacent grades
-    - Adding omitted work formats (remote, hybrid, office)
-    - Increasing salary budget by 20%
-    """
+
+def relaxations(need: NeedCtx, pool: Sequence[CandidateCtx]) -> list[Relaxation]:
+    """Top 3 counterfactual relaxations by the number of candidates they add (delta > 0 only)."""
     if not pool:
         return []
-
-    base_count = sum(1 for c in pool if _qualifies(need, c))
-    candidates: list[Relaxation] = []
-
-    # 1. Relax must-have skills (one by one)
+    base = _count(need, pool)
+    options: list[tuple[str, NeedCtx]] = []
     for s in need.must_skills:
-        rem_skills = tuple(x for x in need.must_skills if x != s)
-        relaxed_need = dataclasses.replace(need, must_skills=rem_skills)
-        count = sum(1 for c in pool if _qualifies(relaxed_need, c))
-        delta = count - base_count
-        if delta > 0:
-            s_name = skill_name(s)
-            candidates.append(Relaxation(change=f"убрать {s_name} из обязательных", delta=delta))
-
-    # 2. Allow adjacent grades
+        options.append((f"убрать {skill_name(s)} из обязательных",
+                        dataclasses.replace(need, must_skills=tuple(x for x in need.must_skills if x != s))))
     if not need.allow_adjacent:
-        relaxed_need = dataclasses.replace(need, allow_adjacent=True)
-        count = sum(1 for c in pool if _qualifies(relaxed_need, c))
-        delta = count - base_count
-        if delta > 0:
-            candidates.append(Relaxation(change="разрешить смежные грейды", delta=delta))
-
-    # 3. Add work formats
+        options.append(("разрешить смежные грейды", dataclasses.replace(need, allow_adjacent=True)))
     if need.work_formats:
         for fmt in ("remote", "hybrid", "office"):
             if fmt not in need.work_formats:
-                relaxed_need = dataclasses.replace(need, work_formats=tuple(list(need.work_formats) + [fmt]))
-                count = sum(1 for c in pool if _qualifies(relaxed_need, c))
-                delta = count - base_count
-                if delta > 0:
-                    label = FORMAT_RU.get(fmt, fmt)
-                    candidates.append(Relaxation(change=f"добавить {label}", delta=delta))
-
-    # 4. Increase budget by 20%
-    if need.salary_max > 0:
-        relaxed_need = dataclasses.replace(need, salary_max=int(round(need.salary_max * 1.20)))
-        count = sum(1 for c in pool if _qualifies(relaxed_need, c))
-        delta = count - base_count
-        if delta > 0:
-            candidates.append(Relaxation(change="увеличить бюджет на 20 %", delta=delta))
-
-    # Sort by delta descending, tie-break by change text ascending
-    candidates.sort(key=lambda r: (-r.delta, r.change))
-    return candidates[:3]
+                options.append((f"добавить {FORMAT_RU[fmt]}",
+                                dataclasses.replace(need, work_formats=(*need.work_formats, fmt))))
+    options.append((f"увеличить бюджет на {round(BUDGET_STEP * 100)} %",
+                    dataclasses.replace(need, salary_max=round(need.salary_max * (1 + BUDGET_STEP)))))
+    found = [Relaxation(text, _count(relaxed, pool) - base) for text, relaxed in options]
+    found = [r for r in found if r.delta > 0]
+    found.sort(key=lambda r: (-r.delta, r.change))
+    return found[:TOP]
 
 
-def acceptance_likelihood(
-    need: NeedCtx,
-    offer_salary_max: int,
-    c: CandidateCtx,
-) -> Literal["low", "medium", "high"]:
-    """Estimate probability (low, medium, high) of candidate accepting the offer.
+def _salary_score(offer_gross: float, c: CandidateCtx) -> float:
+    kind = c.salary_type or "gross"
+    lo = to_gross(c.salary_min, kind) if c.salary_min else None
+    hi = to_gross(c.salary_max, kind) if c.salary_max else None
+    if lo is not None and hi is not None and hi > lo:
+        if offer_gross >= hi * 1.05:
+            return 1.0
+        if offer_gross >= hi:
+            return 0.90
+        if offer_gross >= lo:
+            return 0.40 + 0.50 * (offer_gross - lo) / (hi - lo)       # 0.40 at the minimum, 0.90 at the maximum
+        return max(0.0, 0.40 - (lo - offer_gross) / lo)
+    if hi is not None:
+        if offer_gross >= hi * 1.05:
+            return 1.0
+        if offer_gross >= hi * 0.95:
+            return 0.85
+        return max(0.0, 0.50 - (hi - offer_gross) / hi)
+    if lo is not None:
+        if offer_gross >= lo * 1.25:
+            return 1.0
+        if offer_gross >= lo:
+            return 0.75
+        return max(0.0, 0.40 - (lo - offer_gross) / lo)
+    return 0.55                                                        # no declared expectation
 
-    Evaluated axes:
-    - Salary ratio (40% weight): offer_salary_max vs candidate expectations in gross.
-    - Format fit (25% weight): candidate work_formats matching need work_formats.
-    - Responsiveness (20% weight): days since last_active_at.
-    - Status (15% weight): confirmed in league vs unconfirmed / pending.
-    """
-    # ── 1. Salary score (0..1) ────────────────────────────────────────────────
-    offer_gross = to_gross(offer_salary_max, need.salary_type)
-    c_max_gross = to_gross(c.salary_max, c.salary_type or "gross") if c.salary_max else None
-    c_min_gross = to_gross(c.salary_min, c.salary_type or "gross") if c.salary_min else None
 
-    if c_max_gross is not None and c_min_gross is not None and c_max_gross > c_min_gross:
-        if offer_gross >= c_max_gross * 1.05:
-            salary_score = 1.0
-        elif offer_gross >= c_max_gross:
-            salary_score = 0.90
-        elif offer_gross >= c_min_gross:
-            # Interpolate between min (0.40) and max (0.90)
-            frac = (offer_gross - c_min_gross) / (c_max_gross - c_min_gross)
-            salary_score = 0.40 + 0.50 * frac
-        else:
-            under_ratio = (c_min_gross - offer_gross) / c_min_gross
-            salary_score = max(0.0, 0.40 - under_ratio)
-    elif c_max_gross is not None:
-        if offer_gross >= c_max_gross * 1.05:
-            salary_score = 1.0
-        elif offer_gross >= c_max_gross * 0.95:
-            salary_score = 0.85
-        else:
-            under_ratio = (c_max_gross - offer_gross) / c_max_gross
-            salary_score = max(0.0, 0.50 - under_ratio)
-    elif c_min_gross is not None:
-        if offer_gross >= c_min_gross * 1.25:
-            salary_score = 1.0
-        elif offer_gross >= c_min_gross:
-            salary_score = 0.75
-        else:
-            under_ratio = (c_min_gross - offer_gross) / c_min_gross
-            salary_score = max(0.0, 0.40 - under_ratio)
-    else:
-        # No declared salary expectations
-        salary_score = 0.55
-
-    # Hard drop if offer is heavily below candidate's minimum (> 25% below min)
-    if c_min_gross and offer_gross < c_min_gross * 0.75:
+def acceptance_likelihood(need: NeedCtx, offer_salary_max: int, c: CandidateCtx,
+                          now: datetime.datetime) -> Literal["low", "medium", "high"]:
+    offer = to_gross(offer_salary_max, need.salary_type)
+    if c.salary_min and offer < to_gross(c.salary_min, c.salary_type or "gross") * 0.75:
         return "low"
-
-    # ── 2. Format fit (0..1) ──────────────────────────────────────────────────
-    has_format_conflict = False
-    if not need.work_formats or not c.work_formats:
-        format_score = 0.8
-    else:
-        common = set(need.work_formats) & set(c.work_formats)
-        if common:
-            format_score = 1.0
-        else:
-            format_score = 0.0
-            has_format_conflict = True
-
-    # ── 3. Responsiveness (0..1) ──────────────────────────────────────────────
+    salary = _salary_score(offer, c)
+    conflict = bool(need.work_formats and c.work_formats and not set(need.work_formats) & set(c.work_formats))
+    fmt = 0.8 if not need.work_formats or not c.work_formats else (0.0 if conflict else 1.0)
     if c.last_active_at is None:
-        resp_score = 0.4
+        recency = 0.4
     else:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        act = c.last_active_at
-        if act.tzinfo is None:
-            act = act.replace(tzinfo=datetime.timezone.utc)
-        days = max(0, (now - act).total_seconds() / 86400.0)
-        if days <= 7:
-            resp_score = 1.0
-        elif days <= 30:
-            resp_score = 0.75
-        elif days <= 60:
-            resp_score = 0.5
-        else:
-            resp_score = 0.25
-
-    # ── 4. Status score (0..1) ────────────────────────────────────────────────
-    if c.league_status == "confirmed":
-        status_score = 1.0
-    elif c.league_status == "pending":
-        status_score = 0.7
-    else:
-        status_score = 0.5
-
-    # Weighted combination
-    total = (
-        0.40 * salary_score
-        + 0.25 * format_score
-        + 0.20 * resp_score
-        + 0.15 * status_score
-    )
-
-    if has_format_conflict:
-        # Candidate and position have incompatible formats: cannot be "high"
+        seen = c.last_active_at if c.last_active_at.tzinfo else c.last_active_at.replace(tzinfo=datetime.timezone.utc)
+        ref = now if now.tzinfo else now.replace(tzinfo=datetime.timezone.utc)
+        days = max(0.0, (ref - seen).total_seconds() / 86400.0)
+        recency = 1.0 if days <= 7 else 0.75 if days <= 30 else 0.5 if days <= 60 else 0.25
+    status = {"confirmed": 1.0, "pending": 0.7}.get(c.league_status, 0.5)
+    total = 0.40 * salary + 0.25 * fmt + 0.20 * recency + 0.15 * status
+    if conflict:
         return "low" if total < 0.45 else "medium"
-
-    if total >= 0.78:
-        return "high"
-    if total >= 0.45:
-        return "medium"
-    return "low"
+    return "high" if total >= 0.78 else "medium" if total >= 0.45 else "low"

@@ -198,14 +198,15 @@ def _afford_integral(a: float, b: float, budget: float) -> float:
 def cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     if len(a) != len(b) or not a:
         raise ValueError("embeddings differ in dimension")
-    dot = sum(x * y for x, y in zip(a, b, strict=True))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    return dot / (na * nb) if na and nb else 0.0
+    norms = math.sumprod(a, a) * math.sumprod(b, b)
+    return math.sumprod(a, b) / math.sqrt(norms) if norms > 0 else 0.0
 
 
 def semantic_fit(need: NeedCtx, c: CandidateCtx) -> tuple[float, list[Reason]]:
-    if need.embedding is None or c.embedding is None:
+    """Neutral when either vector is missing, or when the model tags differ (including one tagged
+    and one untagged vector): a cosine across two embedding spaces means nothing (ML-9 review).
+    Two untagged vectors are compared, as before tagging existed."""
+    if need.embedding is None or c.embedding is None or need.embedding_model != c.embedding_model:
         return NEUTRAL, [Reason("info", "Смысловое сходство не рассчитано", None)]
     cos = cosine(need.embedding, c.embedding)
     value = min(1.0, max(0.0, (cos - SEMANTIC_LO) / (SEMANTIC_HI - SEMANTIC_LO)))

@@ -66,11 +66,12 @@ class Gini(TypedNumberFamily):
     meta = FamilyMeta(id="ml.models.gini.v1", version=1, specs=M, topic="ml.models",
                       skills=("machine_learning",), format="numeric_scenario", a=1.2, b=0.5, c=0.0,
                       time_limit_s=150)
+    SEMANTIC = ('ask', 'left', 'right')
     DECIMALS = 3
 
     def draw(self, rng):
-        left = [rng.randint(0, 12) for _ in range(2)]
-        right = [rng.randint(0, 12) for _ in range(2)]
+        left = [rng.randint(0, 30) for _ in range(2)]
+        right = [rng.randint(0, 30) for _ in range(2)]
         if sum(left) == 0:
             left[0] = 1
         if sum(right) == 0:
@@ -164,6 +165,7 @@ class Groupby(TypedNumberFamily):
 
     meta = FamilyMeta(id="ml.data.groupby.v1", version=1, specs=M, topic="ml.data_processing",
                       skills=("pandas", "python"), format="code_output", a=1.1, b=-0.5, c=0.0, time_limit_s=120)
+    SEMANTIC = ('rows', 'target', 'agg')
     DECIMALS = 2
     CITIES = ("Казань", "Омск", "Пермь", "Сочи", "Тула", "Уфа")
 

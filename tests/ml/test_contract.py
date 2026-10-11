@@ -100,6 +100,8 @@ def test_string_constants_match_core_enums():
         list(enums.Grade.values)
     assert [legacy.GradeDecision.CONFIRMED, legacy.GradeDecision.UNCONFIRMED] == \
         list(enums.GradeDecision.values)
+    from assessment.engine import monitor
+    assert monitor.STATUSES == tuple(enums.ItemFamilyStatus.values)
 
 
 # ── families contract ──────────────────────────────────────────────────────

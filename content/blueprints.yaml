@@ -46,3 +46,9 @@ blueprints:
     ml.models: 0.12
     ml.data_processing: 0.09
     ml.deep_learning: 0.05
+
+# Promotion blueprint (ML-13): a promotion test is about the next grade. It starts at that
+# grade's start_theta and draws only items with b >= theta_cut(next grade) + min_b_offset while the
+# topic mix has any, so the evidence comes from items that discriminate around the next cut.
+promotion:
+  min_b_offset: -0.5
