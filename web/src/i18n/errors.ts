@@ -26,6 +26,15 @@ export const ERROR_MESSAGES: Record<string, string> = {
   contact_not_granted: 'Контакты пока не раскрыты.',
   no_credits: 'Лимит отправок на неделю исчерпан.',
   company_required: 'Сначала создайте профиль компании.',
+  offer_expired: 'Срок действия оффера истёк.',
+  fallback_not_eligible: 'Фолбэк недоступен для текущих ответов теста.',
+  fallback_already_used: 'Попытка короткого теста уже была использована.',
+  account_exists: 'Аккаунт с таким email уже зарегистрирован. Войдите по паролю.',
+  fsp_oidc_required: 'Требуется подтверждение через FSP ID.',
+  fsp_id_unavailable: 'Сервис FSP ID временно недоступен. Попробуйте позже.',
+  token_exchange_failed: 'Не удалось подтвердить авторизацию FSP ID.',
+  report_unreadable: 'Отчёт валидации временно недоступен.',
+  no_item_bank: 'Банк заданий пуст для выбранных параметров.',
   api_error: 'Что-то пошло не так. Попробуйте ещё раз.',
 }
 

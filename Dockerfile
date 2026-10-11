@@ -25,6 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
+# ML-9: CPU-only torch + sentence-transformers, and the USER-bge-m3 weights baked into the image
+# so EMBEDDINGS=local needs no network at runtime (about 2.3 GB).
+ENV HF_HOME=/opt/hf-cache
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install "sentence-transformers>=3.0" \
+    && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('deepvk/USER-bge-m3', device='cpu')"
+
 COPY . .
 
 RUN chmod +x /app/docker-entrypoint.sh 2>/dev/null || true

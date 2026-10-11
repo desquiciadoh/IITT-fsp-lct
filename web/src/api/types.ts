@@ -86,14 +86,18 @@ export type ScoreComponentsDict = Partial<
   Record<'skill' | 'grade' | 'strength' | 'fsp' | 'salary' | 'semantic' | 'freshness', number>
 >
 
-export type TalentShort = Omit<GeneratedTalentShort, 'public_id' | 'league' | 'fsp' | 'skills'> & {
+export type TalentShort = Omit<
+  GeneratedTalentShort,
+  'public_id' | 'league' | 'fsp' | 'skills' | 'display_name' | 'verified_topics'
+> & {
   public_id: string
-  /** present at runtime; the schema does not declare it */
+  /** present at runtime; the schema marks it readOnly */
   display_name?: string
   league?: League | null
   fsp?: { linked: boolean; best_tier?: string; rank?: string; results?: number }
   /** the schema flattens this nested list to `string` */
   skills?: string[]
+  verified_topics?: readonly string[]
   /** FE-12 · search payload carries the shortlist flag on the talent itself. */
   shortlisted?: boolean
 }
@@ -109,6 +113,10 @@ export type Offer = Omit<
   | 'decline_reason'
   | 'decline_comment'
   | 'expires_at'
+  | 'talent'
+  | 'decline'
+  | 'below_floor'
+  | 'acceptance_likelihood'
 > & {
   description?: string
   company?: { id: string; name: string; trust_level?: TrustLevel }
@@ -124,6 +132,10 @@ export type Offer = Omit<
     phone?: string
     telegram?: string
   } | null
+  talent?: TalentShort | null
+  decline?: { reason?: string; comment?: string } | null
+  below_floor?: boolean
+  acceptance_likelihood?: 'low' | 'medium' | 'high' | null
 }
 
 export type ProfileSkill = {
@@ -147,6 +159,7 @@ export type CandidateProfile = Omit<
   | 'league'
   | 'fsp'
   | 'consents'
+  | 'unknown_skills'
 > & {
   specialization?: Spec | '' | null
   claimed_grade?: Grade | '' | null
@@ -155,6 +168,7 @@ export type CandidateProfile = Omit<
   experience_text?: string | null
   contacts?: { email?: string; phone?: string; telegram?: string } | null
   skills?: ProfileSkill[]
+  unknown_skills?: string[]
   league?: League | null
   fsp?: {
     participant_id?: string
@@ -191,13 +205,31 @@ export type Taxonomy = {
   skills: string[]
 }
 
-export type ResultTopic = { key: string; label: string; correct: number; total: number }
-export type EvidencePoint = { seq: number; correct: boolean | null }
+export type ResultTopic = {
+  key?: string
+  topic?: string
+  label?: string
+  level?: string
+  correct?: number
+  total?: number
+}
+export type EvidencePoint = { seq: number; level?: string; correct: boolean | null }
 
 /** GET /api/assessments/{id}/result. G5 fields are optional (mocked until BE adds them). */
 export type AssessmentResult = Omit<
   GeneratedAssessmentResult,
-  'kind' | 'mode' | 'status' | 'theta' | 'se' | 'rating' | 'result_grade' | 'decision' | 'started_at'
+  | 'kind'
+  | 'mode'
+  | 'status'
+  | 'theta'
+  | 'se'
+  | 'rating'
+  | 'result_grade'
+  | 'decision'
+  | 'started_at'
+  | 'topics'
+  | 'evidence'
+  | 'fallback'
 > & {
   kind: AssessmentKind
   mode: AssessmentMode
@@ -213,7 +245,7 @@ export type AssessmentResult = Omit<
   percentile?: number | null
   topics?: ResultTopic[]
   evidence?: EvidencePoint[]
-  fallback?: { kind: 'instant' | 'short_test'; reason?: string } | null
+  fallback?: { kind?: 'instant' | 'short_test'; mode?: string; grade?: string; reason?: string } | null
   next_attempt_at?: string | null
 }
 
@@ -239,11 +271,11 @@ export type ItemInputType = 'choice' | 'number' | 'text'
  * gap G5: `level` (difficulty) and `max_items` (progress total) are not on
  * the backend yet — optional here, mocked in qualification.ts.
  */
-export type AssessmentItem = Omit<GeneratedItemView, 'code' | 'options' | 'input_type'> & {
+export type AssessmentItem = Omit<GeneratedItemView, 'code' | 'options' | 'input_type' | 'level'> & {
   code: { lang: string; text: string } | null
   options: { id: string; text_md: string }[] | null
   input_type: ItemInputType
-  level?: number | null
+  level?: string | number | null
 }
 
 export type AssessmentSession = Omit<GeneratedAssessmentSession, 'current'> & {
@@ -401,7 +433,14 @@ export type TalentContacts = {
 }
 export type TalentDetail = Omit<
   GeneratedTalentDetail,
-  'league' | 'fsp' | 'skills' | 'contacts' | 'salary_type'
+  | 'league'
+  | 'fsp'
+  | 'skills'
+  | 'contacts'
+  | 'salary_type'
+  | 'topics'
+  | 'assessments'
+  | 'integrity_flags'
 > & {
   display_name?: string
   last_active_at?: string | null

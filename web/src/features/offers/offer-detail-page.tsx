@@ -55,26 +55,40 @@ export function OfferDetailPage() {
     if (!offer || offer.status !== 'sent' || viewError) return
     if (autoViewed.current === offer.id) return
     autoViewed.current = offer.id
-    view.mutate(
-      { id: offer.id, body: { version: offer.version } },
-      {
-        onError: (err) => {
-          // A version conflict means the offer moved on: refetch and retry once.
-          if (isOfferConflict(err) && viewRetries.current < 1) {
-            viewRetries.current += 1
-            autoViewed.current = null
-            toast.error('Оффер изменился — обновляем данные')
-            void refetch()
-            return
-          }
-          setViewError(
-            err instanceof ApiError
-              ? err
-              : new ApiError({ status: 0, code: 'api_error', detail: 'Не удалось открыть оффер' }),
-          )
+
+    const runView = (targetOffer: Offer) => {
+      view.mutate(
+        { id: targetOffer.id, body: { version: targetOffer.version } },
+        {
+          onError: async (err) => {
+            const isExpired = err instanceof ApiError && err.code === 'offer_expired'
+            if (isExpired) {
+              setViewError(err)
+              void refetch()
+              return
+            }
+
+            if (isOfferConflict(err) && viewRetries.current < 1) {
+              viewRetries.current += 1
+              toast.error('Оффер изменился — обновляем данные')
+              const { data: refreshed } = await refetch()
+              if (refreshed?.status === 'sent') {
+                runView(refreshed)
+              }
+              return
+            }
+
+            setViewError(
+              err instanceof ApiError
+                ? err
+                : new ApiError({ status: 0, code: 'api_error', detail: 'Не удалось открыть оффер' }),
+            )
+          },
         },
-      },
-    )
+      )
+    }
+
+    runView(offer)
   }, [offer, view, refetch, viewError])
 
   if (isLoading) {
@@ -84,11 +98,17 @@ export function OfferDetailPage() {
       </div>
     )
   }
-  if (isError || !offer) {
+  if (isError || !offer || viewError) {
     return (
       <ErrorState
-        code={error instanceof ApiError ? error.code : undefined}
-        onRetry={() => void refetch()}
+        code={viewError?.code ?? (error instanceof ApiError ? error.code : undefined)}
+        description={viewError ? errorMessage(viewError.code, viewError.detail) : undefined}
+        onRetry={() => {
+          setViewError(null)
+          viewRetries.current = 0
+          autoViewed.current = null
+          void refetch()
+        }}
       />
     )
   }

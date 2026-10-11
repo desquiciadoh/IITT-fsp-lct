@@ -79,7 +79,6 @@ def candidate_to_dto(profile: CandidateProfile) -> dict[str, Any]:
 
 def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
     """Fetch candidate DTOs using fast values queries without instantiating thousands of models."""
-    user_id_qs = filtered_qs.order_by().values("user_id")
     profile_rows = list(
         filtered_qs.order_by().values(
             "user_id",
@@ -100,10 +99,12 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
     if not profile_rows:
         return []
 
-    # Batch skills via SQL subquery (avoids sending 1500+ params across wire)
+    user_ids = [r["user_id"] for r in profile_rows]
+
+    # Batch skills via list of IDs (avoids re-evaluating complex subquery)
     skills_by_user: dict[int, list[dict[str, Any]]] = {}
     for row in (
-        CandidateSkill.objects.filter(candidate_id__in=user_id_qs)
+        CandidateSkill.objects.filter(candidate_id__in=user_ids)
         .order_by()
         .values("candidate_id", "skill_id", "skill__name", "source", "level")
     ):
@@ -116,10 +117,10 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch leagues via SQL subquery
+    # Batch leagues via list of IDs
     leagues_by_user: dict[int, list[dict[str, Any]]] = {}
     for row in (
-        LeagueMembership.objects.filter(candidate_id__in=user_id_qs)
+        LeagueMembership.objects.filter(candidate_id__in=user_ids)
         .order_by()
         .values(
             "candidate_id",
@@ -142,10 +143,10 @@ def fetch_candidate_dtos(filtered_qs) -> list[dict[str, Any]]:
             }
         )
 
-    # Batch FSP results count via SQL subquery
+    # Batch FSP results count via list of IDs
     fsp_counts: dict[int, int] = {}
     for row in (
-        FSPResult.objects.filter(candidate_id__in=user_id_qs)
+        FSPResult.objects.filter(candidate_id__in=user_ids)
         .order_by()
         .values("candidate_id")
         .annotate(cnt=Count("id"))

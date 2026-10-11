@@ -5,6 +5,7 @@ import type {
   AssessmentResult,
   AssessmentSession,
 } from '@/api/types'
+import { completeCandidateQualification } from '@/mocks/handlers/core'
 
 /**
  * FE-05 · Test runner — stateful in-memory CAT session store (`all` mode).
@@ -279,6 +280,7 @@ function isCorrect(answer: StoredAnswer): boolean {
 function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
   s.status = 'finished'
   s.finishedAt = now.toISOString()
+  completeCandidateQualification()
   const maxItems = maxItemsFor(s)
   const correct = s.answers.filter(isCorrect).length
   const theta = Math.round(((correct - maxItems / 2) / 2) * 100) / 100

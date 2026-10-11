@@ -139,6 +139,10 @@ function advanceStep(
   if (next) currentMe = { ...currentMe, onboarding_step: next }
 }
 
+export function completeCandidateQualification(): void {
+  advanceStep(() => 'done')
+}
+
 export const coreHandlers = [
   http.get('*/api/me', () => json(currentMe)),
   http.post('*/api/auth/register', async ({ request }) => {
@@ -206,7 +210,7 @@ export const coreHandlers = [
     const next = { ...profile, ...body } as CandidateProfile
     profileStore.set(currentMe.id, next)
     advanceStep((step) => {
-      if (body.claimed_grade) return step === 'consent' ? 'profile' : 'done'
+      if (body.claimed_grade) return 'qualification'
       if (step === 'profile') return 'qualification'
       return undefined
     })

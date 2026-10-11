@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 import { HomePage } from '@/pages/home'
 import { DevUiPage } from '@/pages/dev-ui'
 import { DesignVariantsPage } from '@/pages/design-variants'
@@ -29,6 +29,11 @@ const ph = (title: string, owner: 'FE1' | 'FE2', task: string) => (
   <Placeholder title={title} owner={owner} task={task} />
 )
 
+function CandidateProfileRedirect() {
+  const location = useLocation()
+  return <Navigate to={{ pathname: '/candidate/settings', search: location.search }} replace />
+}
+
 export const router = createBrowserRouter([
   { path: '/', element: <IndexRedirect /> },
   { path: '/home', element: <HomePage /> },
@@ -42,7 +47,7 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: '/jury', element: <JuryPage /> },
-      { path: '/lab', element: ph('Лаборатория', 'FE2', 'FE-18') },
+      { path: '/lab', element: ph('Лаборатория', 'FE1', 'FE-13') },
     ],
   },
   {
@@ -62,6 +67,7 @@ export const router = createBrowserRouter([
                 element: <OnboardingGate />,
                 children: [
                   { path: '/candidate', element: <DashboardPage /> },
+                  { path: '/candidate/profile', element: <CandidateProfileRedirect /> },
                   {
                     path: '/candidate/qualification/start',
                     element: <StartPage />,

@@ -27,6 +27,8 @@ if not ITEM_SEED_SECRET:
     else:
         raise RuntimeError("ITEM_SEED_SECRET environment variable is required in production")
 
+CONTACTS_ENCRYPTION_KEY = os.environ.get("CONTACTS_ENCRYPTION_KEY") or os.environ.get("CONTACT_ENCRYPTION_KEY", "")
+
 _hosts = os.environ.get("ALLOWED_HOSTS", "")
 if _hosts:
     ALLOWED_HOSTS = [h.strip() for h in _hosts.split(",") if h.strip()]

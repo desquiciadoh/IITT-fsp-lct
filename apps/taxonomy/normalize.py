@@ -76,6 +76,16 @@ _CANONICAL_SPELLINGS = {
     "drf": "drf",
 }
 
+_NON_SKILL_WORDS = {
+    "none", "null", "nil", "nope", "note", "base", "done", "test", "role",
+    "mode", "term", "team", "year", "lead", "work", "page", "part", "open",
+    "cost", "date", "case", "file", "link", "line", "user", "good", "fast",
+    "last", "past", "best", "rest", "load", "head", "read", "time", "task",
+    "word", "uses", "help", "here", "home", "main", "name", "next", "plan",
+    "root", "rule", "view", "city", "опыт", "стек", "курс", "база", "роль",
+    "план", "тест", "нет",
+}
+
 
 def _prenormalize_token(raw: str) -> str:
     """Apply NFKC, lowercase, whitespace collapse, dashes and lookalike mapping."""
@@ -165,7 +175,7 @@ def normalize_skill(raw: str, catalog: dict[str, SkillEntry] | None = None) -> S
     # - length ratio in [0.75, 1.33]
     # - OSA distance <= 1 for len 4..9, <= 2 for len >= 10
     # - ambiguous best distance -> no match
-    if len(prenorm) >= 4:
+    if len(prenorm) >= 5 and prenorm not in _NON_SKILL_WORDS:
         input_len = len(prenorm)
         max_dist = 1 if input_len < 10 else 2
         first_char = prenorm[0]
@@ -174,7 +184,7 @@ def normalize_skill(raw: str, catalog: dict[str, SkillEntry] | None = None) -> S
 
         for cand_key, sid in by_key.items():
             cand_len = len(cand_key)
-            if cand_len < 4:
+            if cand_len < 5:
                 continue
             if cand_key[0] != first_char:
                 continue

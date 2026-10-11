@@ -17,6 +17,15 @@ export function useTaxonomy() {
     queryFn: () => customFetch<Taxonomy>('/api/taxonomy'),
     staleTime: 5 * 60_000,
     retry: false,
+    // The backend TaxonomySerializer returns skills as {id, name, aliases, topic}
+    // objects, but the Taxonomy type (and all consumers) expect plain string[].
+    // Normalise here so FilterPanel and other consumers never see raw objects.
+    select: (data): Taxonomy => ({
+      ...data,
+      skills: (data.skills ?? []).map((s) =>
+        typeof s === 'string' ? s : (s as unknown as { name: string }).name,
+      ),
+    }),
   })
 }
 
@@ -65,5 +74,30 @@ export function useUploadResume() {
         body: form,
       })
     },
+  })
+}
+
+export interface CompanyMinimal {
+  id: string
+  name: string
+}
+
+export interface CompanyPaginatedResponse {
+  items: CompanyMinimal[]
+  total: number
+  page: number
+  pages: number
+}
+
+export function useSearchCompanies(search: string) {
+  const trimmed = search.trim()
+  return useQuery({
+    queryKey: keys.companies(trimmed),
+    queryFn: () =>
+      customFetch<CompanyPaginatedResponse>(
+        `/api/companies?search=${encodeURIComponent(trimmed)}`,
+      ),
+    enabled: trimmed.length >= 2,
+    staleTime: 60_000,
   })
 }

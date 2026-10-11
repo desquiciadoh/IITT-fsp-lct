@@ -423,8 +423,6 @@ class PositionParseView(views.APIView):
             res_dict = async_res.get(timeout=15)
             # Ensure draft fallback defaults
             draft = res_dict.get("draft") or {}
-            if not draft.get("salary_type"):
-                draft["salary_type"] = "gross"
             res_dict["draft"] = draft
             return Response(res_dict)
         except Exception as celery_err:
@@ -441,8 +439,6 @@ class PositionParseView(views.APIView):
 
                 result = parse_jd_func(text, gateway=fake_llm_cls())
                 draft = result.draft
-                if not draft.get("salary_type"):
-                    draft["salary_type"] = "gross"
                 return Response(
                     {
                         "draft": draft,
@@ -452,7 +448,7 @@ class PositionParseView(views.APIView):
                     }
                 )
             except Exception as e:
-                logger.exception("Failed to parse JD with rules fallback: %s", e)
+                logger.error("Failed to parse JD with rules fallback: %s", type(e).__name__)
                 raise FSPAPIError(
                     "jd_parse_failed",
                     "Failed to parse job description",

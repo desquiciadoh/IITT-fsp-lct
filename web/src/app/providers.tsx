@@ -20,20 +20,31 @@ type Meta = Record<string, unknown> | undefined
  */
 function createQueryClient() {
   const ref: { client?: QueryClient } = {}
+  let isRedirecting = false
 
   const handleError = (error: unknown, meta: Meta) => {
     if (!(error instanceof ApiError) || error.status !== 401) return
     if (meta?.skipAuthRedirect) return
     const from = router.state.location.pathname
-    if (from === '/login') return
+    if (from === '/login' || isRedirecting) return
+    isRedirecting = true
     ref.client?.clear()
-    router.navigate(`/login?next=${encodeURIComponent(from)}`, { replace: true })
-    toast.error(errorMessage('unauthorized'))
+    void router
+      .navigate(`/login?next=${encodeURIComponent(from)}`, { replace: true })
+      .finally(() => {
+        isRedirecting = false
+      })
+    toast.error(errorMessage('unauthorized'), { id: 'session-expired' })
   }
 
   const client = new QueryClient({
     defaultOptions: {
-      queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 },
+      queries: {
+        retry: (n, e) =>
+          !(e instanceof ApiError && (e.status === 401 || e.status === 403)) && n < 1,
+        refetchOnWindowFocus: false,
+        staleTime: 15_000,
+      },
     },
     queryCache: new QueryCache({
       onError: (error, query) => handleError(error, query.meta),

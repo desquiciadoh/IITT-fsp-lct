@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { customFetch, ApiError } from '@/api/client'
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const client = useQueryClient()
   const {
     register,
@@ -32,6 +33,20 @@ export function LoginPage() {
     client.clear()
     if (data) client.setQueryData(keys.me, data)
     client.invalidateQueries({ queryKey: keys.me })
+
+    const next = searchParams.get('next')
+    if (next && next.startsWith('/') && !next.startsWith('//')) {
+      const role = data?.role
+      const isRoleAllowed =
+        (role === 'candidate' && (next.startsWith('/candidate') || next === '/' || next.startsWith('/jury'))) ||
+        (role === 'employer' && (next.startsWith('/employer') || next === '/' || next.startsWith('/jury'))) ||
+        (role === 'admin')
+      if (isRoleAllowed) {
+        navigate(next, { replace: true })
+        return
+      }
+    }
+
     navigate('/', { replace: true })
   }
 

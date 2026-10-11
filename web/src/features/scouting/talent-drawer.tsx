@@ -178,14 +178,19 @@ function DrawerBody({
         <section className="flex flex-col gap-1.5">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground">Темы теста</h3>
           <ul className="flex flex-col gap-1 text-sm">
-            {talent.topics.map((t) => (
-              <li key={t.key} className="flex justify-between">
-                <span>{t.label}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  {t.correct}/{t.total}
-                </span>
-              </li>
-            ))}
+            {talent.topics.map((t, idx) => {
+              const label = t.label ?? t.topic ?? t.key ?? `Тема ${idx + 1}`
+              const value =
+                t.correct != null && t.total != null
+                  ? `${t.correct}/${t.total}`
+                  : (t.level ?? '—')
+              return (
+                <li key={t.key ?? t.topic ?? idx} className="flex justify-between">
+                  <span>{label}</span>
+                  <span className="tabular-nums text-muted-foreground">{value}</span>
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link2, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { ApiError, customFetch } from '@/api/client'
 import { keys } from '@/api/keys'
 import { errorMessage } from '@/i18n/errors'
-import { useProfile, useSaveConsents, useSaveProfile } from '@/api/profile'
+import { useProfile, useSaveConsents, useSaveProfile, useSearchCompanies } from '@/api/profile'
 import { formatDate } from '@/lib/format'
 import { PLACEMENT_TIER_LABEL, SPORTS_RANK_LABEL } from '@/lib/labels'
 import { cn } from '@/lib/utils'
@@ -57,6 +58,7 @@ function ToggleRow({
 /** FE-08: candidate settings — privacy, consents, FSP. */
 export function SettingsPage() {
   const client = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: profile, isLoading } = useProfile()
   const saveProfile = useSaveProfile()
   const saveConsents = useSaveConsents()
@@ -66,9 +68,39 @@ export function SettingsPage() {
   const [salaryFloor, setSalaryFloor] = useState('')
   const [blocked, setBlocked] = useState<string[]>([])
   const [blockPick, setBlockPick] = useState('')
+  const [companySearch, setCompanySearch] = useState('')
+  const { data: searchResults, isFetching: isSearching } = useSearchCompanies(companySearch)
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    for (const c of MOCK_COMPANIES) map[c.id] = c.name
+    return map
+  })
   const [consents, setConsents] = useState({ processing: true, publication: true, fsp_sync: true })
   const [fspId, setFspId] = useState('')
   const [fspPending, setFspPending] = useState(false)
+
+  // Handle ?fsp_linked=true from backend OIDC callback
+  useEffect(() => {
+    if (searchParams.get('fsp_linked') === 'true') {
+      toast.success('ID ФСП успешно привязан через Госуслуги / ФСП')
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('fsp_linked')
+      setSearchParams(nextParams, { replace: true })
+      void client.invalidateQueries({ queryKey: keys.profile })
+    }
+  }, [searchParams, setSearchParams, client])
+
+  // Cache company names from search results
+  useEffect(() => {
+    if (!searchResults?.items) return
+    setCompanyNames((prev) => {
+      const next = { ...prev }
+      for (const item of searchResults.items) {
+        next[item.id] = item.name
+      }
+      return next
+    })
+  }, [searchResults])
 
   useEffect(() => {
     if (!profile) return
@@ -126,6 +158,10 @@ export function SettingsPage() {
         void client.invalidateQueries({ queryKey: keys.profile })
       })
       .catch((e: unknown) => {
+        if (e instanceof ApiError && e.code === 'fsp_oidc_required') {
+          window.location.assign('/api/auth/fsp-id/login?intent=link')
+          return
+        }
         if (e instanceof ApiError && e.code === 'fsp_id_already_linked') {
           toast.error('Этот ID ФСП уже привязан к другому кандидату')
         } else {
@@ -201,54 +237,103 @@ export function SettingsPage() {
             {blocked.length === 0 && (
               <span className="text-xs text-muted-foreground">Список пуст.</span>
             )}
-            {blocked.map((id) => {
-              const company = MOCK_COMPANIES.find((c) => c.id === id)
-              return (
-                <span
-                  key={id}
-                  className="flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs"
+            {blocked.map((id) => (
+              <span
+                key={id}
+                className="flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs"
+              >
+                {companyNames[id] ?? id}
+                <button
+                  type="button"
+                  aria-label={`Убрать ${companyNames[id] ?? id} из блок-листа`}
+                  onClick={() => setBlocked(blocked.filter((b) => b !== id))}
                 >
-                  {company?.name ?? id}
-                  <button
-                    type="button"
-                    aria-label={`Убрать ${company?.name ?? id} из блок-листа`}
-                    onClick={() => setBlocked(blocked.filter((b) => b !== id))}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )
-            })}
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
           </div>
-          <div className="mt-3 flex gap-2">
-            <select
-              value={blockPick}
-              onChange={(e) => setBlockPick(e.target.value)}
-              aria-label="Выберите компанию для блокировки"
-              className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              <option value="">— выбрать компанию (демо-список) —</option>
-              {MOCK_COMPANIES.filter((c) => !blocked.includes(c.id)).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!blockPick}
-              onClick={() => {
-                setBlocked([...blocked, blockPick])
-                setBlockPick('')
-              }}
-            >
-              Заблокировать
-            </Button>
+
+          <div className="mt-3 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={companySearch}
+                onChange={(e) => setCompanySearch(e.target.value)}
+                placeholder="Поиск компании по реестру (от 2 символов)…"
+                className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+              />
+              {isSearching && (
+                <span className="flex items-center text-xs text-muted-foreground">
+                  <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> Поиск…
+                </span>
+              )}
+            </div>
+
+            {companySearch.trim().length >= 2 && searchResults?.items && (
+              <div className="max-h-40 divide-y divide-border/50 overflow-y-auto rounded-md border border-border bg-background p-1">
+                {searchResults.items.length === 0 ? (
+                  <p className="p-2 text-xs text-muted-foreground">Компании не найдены</p>
+                ) : (
+                  searchResults.items.map((c) => {
+                    const isAlreadyBlocked = blocked.includes(c.id)
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between rounded p-1.5 text-xs hover:bg-muted/50"
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          disabled={isAlreadyBlocked}
+                          onClick={() => {
+                            if (!isAlreadyBlocked) {
+                              setBlocked([...blocked, c.id])
+                              setCompanyNames((prev) => ({ ...prev, [c.id]: c.name }))
+                            }
+                          }}
+                        >
+                          {isAlreadyBlocked ? 'В блок-листе' : 'Заблокировать'}
+                        </Button>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <select
+                value={blockPick}
+                onChange={(e) => setBlockPick(e.target.value)}
+                aria-label="Выберите компанию для блокировки"
+                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="">— или выбрать из популярных компаний —</option>
+                {MOCK_COMPANIES.filter((c) => !blocked.includes(c.id)).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!blockPick}
+                onClick={() => {
+                  setBlocked([...blocked, blockPick])
+                  setBlockPick('')
+                }}
+              >
+                Заблокировать
+              </Button>
+            </div>
           </div>
           <span className="mt-2 block text-xs text-muted-foreground">
-            Поиск по реальному реестру компаний пока недоступен (G17) — список организаций
-            демонстрационный.
+            Компании из черного списка не увидят ваш профиль в поиске и не смогут отправить оффер.
           </span>
         </div>
         <Button onClick={savePrivacy} disabled={saveProfile.isPending}>
@@ -338,11 +423,21 @@ export function SettingsPage() {
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
               />
             </label>
-            <Button onClick={linkFsp} disabled={fspPending}>
-              {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={linkFsp} disabled={fspPending}>
+                {fspPending ? 'Привязываем…' : 'Привязать ID ФСП'}
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => window.location.assign('/api/auth/fsp-id/login?intent=link')}
+              >
+                Через ФСП ID (OIDC)
+              </Button>
+            </div>
             <span className="text-xs text-muted-foreground">
-              Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.).
+              Демо-ID для проверки: FSP-000123 (КМС) или FSP-000456 (1 кат.). В боевом режиме
+              подтверждение выполняется через OIDC-провайдер Федерации.
             </span>
           </div>
         )}

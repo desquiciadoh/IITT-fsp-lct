@@ -45,21 +45,60 @@ function Cooldown({ deadline }: { deadline: string }) {
   )
 }
 
+const TOPIC_LABEL_MAP: Record<string, string> = {
+  architecture: 'Архитектура',
+  performance: 'Производительность',
+  testing: 'Тестирование',
+  security: 'Безопасность',
+  product_thinking: 'Продуктовое мышление',
+  mentoring: 'Менторство',
+  general: 'Общие темы',
+  python: 'Python',
+  sql: 'SQL',
+  javascript: 'JavaScript',
+}
+
+const LEVEL_LABEL_MAP: Record<string, string> = {
+  strong: 'уверенно',
+  moderate: 'средне',
+  limited: 'базово',
+}
+
 function TopicsChart({ topics }: { topics: NonNullable<AssessmentResult['topics']> }) {
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="text-sm font-semibold">Темы</h3>
-      {topics.map((topic) => {
-        const pct = topic.total > 0 ? Math.round((topic.correct / topic.total) * 100) : 0
+      {topics.map((topic, idx) => {
+        const key = topic.key ?? topic.topic ?? `topic-${idx}`
+        const label =
+          topic.label ??
+          TOPIC_LABEL_MAP[topic.topic ?? ''] ??
+          topic.topic ??
+          topic.key ??
+          `Тема ${idx + 1}`
+        const hasCounts = topic.total != null && topic.correct != null
+        const pct = hasCounts
+          ? topic.total! > 0
+            ? Math.round((topic.correct! / topic.total!) * 100)
+            : 0
+          : topic.level === 'strong'
+            ? 100
+            : topic.level === 'moderate'
+              ? 60
+              : 30
+        const statText = hasCounts
+          ? `${topic.correct}/${topic.total}`
+          : LEVEL_LABEL_MAP[topic.level ?? ''] ?? topic.level ?? ''
+
         return (
-          <div key={topic.key} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
-              {topic.label}
+          <div key={key} className="flex items-center gap-3">
+            <span className="w-40 shrink-0 truncate text-xs text-muted-foreground" title={label}>
+              {label}
             </span>
             <div
               className="h-3 flex-1 overflow-hidden rounded-full bg-secondary"
               role="img"
-              aria-label={`${topic.label}: ${topic.correct} из ${topic.total}`}
+              aria-label={`${label}: ${statText}`}
             >
               <div
                 className={cn(
@@ -70,7 +109,7 @@ function TopicsChart({ topics }: { topics: NonNullable<AssessmentResult['topics'
               />
             </div>
             <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-              {topic.correct}/{topic.total}
+              {statText}
             </span>
           </div>
         )
@@ -215,10 +254,11 @@ export function ResultPage() {
   const copy = result.decision === 'confirmed' ? DECISION_COPY.confirmed : DECISION_COPY.unconfirmed
   const cooldown = eligibility?.next_attempt_at || result.next_attempt_at || null
   const canStart = eligibility ? eligibility.can_start : !cooldown
+  const fallbackMode = result.fallback?.kind ?? result.fallback?.mode
   const fallbackLabel =
-    result.fallback?.kind === 'instant'
+    fallbackMode === 'instant'
       ? 'Экспресс-тест'
-      : result.fallback?.kind === 'short_test'
+      : fallbackMode === 'short_test'
         ? 'Короткий тест'
         : null
   const startParams = new URLSearchParams({

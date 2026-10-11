@@ -203,6 +203,24 @@ export const employerHandlers = [
     return stub(company)
   }),
 
+  http.get('*/api/companies', ({ request }) => {
+    const url = new URL(request.url)
+    const search = (url.searchParams.get('search') ?? '').toLowerCase().trim()
+    const all = [
+      { id: '00000000-0000-4000-8000-000000000001', name: 'Yandex Tech' },
+      { id: '00000000-0000-4000-8000-000000000002', name: 'Ozon' },
+      { id: '00000000-0000-4000-8000-000000000003', name: 'Avito' },
+      ...(company ? [{ id: company.id, name: company.name }] : []),
+    ]
+    const filtered = search ? all.filter((c) => c.name.toLowerCase().includes(search)) : all
+    return stub({
+      items: filtered,
+      total: filtered.length,
+      page: 1,
+      pages: 1,
+    })
+  }),
+
   http.post('*/api/companies', async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as Partial<Company>
     if (!body.name || !body.inn) {

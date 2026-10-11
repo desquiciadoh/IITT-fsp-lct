@@ -1,10 +1,18 @@
 """Root URL configuration for FSP Draft."""
 
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+
+def healthz_view(_request):
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
+    path("healthz", healthz_view, name="healthz"),
+    path("api/healthz", healthz_view, name="api-healthz"),
     path("admin/", admin.site.urls),
     # OpenAPI 3.0 & Swagger UI
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

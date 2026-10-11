@@ -69,12 +69,13 @@ export function SendOfferModal({
   positionId: string
   position?: Position
   /** G10: identity may be missing on the employer payload; the drawer passes it. */
-  candidate?: TalentShort | null
+  candidate?: (TalentShort | { public_id: string; display_name?: string }) | null
   open: boolean
   onClose: () => void
   onSent?: (offer: Offer) => void
 }) {
   const [serverCode, setServerCode] = useState<string | null>(null)
+  const [salaryFieldError, setSalaryFieldError] = useState<string | null>(null)
   const send = useSendOffer()
 
   const {
@@ -96,12 +97,14 @@ export function SendOfferModal({
     if (open) {
       reset(sendOfferDefaults(position))
       setServerCode(null)
+      setSalaryFieldError(null)
     }
   }, [open, position, reset])
 
   // zodResolver hands the coerced output to onSubmit; the form itself keeps raw strings.
   const onSubmit = handleSubmit((raw: OfferFormValues) => {
     setServerCode(null)
+    setSalaryFieldError(null)
     const input: SendOfferInput = {
       ...toSendOfferInput(raw),
       candidate_public_id: candidate?.public_id ?? '',
@@ -117,13 +120,19 @@ export function SendOfferModal({
         // Show the error by its contract code (FE2.md §FE-11).
         const code = err instanceof ApiError ? err.code : 'api_error'
         setServerCode(code)
+        // Extract the first field-level message so the user sees the real reason
+        // (e.g. "salary_max must be >= salary_min") instead of just the generic label.
+        if (err instanceof ApiError && code === 'salary_invalid') {
+          const fieldMsgs = Object.values(err.fieldErrors).flat()
+          setSalaryFieldError(fieldMsgs[0] ?? null)
+        }
       },
     })
   })
 
   const serverMessage =
     serverCode === 'salary_invalid'
-      ? errorMessage('salary_invalid')
+      ? null  // shown inline in the salary fieldset
       : serverCode === 'candidate_not_reachable'
         ? errorMessage('candidate_not_reachable')
         : serverCode === 'not_found'
@@ -216,7 +225,7 @@ export function SendOfferModal({
             </span>
             {serverCode === 'salary_invalid' && (
               <p className="text-xs text-destructive" role="alert">
-                {errorMessage('salary_invalid')}
+                {salaryFieldError ?? errorMessage('salary_invalid')}
               </p>
             )}
           </fieldset>

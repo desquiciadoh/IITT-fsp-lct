@@ -43,13 +43,7 @@ export async function startMocks(): Promise<void> {
           ...coreHandlers,
         ]
       : [
-          ...gapHandlers,
-          ...demoGapHandlers,
-          // FE-11 offer mock BEFORE scouting/employer: its POST /api/offers
-          // and */withdraw routes must win over any static fixtures there.
-          ...offerHandlers,
-          ...scoutingHandlers,
-          ...employerHandlers,
+          // Gaps G1–G17 are live on backend (BE.md §2.3). Missing mode only stubs what is still unreleased.
         ]
   const worker = setupWorker(...handlers)
   await worker.start({
