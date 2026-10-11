@@ -1,58 +1,82 @@
 /*
- * FSP Draft design tokens — direction "Arena (dark)".
- * Placeholder palette until PD-02 (brand book) lands; swap the raw
- * values below and every component follows automatically.
+ * FSP design tokens — brand book "Лидеры цифровой трансформации 2026".
+ * Light theme. Rule R7b: raw colour values live ONLY in this file;
+ * components consume the --fsp-* custom properties (directly or via the
+ * Tailwind @theme mapping below).
+ *
+ * Accent palette:
+ *   #FF0053 bright pink/red  — CTA buttons, important notices, active elements
+ *   #FFD6E4 light pink       — block backgrounds, underlays
+ *   #8A83D1 light violet     — secondary accents, icons
+ *   #FC3777 crimson          — gradients, hover effects
+ *   #310F53 dark violet      — headings, footer, navigation
+ *   #520978 deep violet      — primary brand elements, banners
+ * Base: #FFFFFF background · #1C1D22 near-black text.
  */
 
 :root {
   /* surfaces */
-  --fsp-bg: #0b0f14;
-  --fsp-panel: #121821;
-  --fsp-panel-hover: #182031;
-  --fsp-line: #1f2836;
+  --fsp-bg: #ffffff;
+  --fsp-panel: #ffffff;
+  --fsp-panel-hover: #f6f2fa;
+  --fsp-line: #e5e0ee;
+  --fsp-surface-soft: #ffd6e4; /* light-pink underlay for highlight blocks */
 
   /* text */
-  --fsp-fg: #e8eef5;
-  --fsp-muted: #8b98a8;
+  --fsp-fg: #1c1d22;
+  --fsp-muted: #5c5470; /* violet-tinted grey, AA on white & on panel-hover */
+  --fsp-heading: #310f53;
 
-  /* brand accent (FSP neon) */
-  --fsp-accent: #b8ff3c;
-  --fsp-accent-fg: #0b0f14;
+  /* brand accent (CTA) */
+  --fsp-accent: #ff0053;
+  --fsp-accent-hover: #fc3777; /* crimson hover per brand book */
+  --fsp-accent-strong: #d10044; /* AA-safe variant for small accent TEXT on white */
+  --fsp-accent-fg: #ffffff;
+  --fsp-brand: #520978; /* deep violet — primary brand elements */
+  --fsp-secondary: #8a83d1; /* light violet — secondary accents, icons */
+
+  /* brand gradient: hero sections, banners (FE-05/09/10/12) */
+  --fsp-gradient-brand: linear-gradient(135deg, #310f53 0%, #520978 55%, #ff0053 100%);
 
   /* semantic states */
-  --fsp-plus: #b8ff3c;
-  --fsp-minus: #ff6b6b;
-  --fsp-info: #58c7ff;
-  --fsp-warn: #ffc857;
+  --fsp-plus: #15803d;
+  --fsp-minus: #dc2626;
+  --fsp-info: #1d4ed8;
+  --fsp-warn: #92400e;
 
-  /* offer statuses */
-  --fsp-status-sent: #58c7ff;
-  --fsp-status-viewed: #ffc857;
-  --fsp-status-accepted: #b8ff3c;
-  --fsp-status-declined: #ff6b6b;
-  --fsp-status-withdrawn: #8b98a8;
-  --fsp-status-expired: #8b98a8;
+  /* offer statuses — chip pairs: solid dot + AA text tone on white */
+  --fsp-status-sent: #1d4ed8;
+  --fsp-status-viewed: #92400e;
+  --fsp-status-accepted: #15803d;
+  --fsp-status-declined: #dc2626;
+  --fsp-status-withdrawn: #5c5470;
+  --fsp-status-expired: #5c5470;
 
   /* league statuses */
-  --fsp-league-pending: #8b98a8;
-  --fsp-league-confirmed: #b8ff3c;
-  --fsp-league-unconfirmed: #ffc857;
+  --fsp-league-pending: #5c5470;
+  --fsp-league-confirmed: #15803d;
+  --fsp-league-unconfirmed: #92400e;
 
   /* score-bar segments without a semantic token yet */
-  --fsp-score-salary: #a78bfa;
-  --fsp-score-semantic: #f472b6;
-  --fsp-score-fsp: #ffc857;
+  --fsp-score-salary: #520978;
+  --fsp-score-semantic: #fc3777;
+  --fsp-score-fsp: #8a83d1;
+
+  /* card styling — flat/minimal: hairline border + soft shadow */
+  --shadow-card: 0 1px 2px rgb(28 29 34 / 0.06), 0 4px 16px rgb(49 15 83 / 0.08);
 
   /*
-   * WCAG AA check (R7b), ratio of each colour used as text on --fsp-panel
-   * #121821 (AA normal text needs >= 4.5):
-   *   --fsp-muted 6.07 · sent 9.36 · viewed 11.59 · accepted 14.77 ·
-   *   declined 6.42 · info 9.36 · warn 11.59 · minus 6.42 · plus 14.77.
-   * All pass; on --fsp-bg the ratios are higher still.
+   * WCAG AA check (R7b), ratios against --fsp-bg/--fsp-panel #ffffff
+   * (AA normal text >= 4.5, large text >= 3):
+   *   fg 15.93 · muted 7.20 · heading 14.99 · brand 12.06 · plus 4.84 ·
+   *   minus 4.50 · info 6.98 · warn 7.02 · accent-strong 5.5 · secondary 3.9
+   * --fsp-accent #ff0053 is 4.44 on white: used as fills with white label
+   * (contrast 4.89) and as large/decorative text only; any small accent
+   * copy must use --fsp-accent-strong. --fsp-secondary is icon-scale only.
    */
 
-  /* type */
-  --fsp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* type — Montserrat per brand book (self-hosted woff2, public/fonts) */
+  --fsp-font-sans: 'Montserrat Variable', 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fsp-font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
 
   /* radii */
@@ -94,6 +118,17 @@
   --v-line: #dfe5ef;
 }
 
+/* Brand-book variant preview (current :root values, scoped for /dev/design). */
+.dv-brand {
+  --v-bg: #ffffff;
+  --v-panel: #ffffff;
+  --v-fg: #1c1d22;
+  --v-muted: #5c5470;
+  --v-accent: #ff0053;
+  --v-accent-fg: #ffffff;
+  --v-line: #e5e0ee;
+}
+
 @theme inline {
   --color-background: var(--fsp-bg);
   --color-foreground: var(--fsp-fg);
@@ -119,9 +154,15 @@
   --color-minus: var(--fsp-minus);
   --color-info: var(--fsp-info);
   --color-warn: var(--fsp-warn);
+  --color-brand: var(--fsp-brand);
+  --color-heading: var(--fsp-heading);
+  --color-secondary-accent: var(--fsp-secondary);
+  --color-surface-soft: var(--fsp-surface-soft);
 
   --font-sans: var(--fsp-font-sans);
   --font-mono: var(--fsp-font-mono);
+
+  --shadow-card: var(--shadow-card);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
