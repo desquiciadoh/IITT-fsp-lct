@@ -70,7 +70,7 @@ export function TalentRow({
         />
         <div className="flex items-center gap-2">
           {score !== undefined && (
-            <span className="text-xs font-bold tabular-nums text-primary">{Math.round(score)}</span>
+            <span className="text-xs font-bold tabular-nums text-[var(--fsp-accent-strong)]">{Math.round(score)}</span>
           )}
           {onToggleShortlist && (
             <button

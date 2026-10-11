@@ -22,7 +22,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
 
 ### P0
 
-- [ ] **FE-05 · Test runner** (L). Routes `/candidate/qualification/start` and `/candidate/qualification/:id`.
+- [x] **FE-05 · Test runner** (L). Routes `/candidate/qualification/start` and `/candidate/qualification/:id`.
   - **Start screen.**
     - Read `specialization` and `claimed_grade` from the query string (FE1's onboarding links here).
     - Call `GET /api/assessments/eligibility?specialization=` → `{can_start, next_attempt_at?, promotion_available, reason?, active_session_id?}`. If `active_session_id` is set, offer to **resume** that session. If `reason === 'cooldown_active'`, show a countdown.
@@ -44,7 +44,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
   - **Leaving early.** "Завершить досрочно" calls `POST /assessments/{id}/finish` (G5; mocked) with a confirm dialog.
   - **Backend now:** a session has **only 3 items**, with no adaptivity yet (ML is building the CAT engine, ML.md). **The client never receives correctness per item; don't try to show it.**
   - *Done:* a full run completes against the backend and against an 8-item mock; a refresh mid-test resumes; the timer auto-submits; it works at phone width (the QR "wow" demo option).
-- [ ] **FE-09 · Company & position wizard** (M).
+- [x] **FE-09 · Company & position wizard** (M).
   - **Company** (`/employer/company`): `GET`/`PUT /api/companies/me` with `{name, inn, website, email_domain, business_domain, description, contact_email}`; `trust_level` is read-only and shown as `TrustBadge`.
     - **Note:** the backend currently auto-creates a company for employers without one, which is a security bug (BE.md B1). After the fix, the API returns 403 `company_required`, and you must show a "create company" form (gap G17).
   - **New position** (`/employer/positions/new`):
@@ -56,7 +56,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
   - **Edit** (`/employer/positions/:id`): settings tab with `GET`/`PUT /api/positions/{id}`.
   - **Employer dashboard** (`/employer`): positions list (`GET /api/positions` returns an array) and an offers summary.
   - *Done:* a sample JD becomes a saved position (mocked parse, real save); invalid salaries never reach the server.
-- [ ] **FE-10 · Scouting** (L), route `/employer/positions/:id`.
+- [x] **FE-10 · Scouting** (L), route `/employer/positions/:id`. See `docs/FE-10-Scouting.md`.
   - **League shelves:** `GET /api/leagues?specialization=` → `[{specialization, grade, confirmed, unconfirmed, median_expectation?}]` (gap G7; mock it).
   - **Ranked pool:** `GET /api/positions/{id}/pool` → `{items, total, page}`. Each item is `{talent, score, components, reasons, shortlisted}`.
     - `talent` = `{public_id, city, work_formats, salary_min, salary_max, salary_type, league {specialization, grade, status, rating, percentile, strength}, fsp {linked, results_count, sports_rank}, skills [{id, name, source}], last_active_at}`.
@@ -70,7 +70,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
   - **Candidate drawer:** `?c=<public_id>` → `GET /api/talent/{public_id}` → talent fields plus `about`, `experience_text`, and `contacts` (`null` unless the company has a grant; then `{full_name, email, phone, telegram}`). Sections for topics, assessments and integrity flags come later (gap G9): hide them when absent. Add a "Отправить оффер" button.
   - A reload restores the whole view (filters, drawer) from the URL.
   - *Done:* after changing filters 10 times the shortlist is intact; reload restores the view; contacts appear only after acceptance.
-- [ ] **FE-11 · Send Offer & offers board** (M).
+- [x] **FE-11 · Send Offer & offers board** (M).
   - **Send Offer modal** (from a pool row or the drawer): `POST /api/offers {candidate_public_id, position_id, title, description, salary_min, salary_max, salary_type, contact_channel: 'email'|'phone'|'telegram'|'platform', contact_value, expires_in_days?}`.
     - Prefill the salary from the position.
     - **Always send `salary_type` explicitly**: the backend silently defaults to gross today (B15).
@@ -82,7 +82,7 @@ IDs refer to `docs/TASKS.md` §2.6. The "Backend now" lines describe the actual 
   - **Contacts panel:** after acceptance, `offer.candidate_contacts = {full_name, email, phone, telegram}`. Today it is filled **only while `status === 'accepted'`**; BE will base it on the grant instead (B16).
   - **Backend gap:** the employer offer payload has **no candidate identity** (gap G10, `talent: TalentShort`). Mock it, and meanwhile show the title, salary, status and dates.
   - *Done:* send → the candidate window updates (live or ≤ 10 s) → accept → contacts appear on the board.
-- [ ] **FE-12 · Talent search** (S), route `/employer/talent`.
+- [x] **FE-12 · Talent search** (S), route `/employer/talent`.
   - `GET /api/talent/search` → `{items: TalentShort[], total, page}`. There are no filters, facets or pagination yet (G8, G14).
   - Reuse the scouting filters, `TalentRow` and the drawer. Compute facet counts client-side until the server returns them.
   - *Done:* filtering by FSP prize-winners plus a stack works.

@@ -11,6 +11,12 @@ type Variant = {
 
 const VARIANTS: Variant[] = [
   {
+    id: 'brand',
+    name: 'Brand book (light)',
+    desc: 'Утверждённая тема по брендбуку: Montserrat, белый фон, CTA #FF0053, заголовки #310F53, градиенты фиолетовой палитры.',
+    cssClass: 'dv-brand',
+  },
+  {
     id: 'arena',
     name: 'Arena (dark)',
     desc: 'Тёмная «спортивная» тема: неон-акцент, крупные цифры рейтинга, ощущение турнирной таблицы.',
