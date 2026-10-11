@@ -203,10 +203,10 @@ def cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:
 
 
 def semantic_fit(need: NeedCtx, c: CandidateCtx) -> tuple[float, list[Reason]]:
-    """Neutral when either vector is missing, or when both are tagged with different models: a
-    cosine across two embedding spaces means nothing (ML-9 review)."""
-    if need.embedding is None or c.embedding is None or (
-            need.embedding_model and c.embedding_model and need.embedding_model != c.embedding_model):
+    """Neutral when either vector is missing, or when the model tags differ (including one tagged
+    and one untagged vector): a cosine across two embedding spaces means nothing (ML-9 review).
+    Two untagged vectors are compared, as before tagging existed."""
+    if need.embedding is None or c.embedding is None or need.embedding_model != c.embedding_model:
         return NEUTRAL, [Reason("info", "Смысловое сходство не рассчитано", None)]
     cos = cosine(need.embedding, c.embedding)
     value = min(1.0, max(0.0, (cos - SEMANTIC_LO) / (SEMANTIC_HI - SEMANTIC_LO)))

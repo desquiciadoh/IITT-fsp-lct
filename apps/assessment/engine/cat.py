@@ -286,7 +286,15 @@ class IrtCatEngine:
         unseen = [m for m in eligible if m.id not in state.seen]
         if unseen:
             eligible = unseen
-        target = self.content.grade(state.claimed).start_theta if n == 0 else state.theta
+        start = self.content.grade(state.claimed)
+        if state.kind == "promotion" and state.claimed != GRADES[-1]:
+            # promotion blueprint (ML-13): the test is about the next grade, so it starts at that
+            # grade and keeps to items at least near its cut while any are left in the topic mix
+            start = self.content.grade(GRADES[GRADES.index(state.claimed) + 1])
+            hard = [m for m in eligible if m.b >= start.theta_cut + self.content.promotion_min_b_offset]
+            if hard:
+                eligible = hard
+        target = start.start_theta if n == 0 else state.theta
         scored = sorted(((-float(information(target, m.a, m.b, m.c)), m.id, m) for m in eligible),
                         key=lambda t: (t[0], t[1]))
         top = [m for _, _, m in scored[: self.TOP_K]]

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from validation.bench_matching import run_matching_benchmark
 from validation.charts import generate_all_charts
+from validation.pilot import run_pilot_analysis
 from validation.report import build_report, git_sha, write_json
 from validation.sim_assessment import run_assessment_simulation
 
@@ -71,7 +72,8 @@ def run(n_simulees: int, retest_n: int, leak_n: int, leak_draws: int, verify_n: 
     table = targets(assessment, matching)
     details = {"generated_at": report["generated_at"], "git_sha": sha, "seed": seed,
                "runtime_s": {"assessment": round(t1 - t0, 1), "matching": round(t2 - t1, 1)},
-               "targets": table, "assessment": a_details, "matching": m_details}
+               "targets": table, "assessment": a_details, "matching": m_details,
+               "pilot": run_pilot_analysis()}
     write_json(report, out_dir / "report.json")
     write_json(details, out_dir / "details.json")
     charts = generate_all_charts(report, out_dir / "charts")

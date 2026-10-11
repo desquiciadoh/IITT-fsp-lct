@@ -47,6 +47,7 @@ class Content:
     specializations: dict[str, str]                   # id -> name_ru
     topics: dict[str, TopicDef]
     blueprints: dict[str, dict[str, float]]           # spec -> topic -> weight
+    promotion_min_b_offset: float = -0.5              # promotion tests: items with b >= next cut + this
 
     def grade(self, gid: str) -> GradeDef:
         return self.grades[GRADES.index(gid)]
@@ -119,5 +120,10 @@ def load_content(content_dir: str | None = None) -> Content:
     if sorted(blueprints) != sorted(SPECS):
         raise ContentError(f"blueprints.yaml must cover {SPECS}")
 
+    promo = b.get("promotion") or {}
+    offset = float(promo.get("min_b_offset", -0.5))
+    if not math.isfinite(offset) or not -2.0 <= offset <= 0.0:
+        raise ContentError(f"promotion.min_b_offset must be in [-2, 0], got {offset}")
+
     return Content(grades=grades, rating_base=base, rating_per_theta=per, specializations=specs,
-                   topics=topics, blueprints=blueprints)
+                   topics=topics, blueprints=blueprints, promotion_min_b_offset=offset)
