@@ -28,7 +28,7 @@ from django.utils import timezone
 from fsp_sync.services import recompute_strength
 from outreach.events import publish_domain_event
 
-from assessment import engine_adapter
+from assessment import cat_bridge as engine_adapter
 from assessment.models import AssessmentItem, AssessmentSession, ItemFamily, LeagueMembership
 
 if TYPE_CHECKING:
@@ -150,37 +150,91 @@ class AssessmentService:
         except IntegrityError as exc:
             raise AssessmentInProgress() from exc
 
-        # 5. Seed items with HMAC
-        item_seed_secret = settings.ITEM_SEED_SECRET
-        for seq, family_meta in enumerate(active_metas, start=1):
-            seed_raw = f"{item_seed_secret}:{session.id}:{family_meta.id}:{seq}"
-            seed = hmac.new(
-                item_seed_secret.encode("utf-8"),
-                seed_raw.encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
-            instance = engine_adapter.generate_instance(family_meta.id, seed)
-
-            item_family_obj = ItemFamily.objects.filter(id=family_meta.id).first()
-            if not item_family_obj:
-                engine_adapter.sync_families_to_db()
-                item_family_obj = ItemFamily.objects.get(id=family_meta.id)
-
-            # Only the first item is current at start; later items get their
-            # deadline when they are served (see _serve_item).
-            deadline = now_real + timedelta(seconds=instance.time_limit_s) if seq == 1 else None
-            AssessmentItem.objects.create(
-                assessment=session,
-                seq=seq,
-                family=item_family_obj,
-                seed=seed,
-                view=instance.view(),
-                key=instance.key,  # Server-side only
-                fingerprint=instance.fingerprint,
-                deadline_at=deadline,
-            )
+        # 5. Serve the first item (ML-3: one item at a time; next_family appends
+        # a pending entry, make_rng renders it deterministically).
+        AssessmentService._serve_next_item(session, now_real)
 
         return session
+
+    @staticmethod
+    def _pool_for(session: AssessmentSession):
+        pool = engine_adapter.active_metas(session.specialization)
+        by_id = {m.id: m for m in pool}
+        # A pending family that got retired mid-session must stay finishable.
+        state = engine_adapter.load_state(session.state)
+        if state:
+            for x in state.administered:
+                if x["family_id"] not in by_id:
+                    try:
+                        by_id[x["family_id"]] = engine_adapter.family_meta(x["family_id"])
+                    except ValueError:
+                        pass
+        return list(by_id.values())
+
+    @staticmethod
+    def _serve_next_item(session: AssessmentSession, now) -> AssessmentItem | None:
+        """Ask the CAT engine for the next family, render and serve the item.
+
+        Returns the served AssessmentItem, or None when a stop rule ended the
+        test (state.stop_reason is persisted either way).
+        """
+        state = engine_adapter.load_state(session.state)
+        if state is None:
+            state = engine_adapter.start(
+                spec=session.specialization,
+                claimed=session.claimed_grade,
+                mode=session.mode,
+                kind=session.kind,
+            )
+        pool = AssessmentService._pool_for(session)
+        seq = len(state.administered) + 1
+        rng_select = engine_adapter.make_rng(session.id, "select", seq)
+        meta = engine_adapter.next_family(state, pool=pool, rng=rng_select)
+        if meta is None:
+            session.state = state.to_json()
+            session.save(update_fields=["state"])
+            return None
+        rng_item = engine_adapter.make_rng(session.id, meta.id, seq)
+        instance = engine_adapter.generate_instance(meta.id, rng_item)
+
+        item_family_obj = ItemFamily.objects.filter(id=meta.id).first()
+        if not item_family_obj:
+            # Self-heal a missing bank row (fresh test DB, or a family added by
+            # a deploy that forgot to run sync_families). The upsert is
+            # idempotent and bounded by the registry size.
+            engine_adapter.sync_families_to_db()
+            item_family_obj = ItemFamily.objects.filter(id=meta.id).first()
+            if not item_family_obj:
+                raise FSPAPIError(
+                    "no_item_bank",
+                    "No item bank",
+                    f"Item family {meta.id} is missing from the database; run manage.py sync_families",
+                    409,
+                )
+
+        item_seed = hmac.new(
+            engine_adapter.seed_secret(),
+            f"{session.id}|{meta.id}|{seq}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        view = instance.view()
+        view["time_limit_s"] = meta.time_limit_s
+        item = AssessmentItem.objects.create(
+            assessment=session,
+            seq=seq,
+            family=item_family_obj,
+            seed=item_seed,
+            view=view,
+            key=instance.key,  # Server-side only
+            fingerprint=instance.fingerprint,
+        )
+        session.state = state.to_json()
+        session.save(update_fields=["state"])
+        AssessmentService._serve_item(item, now)
+        item_family_obj.exposures = (item_family_obj.exposures or 0) + 1
+        item_family_obj.save(update_fields=["exposures"])
+        return item
 
     @staticmethod
     @transaction.atomic
@@ -214,7 +268,9 @@ class AssessmentService:
                 400,
             )
 
-        current_item = session.items.filter(answered_at__isnull=True).order_by("seq").first()
+        current_item = session.items.select_related("family").filter(
+            answered_at__isnull=True
+        ).order_by("seq").first()
         if not current_item or str(current_item.id) != str(item_id):
             raise ItemNotCurrent()
 
@@ -228,38 +284,64 @@ class AssessmentService:
         )
         if late:
             current_item.answer = {"value": None, "timed_out": True, "late": True}
-            current_item.correct = False
+            # D1: a served item that was never answered scores as incorrect.
+            # A candidate who submits the right answer after the deadline is
+            # still credited for knowing it (correct=True) but flagged late;
+            # the engine's record() applies the authoritative rule
+            # (correct AND not late).
+            current_item.correct = engine_adapter.grade_answer(current_item, answer_val)
         else:
             current_item.answer = {"value": answer_val}
-            current_item.correct = engine_adapter.is_correct(
-                current_item.family_id, current_item.key, answer_val
-            )
+            # Type-aware grading through the owning family's typed checker
+            # (option ids vs number/text values).
+            current_item.correct = engine_adapter.grade_answer(current_item, answer_val)
         current_item.answered_at = now_real
         current_item.integrity = integrity or {}
         current_item.save()
 
         # Update CAT engine state
-        if session.state:
-            cat_state = engine_adapter.CatState.from_json(session.state)
-        else:
-            cat_state = engine_adapter.start(
-                session.specialization, session.claimed_grade, session.mode, session.kind
+        # The served item's params (a/b/topic) are persisted on its ItemFamily
+        # row; replay paths must grade with the *served* parameters so theta is
+        # derived identically to the live test (ML.md §3).
+        item_params = {
+            "a": current_item.family.a,
+            "b": current_item.family.b,
+            "topic": current_item.family.topic,
+        }
+        cat_state = engine_adapter.load_state(session.state)
+        if cat_state is None:
+            # State lost/corrupt: rebuild from this session's own answers and
+            # re-open a pending entry for the current item, then score it
+            # through the normal record() path (fallback-recovery via
+            # replay_session instead of an inline record loop).
+            cat_state = engine_adapter.replay_session(session, serve_pending=True)
+            cat_state = engine_adapter.record(
+                cat_state,
+                current_item.family_id,
+                correct=current_item.correct,
+                late=late,
+                params=item_params,
             )
-        cat_state = engine_adapter.record(
-            cat_state,
-            current_item.family_id,
-            correct=current_item.correct,
-            late=late,
-        )
+        else:
+            cat_state = engine_adapter.record(
+                cat_state,
+                current_item.family_id,
+                correct=current_item.correct,
+                late=late,
+                params=item_params,
+            )
         session.state = cat_state.to_json()
         session.save(update_fields=["state"])
 
         next_item = session.items.filter(answered_at__isnull=True).order_by("seq").first()
+        if not next_item and cat_state.stop_reason is None:
+            next_item = AssessmentService._serve_next_item(session, now_real)
         if next_item:
-            AssessmentService._serve_item(next_item, now_real)
+            if next_item.deadline_at is None:
+                AssessmentService._serve_item(next_item, now_real)
             return session, next_item, False
 
-        # All items answered: finalize
+        # A stop rule ended the test (or the pool ran out): finalize.
         AssessmentService.finalize_assessment(session, user)
         session.refresh_from_db()
         return session, None, True
@@ -269,6 +351,12 @@ class AssessmentService:
         """Make `item` current: its clock starts now."""
         time_limit_s = (item.view or {}).get("time_limit_s") or item.family.time_limit_s
         item.served_at = now
+        # ML.md §3: the family's own time limit wins over the DB row copy —
+        # a recalibrated registry meta must govern the live deadline.
+        try:
+            time_limit_s = engine_adapter.family_meta(item.family_id).time_limit_s
+        except ValueError:
+            pass
         item.deadline_at = now + timedelta(seconds=time_limit_s)
         item.save(update_fields=["served_at", "deadline_at"])
 
@@ -278,16 +366,10 @@ class AssessmentService:
         items = list(session.items.select_related("family").all())
         if not items or AssessmentService._was_abandoned(session):
             return False
-        cat_state = engine_adapter.start(
-            session.specialization, session.claimed_grade, session.mode, session.kind
-        )
-        for it in items:
-            cat_state = engine_adapter.record(
-                cat_state,
-                it.family_id,
-                correct=bool(it.correct),
-                late=bool(it.answer and it.answer.get("late")),
-            )
+        # Replay through the engine with each item's *served* params (ML.md §3);
+        # replay_session() already skips unanswered rows and relaxes the
+        # stop-rule window so every answered entry is scored.
+        cat_state = engine_adapter.replay_session(session)
         cat_res = engine_adapter.result(cat_state)
         achieved = cat_res.result_grade
         return GRADE_ORDER.get(achieved, 0) >= GRADE_ORDER[lower_grade]
@@ -350,6 +432,15 @@ class AssessmentService:
             )
 
         now_real = timezone.now()
+        # Mark the pending item (if any) abandoned in the CAT state so the
+        # engine scores it as incorrect instead of raising on a dangling entry.
+        cat_state = engine_adapter.load_state(session.state)
+        if cat_state is not None:
+            for x in cat_state.administered:
+                if x["correct"] is None:
+                    x["correct"], x["late"] = False, True
+            session.state = cat_state.to_json()
+
         total_items = session.items.count()
         answered_items = session.items.filter(answered_at__isnull=False).count()
         counts_as_attempt = total_items > 0 and (answered_items / total_items >= 0.5)
@@ -371,6 +462,19 @@ class AssessmentService:
 
         session.refresh_from_db()
         return session
+
+    @staticmethod
+    def _pending_state(session: AssessmentSession):
+        """Score any pending CAT entry as incorrect; return the state or None."""
+        st = engine_adapter.load_state(session.state)
+        if st is None:
+            return None
+        changed = False
+        for x in st.administered:
+            if x["correct"] is None:
+                x["correct"], x["late"] = False, True
+                changed = True
+        return st if changed else None
 
     @staticmethod
     def sweep_stale_sessions(grace_seconds: int = 60) -> int:
@@ -403,6 +507,11 @@ class AssessmentService:
                 )
 
                 if not current_item:
+                    # No served-unanswered item exists; if the engine still has a
+                    # pending entry, score it as abandoned before finalizing.
+                    st = AssessmentService._pending_state(session_locked)
+                    if st is not None:
+                        session_locked.state = st.to_json()
                     AssessmentService.finalize_assessment(session_locked, session_locked.candidate)
                     swept_count += 1
                     continue
@@ -416,6 +525,12 @@ class AssessmentService:
                     total_items = session_locked.items.count()
                     answered_items = session_locked.items.filter(answered_at__isnull=False).count()
                     counts_as_attempt = total_items > 0 and (answered_items / total_items >= 0.5)
+
+                    # The timed-out item is pending in the CAT state; score it
+                    # as incorrect so the engine can finalize without raising.
+                    st = AssessmentService._pending_state(session_locked)
+                    if st is not None:
+                        session_locked.state = st.to_json()
 
                     for remaining in session_locked.items.filter(answered_at__isnull=True):
                         remaining.answer = {"value": None, "timed_out": True}
@@ -450,25 +565,31 @@ class AssessmentService:
         cat_result = None
         if session.state:
             try:
-                cat_state = engine_adapter.CatState.from_json(session.state)
-                cat_result = engine_adapter.result(cat_state)
+                cat_state = engine_adapter.load_state(session.state)
+                if cat_state is not None:
+                    # A pending entry (served, never answered) would make the
+                    # engine's result() score it late-incorrect (D1); when the
+                    # session still has its own answer rows, replay them with
+                    # served params instead so theta reflects the real answers.
+                    has_answered = session.items.filter(
+                        answered_at__isnull=False
+                    ).exists()
+                    if has_answered and any(
+                        x["correct"] is None for x in cat_state.administered
+                    ):
+                        cat_state = engine_adapter.replay_session(
+                            session, exclude_unanswered=True
+                        )
+                    cat_result = engine_adapter.result(cat_state)
             except Exception:
+                logger.exception("CAT result failed for session %s", session.id)
                 cat_result = None
 
         if cat_result is None:
-            cat_state = engine_adapter.start(
-                session.specialization,
-                session.claimed_grade,
-                session.mode,
-                session.kind,
-            )
-            for it in session.items.select_related("family").all():
-                cat_state = engine_adapter.record(
-                    cat_state,
-                    it.family_id,
-                    correct=bool(it.correct),
-                    late=bool(it.answer and it.answer.get("late")),
-                )
+            # State lost/corrupt: rebuild from the session's own items through
+            # the bridge replay (served params + relaxed stop window), which
+            # self-heals families missing from the rebuilt selection.
+            cat_state = engine_adapter.replay_session(session)
             cat_result = engine_adapter.result(cat_state)
 
         theta = cat_result.theta
@@ -479,7 +600,13 @@ class AssessmentService:
         claimed_val = GRADE_ORDER.get(session.claimed_grade, 2)
         achieved_val = GRADE_ORDER.get(result_grade, 2)
 
-        if not timed_out and achieved_val >= claimed_val:
+        # D8: only a stop-rule-terminated test can confirm a grade; sessions the
+        # BE ends early (finish/abandon/sweep) are scored but never confirmed.
+        if timed_out:
+            complete = False
+        else:
+            complete = bool(getattr(cat_result, "complete", True))
+        if complete and not timed_out and achieved_val >= claimed_val:
             decision = GradeDecision.CONFIRMED
             assigned_grade = session.claimed_grade
             league_status = LeagueStatus.CONFIRMED

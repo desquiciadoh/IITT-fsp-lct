@@ -180,8 +180,16 @@ class TestAssessmentServiceUsesAdapter:
             answer_val=item.key,
         )
         assert answered_session.state is not None
-        assert len(answered_session.state["administered"]) == 1
-        assert answered_session.state["administered"][0]["correct"] is True
+        # ML contract (N2): the engine serves one item at a time — after this
+        # answer is recorded, next_family() has already appended a *pending*
+        # entry (correct=None) for the following item. So administered holds
+        # the graded response plus the new pending item.
+        administered = answered_session.state["administered"]
+        graded = [x for x in administered if x["correct"] is not None]
+        pending = [x for x in administered if x["correct"] is None]
+        assert len(graded) == 1
+        assert graded[0]["correct"] is True
+        assert len(pending) == 1
 
         # Finalize assessment
         finalized = AssessmentService.finalize_assessment(answered_session, user)
