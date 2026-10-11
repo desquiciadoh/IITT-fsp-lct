@@ -45,13 +45,16 @@ __all__ = [
     "active_metas",
     "all_family_metas",
     "family_meta",
+    "force_stop",
     "generate_instance",
     "grade_cut",
+    "grade_of_theta",
     "is_correct",
     "item_level",
     "make_rng",
     "next_family",
     "record",
+    "replay_session",
     "result",
     "seed_secret",
     "start",
@@ -299,6 +302,26 @@ def record(
     if not any(x["correct"] is None for x in state.administered):
         state.max_items = max(state.max_items, len(state.administered) + 1)
     return ENGINE.record(state, family_id, correct, late)
+
+
+def force_stop(state: CatState) -> CatState:
+    """Mark a (replayed) state as stopped so no further items are served.
+
+    Used by the early-/finish paths: the session's own answers are already
+    replayed through the engine; the test must not continue afterwards.
+    """
+    if state.stop_reason is None:
+        state.stop_reason = "manual_finish"
+    return state
+
+
+def grade_of_theta(theta: float):
+    """Grade whose theta_cut is satisfied by `theta` (highest one that fits)."""
+    best = None
+    for g in ENGINE.content.grades:
+        if theta >= g.theta_cut and (best is None or g.theta_cut > best[1]):
+            best = (g.id, g.theta_cut)
+    return best[0] if best else None
 
 
 def replay_session(
