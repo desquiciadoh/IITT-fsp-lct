@@ -140,7 +140,7 @@ function DrawerBody({
       )}
 
       {talent.league?.rating != null && (
-        <RatingBadge rating={talent.league.rating} percentile={talent.league.percentile} />
+        <RatingBadge rating={talent.league.rating} percentile={talent.league.percentile ?? undefined} />
       )}
 
       {talent.fsp && (

@@ -254,7 +254,7 @@ export function ResultPage() {
   const copy = result.decision === 'confirmed' ? DECISION_COPY.confirmed : DECISION_COPY.unconfirmed
   const cooldown = eligibility?.next_attempt_at || result.next_attempt_at || null
   const canStart = eligibility ? eligibility.can_start : !cooldown
-  const fallbackMode = result.fallback?.kind ?? result.fallback?.mode
+  const fallbackMode = result.fallback?.mode ?? (result.fallback as { kind?: string } | null)?.kind
   const fallbackLabel =
     fallbackMode === 'instant'
       ? 'Экспресс-тест'
@@ -328,7 +328,7 @@ export function ResultPage() {
         {fallbackLabel && (
           <Button variant="outline" asChild>
             <Link
-              to={`/candidate/qualification/start?${startParams.toString()}&mode=fallback&kind=${result.fallback?.kind}`}
+              to={`/candidate/qualification/start?${startParams.toString()}&mode=fallback&kind=${encodeURIComponent(fallbackMode ?? '')}`}
             >
               <Flag className="h-4 w-4" /> {fallbackLabel}
             </Link>

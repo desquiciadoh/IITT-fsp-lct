@@ -68,6 +68,9 @@ type BankItem = Omit<AssessmentItem, 'deadline_at' | 'served_at'> & {
   max_items: number
 }
 
+/** 8 sample items (python/sql/javascript families); keeps BANK free of a TDZ self-reference. */
+const BANK_SIZE = 8
+
 const BANK: BankItem[] = [
   {
     item_id: 'q-py-1',
@@ -83,7 +86,7 @@ const BANK: BankItem[] = [
     time_limit_s: 60,
     level: 1,
     format: 'python',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-2',
@@ -99,7 +102,7 @@ const BANK: BankItem[] = [
     time_limit_s: 60,
     level: 1,
     format: 'python',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-sql-1',
@@ -115,7 +118,7 @@ const BANK: BankItem[] = [
     time_limit_s: 90,
     level: 2,
     format: 'sql',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-js-1',
@@ -134,7 +137,7 @@ const BANK: BankItem[] = [
     time_limit_s: 60,
     level: 2,
     format: 'javascript',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-3',
@@ -146,7 +149,7 @@ const BANK: BankItem[] = [
     time_limit_s: 45,
     level: 2,
     format: 'python',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-sql-2',
@@ -163,7 +166,7 @@ const BANK: BankItem[] = [
     time_limit_s: 45,
     level: 3,
     format: 'sql',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-js-2',
@@ -175,7 +178,7 @@ const BANK: BankItem[] = [
     time_limit_s: 120,
     level: 3,
     format: 'javascript',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-4',
@@ -191,7 +194,7 @@ const BANK: BankItem[] = [
     time_limit_s: 60,
     level: 3,
     format: 'python',
-    max_items: BANK.length,
+    max_items: BANK_SIZE,
   },
 ]
 

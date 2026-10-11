@@ -283,6 +283,15 @@ export type ResultTopic = GeneratedAssessmentTopic & {
   correct?: number
   total?: number
 }
+
+/**
+ * MSW-only fallback payload may additionally carry `kind` and `reason`;
+ * the OpenAPI schema exposes only `{grade, mode}`.
+ */
+export type MockAssessmentFallback = GeneratedAssessmentFallback & {
+  kind?: string
+  reason?: string
+}
 export type EvidencePoint = GeneratedAssessmentEvidence
 
 /**
@@ -326,7 +335,7 @@ export type AssessmentResult = Omit<
  */
 export type MockAssessmentResult = AssessmentResult & {
   percentile?: number | null
-  fallback?: (GeneratedAssessmentFallback & { reason?: string }) | null
+  fallback?: MockAssessmentFallback | null
   next_attempt_at?: string | null
   started_at?: string | null
 }

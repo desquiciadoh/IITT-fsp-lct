@@ -25,21 +25,21 @@ const problem = (status: number, code: string, detail: string) =>
   )
 
 const TOPICS = [
-  { key: 'architecture', label: 'Архитектура', correct: 3, total: 3 },
-  { key: 'performance', label: 'Производительность', correct: 2, total: 3 },
-  { key: 'testing', label: 'Тестирование', correct: 2, total: 2 },
-  { key: 'security', label: 'Безопасность', correct: 1, total: 2 },
+  { topic: 'architecture', level: 'strong', key: 'architecture', label: 'Архитектура', correct: 3, total: 3 },
+  { topic: 'performance', level: 'moderate', key: 'performance', label: 'Производительность', correct: 2, total: 3 },
+  { topic: 'testing', level: 'strong', key: 'testing', label: 'Тестирование', correct: 2, total: 2 },
+  { topic: 'security', level: 'weak', key: 'security', label: 'Безопасность', correct: 1, total: 2 },
 ]
 
 const EVIDENCE = [
-  { seq: 1, correct: true },
-  { seq: 2, correct: true },
-  { seq: 3, correct: true },
-  { seq: 4, correct: false },
-  { seq: 5, correct: true },
-  { seq: 6, correct: true },
-  { seq: 7, correct: false },
-  { seq: 8, correct: true },
+  { seq: 1, level: 'easy', correct: true },
+  { seq: 2, level: 'easy', correct: true },
+  { seq: 3, level: 'medium', correct: true },
+  { seq: 4, level: 'medium', correct: false },
+  { seq: 5, level: 'medium', correct: true },
+  { seq: 6, level: 'hard', correct: true },
+  { seq: 7, level: 'hard', correct: false },
+  { seq: 8, level: 'hard', correct: true },
 ]
 
 const started = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -99,7 +99,7 @@ const resultFixtures: Record<string, MockAssessmentResult> = {
     promotion_unlocked: false,
     topics: TOPICS,
     evidence: EVIDENCE,
-    fallback: { mode: 'short_test', grade: 'middle', reason: 'doubtful_se' },
+    fallback: { mode: 'short_test', grade: 'middle', kind: 'short_test', reason: 'doubtful_se' },
     next_attempt_at: in48h,
   },
   'demo-promotion': {
