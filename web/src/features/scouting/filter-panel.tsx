@@ -198,7 +198,7 @@ function PresetChip({
       className={cn(
         'rounded-full border px-2.5 py-1 text-xs transition-colors',
         active
-          ? 'border-primary bg-primary/15 font-semibold text-primary'
+          ? 'border-primary bg-primary/15 font-semibold text-[var(--fsp-accent-strong)]'
           : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
       )}
     >

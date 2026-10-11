@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { ApiError } from '@/api/client'
 import {
   TEST_RULES,
   assessmentKindFor,
   countdownTo,
   formatCountdown,
   resolveStartView,
+  startRaceError,
 } from './start-page'
 
 /**
@@ -84,5 +86,24 @@ describe('TEST_RULES', () => {
   it('is shown on the start screen (FE2.md §FE-05 "read the rules")', () => {
     expect(TEST_RULES.length).toBeGreaterThanOrEqual(3)
     expect(TEST_RULES.every((r) => r.length > 0)).toBe(true)
+  })
+})
+
+describe('startRaceError (POST /api/assessments races, FE2.md §FE-05)', () => {
+  const apiErr = (status: number, code: string) => new ApiError({ status, code })
+
+  it('maps 429 cooldown_active to neutral Russian copy', () => {
+    const msg = startRaceError(apiErr(429, 'cooldown_active'))
+    expect(msg).toBeTruthy()
+    expect(msg).toMatch(/пауза/i)
+  })
+
+  it('maps 409 assessment_in_progress to a resume hint', () => {
+    expect(startRaceError(apiErr(409, 'assessment_in_progress'))).toMatch(/продолж/i)
+  })
+
+  it('returns null for other errors and non-ApiError values', () => {
+    expect(startRaceError(apiErr(500, 'server_error'))).toBeNull()
+    expect(startRaceError(new Error('boom'))).toBeNull()
   })
 })

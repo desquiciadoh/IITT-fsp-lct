@@ -120,6 +120,25 @@ export function resolveStartView(
   return 'form'
 }
 
+/**
+ * POST /api/assessments error race handling (FE2.md §FE-05: "Errors: 429
+ * `cooldown_active`, 409 `assessment_in_progress`"). The backend raises
+ * `CooldownActive` (apps/core/errors.py) from the create-session service when
+ * eligibility went stale between the GET and the POST, so both codes can come
+ * back from the POST even though the form was rendered as startable.
+ * Returns a Russian toast copy; `null` means "not a handled race code".
+ */
+export function startRaceError(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null
+  if (err.code === 'cooldown_active') {
+    return 'Пауза между попытками активна — следующая попытка станет доступна позже.'
+  }
+  if (err.code === 'assessment_in_progress') {
+    return 'У вас уже есть незавершённый тест — продолжите его с текущего задания.'
+  }
+  return null
+}
+
 // --- component ---------------------------------------------------------------------
 
 /** FE-05 start screen. */
@@ -176,9 +195,14 @@ export function StartPage() {
       {
         onSuccess: (session) => navigate(`/candidate/qualification/${session.id}`),
         onError: (err: unknown) => {
-          if (err instanceof ApiError && err.code === 'assessment_in_progress') {
-            // Race with another tab / stale eligibility → show resume instead.
+          const race = startRaceError(err)
+          if (race) {
+            // Stale eligibility (429 cooldown_active) or a session started in
+            // another tab (409 assessment_in_progress) — refetch so the state
+            // machine re-renders into the cooldown/resume screen.
             void eligibility.refetch()
+            toast.error(race)
+            return
           }
           toast.error(
             err instanceof ApiError ? err.message : 'Не удалось начать тест. Попробуйте ещё раз.',

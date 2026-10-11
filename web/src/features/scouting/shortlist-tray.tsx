@@ -25,7 +25,7 @@ export function ShortlistTray({
       <div className="flex items-center gap-2">
         <Star className="h-4 w-4 fill-current text-primary" />
         <h2 className="text-sm font-semibold">Шорт-лист</h2>
-        <span className="ml-auto rounded-full bg-primary/15 px-2 py-0.5 text-xs font-bold tabular-nums text-primary">
+        <span className="ml-auto rounded-full bg-primary/15 px-2 py-0.5 text-xs font-bold tabular-nums text-[var(--fsp-accent-strong)]">
           {talents.length}
         </span>
       </div>

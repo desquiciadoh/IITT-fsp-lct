@@ -1,8 +1,41 @@
 @import 'tailwindcss';
+
+/* Block UA dark colour-scheme: the app is light per brand book. */
+:root {
+  color-scheme: light;
+}
+
+/* Montserrat (brand book) — self-hosted variable woff2 via @fontsource;
+ * system-ui fallback keeps the app usable if assets are missing. */
+@import '@fontsource-variable/montserrat';
+
 @import './styles/tokens.css';
 
 body {
   background-color: var(--fsp-bg);
   color: var(--fsp-fg);
   font-family: var(--fsp-font-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--fsp-heading);
+}
+
+/* Brand gradient hero/banner surface (FE-05/09/10/12). */
+.fsp-hero {
+  background: var(--fsp-gradient-brand);
+  color: #ffffff;
+}
+.fsp-hero h1,
+.fsp-hero h2,
+.fsp-hero h3 {
+  color: #ffffff;
+}
+
+/* Flat/minimal card: hairline border + soft shadow (tokens.css). */
+.fsp-card {
+  box-shadow: var(--shadow-card);
 }

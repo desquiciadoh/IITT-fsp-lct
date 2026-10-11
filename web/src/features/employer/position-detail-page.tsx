@@ -77,7 +77,7 @@ function PositionTabs({ current }: { current: TabKey }) {
           className={cn(
             '-mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm transition-colors',
             current === tab.key
-              ? 'border-primary font-semibold text-primary'
+              ? 'border-primary font-semibold text-[var(--fsp-accent-strong)]'
               : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >

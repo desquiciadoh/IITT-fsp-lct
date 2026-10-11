@@ -32,7 +32,7 @@ export function AppLayout() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3">
-          <NavLink to="/" className="font-semibold tracking-tight">
+          <NavLink to="/" className="font-bold tracking-tight text-heading">
             ФСП<span className="text-primary">·</span>Практикум
           </NavLink>
           <nav className="flex flex-1 items-center gap-1">
