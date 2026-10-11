@@ -55,3 +55,15 @@ AGENTS.md
 CLAUDE.md
 .pre-commit-config.yaml
 tools/
+
+# Internal planning docs (kept locally)
+docs/ARCHITECTURE.md
+docs/TASKS.md
+docs/QA.md
+docs/TK.md
+docs/DESIGN-BRAND.md
+docs/FE-05-Start-Screen.md
+docs/FE-05-Test-Runner.md
+docs/FE-10-Scouting.md
+docs/FE-12-Talent-Search.md
+docs/pitch/
