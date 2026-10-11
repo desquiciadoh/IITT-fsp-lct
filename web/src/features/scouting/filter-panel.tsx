@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * FE-10 · Pool filter panel. Every change goes through `onChange` → URL query
  * string (single source of truth); the panel itself is stateless except for
  * the salary input draft. Facet counts appear only when the backend ships
- * them (gap G8) — capability detection, not hardcoding.
+ * them (G8 shipped server-side) — capability detection, not hardcoding.
  */
 
 const GRADES: Grade[] = ['intern', 'junior', 'middle', 'senior']

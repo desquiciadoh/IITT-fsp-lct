@@ -18,7 +18,7 @@ export function useResult(id: string) {
   })
 }
 
-/** GET /api/assessments returns an array today; also accept {items} (gap G14). */
+/** GET /api/assessments returns a plain array; also tolerate {items} pages. */
 export function useHistory() {
   return useQuery({
     queryKey: keys.assessments,
@@ -122,9 +122,8 @@ export function usePostAnswer(id: string) {
 
 /**
  * FE-05 · Early finish. `POST /api/assessments/{id}/finish` → AssessmentResult
- * (gap G5 — mocked in qualification.ts; the real backend returns 503 until BE
- * ships it). Errors: 409 `not_enough_answers` (<50% answered → abandoned,
- * BE.md R9), 409 `invalid_transition` (already finished), 404 `not_found`.
+ * (live on the BE). Errors: 409 `not_enough_answers` (<50% answered →
+ * abandoned, BE.md R9), 409 `invalid_transition` (already finished), 404 `not_found`.
  */
 export function finishAssessment(id: string): Promise<AssessmentResult> {
   return customFetch<AssessmentResult>(`/api/assessments/${id}/finish`, {

@@ -1,7 +1,7 @@
 /**
- * The backend emits score components both as a dict (pool items today) and as
- * a list (contract target) — see BE gap G8. Everything renders through this
- * normalizer so both shapes behave identically.
+ * Score components ship as a weighted list on the wire (G8 shipped); the
+ * legacy dict shape still appears in older fixtures. Everything renders
+ * through this normalizer so both shapes behave identically.
  */
 import type { ScoreComponent, ScoreComponentsDict } from '@/api/types'
 

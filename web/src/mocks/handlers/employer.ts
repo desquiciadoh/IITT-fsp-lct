@@ -4,9 +4,10 @@ import type { Company, JdParseResult, Position } from '@/api/types'
 /**
  * FE-09 · Company & position wizard — stateful MSW mock.
  *
- * Endpoints: GET/PUT /api/companies/me, POST /api/companies (gap G17),
+ * Endpoints: GET/PUT /api/companies/me, POST /api/companies,
  * GET/POST /api/positions, GET/PUT /api/positions/{id},
- * POST /api/positions/parse (gap G6). Every response carries `X-Stub: true`.
+ * POST /api/positions/parse (contract shape, G6/G17 shipped on the BE).
+ * Every response carries `X-Stub: true`.
  */
 
 const stub = (data: unknown, status = 200) =>
@@ -37,7 +38,7 @@ function resetStore() {
   positions.length = 0
 }
 
-// --- JD parse (gap G6) -------------------------------------------------------
+// --- JD parse (contract shape) ------------------------------------------------
 
 const KNOWN_SKILLS = new Set([
   'python', 'django', 'fastapi', 'postgresql', 'redis', 'kafka',
@@ -184,7 +185,7 @@ export const employerHandlers = [
     return stub({ detail: 'ok' })
   }),
 
-  // gap G17 — after BE fix B1, employers without a company get 403 here.
+  // After BE fix B1, employers without a company get 403 here (G17 branch).
   http.get('*/api/companies/me', () => {
     if (!company) {
       return problem(403, 'company_required', 'Создайте профиль компании, чтобы публиковать вакансии.')

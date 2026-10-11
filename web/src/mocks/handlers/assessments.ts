@@ -1,9 +1,14 @@
 import { http, HttpResponse } from 'msw'
+import type { MockAssessmentResult } from '@/api/types'
 
 /**
  * `all` mode (no backend): result fixtures, history, eligibility and the
  * Player Card PDF. Real endpoints are never mocked in `missing` mode —
  * fixtures must not mix into live data (R4).
+ *
+ * Fixtures are typed as MockAssessmentResult: `percentile` is legal only on
+ * MSW payloads (not in the OpenAPI schema), so the cast stays
+ * inside this file instead of leaking into the DTO layer.
  */
 
 const stub = (data: unknown, status = 200) =>
@@ -20,21 +25,21 @@ const problem = (status: number, code: string, detail: string) =>
   )
 
 const TOPICS = [
-  { key: 'architecture', label: 'Архитектура', correct: 3, total: 3 },
-  { key: 'performance', label: 'Производительность', correct: 2, total: 3 },
-  { key: 'testing', label: 'Тестирование', correct: 2, total: 2 },
-  { key: 'security', label: 'Безопасность', correct: 1, total: 2 },
+  { topic: 'architecture', level: 'strong', key: 'architecture', label: 'Архитектура', correct: 3, total: 3 },
+  { topic: 'performance', level: 'moderate', key: 'performance', label: 'Производительность', correct: 2, total: 3 },
+  { topic: 'testing', level: 'strong', key: 'testing', label: 'Тестирование', correct: 2, total: 2 },
+  { topic: 'security', level: 'weak', key: 'security', label: 'Безопасность', correct: 1, total: 2 },
 ]
 
 const EVIDENCE = [
-  { seq: 1, correct: true },
-  { seq: 2, correct: true },
-  { seq: 3, correct: true },
-  { seq: 4, correct: false },
-  { seq: 5, correct: true },
-  { seq: 6, correct: true },
-  { seq: 7, correct: false },
-  { seq: 8, correct: true },
+  { seq: 1, level: 'easy', correct: true },
+  { seq: 2, level: 'easy', correct: true },
+  { seq: 3, level: 'medium', correct: true },
+  { seq: 4, level: 'medium', correct: false },
+  { seq: 5, level: 'medium', correct: true },
+  { seq: 6, level: 'hard', correct: true },
+  { seq: 7, level: 'hard', correct: false },
+  { seq: 8, level: 'hard', correct: true },
 ]
 
 const started = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -43,16 +48,27 @@ const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
 
 const base = {
   specialization: 'backend',
+  claimed_grade: 'middle',
   kind: 'initial',
   mode: 'full',
   status: 'finished',
+  theta: 0,
   se: 0.18,
+  rating: null,
+  rating_ci: 0,
+  result_grade: 'middle',
+  decision: 'confirmed',
+  promotion_unlocked: false,
+  counts_as_attempt: true,
   started_at: started,
   finished_at: finished,
-  counts_as_attempt: true,
-}
+  topics: TOPICS,
+  evidence: EVIDENCE,
+  fallback: null,
+  next_attempt_at: null,
+} satisfies Omit<MockAssessmentResult, 'id'>
 
-const resultFixtures: Record<string, Record<string, unknown>> = {
+const resultFixtures: Record<string, MockAssessmentResult> = {
   'demo-confirmed': {
     ...base,
     id: 'demo-confirmed',
@@ -83,7 +99,7 @@ const resultFixtures: Record<string, Record<string, unknown>> = {
     promotion_unlocked: false,
     topics: TOPICS,
     evidence: EVIDENCE,
-    fallback: { kind: 'short_test', reason: 'doubtful_se' },
+    fallback: { mode: 'short_test', grade: 'middle', kind: 'short_test', reason: 'doubtful_se' },
     next_attempt_at: in48h,
   },
   'demo-promotion': {

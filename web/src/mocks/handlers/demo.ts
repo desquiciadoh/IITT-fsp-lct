@@ -27,16 +27,14 @@ const PERSONA_ME: Record<string, typeof me.candidate> = {
 }
 
 /**
- * Only `POST /api/demo/reset` is a gap (G4) — persona login and time travel
- * exist on the backend, so `missing` mode must NOT intercept them: a mocked
- * response sets no session cookie and breaks `/api/me`.
+ * G4 shipped: all three demo endpoints (`/api/demo/persona`, `/api/demo/reset`,
+ * `/api/demo/time-travel`) exist on the backend (see openapi/schema.json), so
+ * `missing` mode must NOT intercept any of them — a mocked response sets no
+ * session cookie and would break `/api/me`. The list is kept empty as a guard
+ * against regressions; handlers for these routes live in `demoHandlers`
+ * (`all` mode only).
  */
-export const demoGapHandlers = [
-  http.post('*/api/demo/reset', () => {
-    setMockMe(me.candidate)
-    return json({ ok: true })
-  }),
-]
+export const demoGapHandlers: ReturnType<typeof http.post>[] = []
 
 /** Full demo suite for `all` mode (no backend). */
 export const demoHandlers = [

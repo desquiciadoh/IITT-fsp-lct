@@ -12,7 +12,7 @@ import { POOL_PAGE_SIZE } from '@/features/scouting/filters'
  *
  * Reuses the FE-10 filter model (PoolFilters ⇄ URL params) and its matching
  * semantics; this module adds what plain search needs on top of it:
- *   - client-side facet counting until the server returns them (G8);
+ *   - client-side facet counting when the server omits `facets`;
  *   - a prize-detection fallback for backends whose `fsp` payload has no
  *     `best_tier` (the real BE serializer ships {linked, results_count,
  *     sports_rank});
@@ -61,10 +61,11 @@ export function normalizeFsp(raw: unknown): RawFsp | null {
 }
 
 /**
- * Facet counts computed on the client from the returned page — used while the
- * backend does not ship `facets` (gap G8). Shape mirrors the pool's target
- * facets: {grades:{...}, formats:{...}, fsp:{linked,prize},
- * confirmed_only:{true:N}} so FilterPanel can consume either source.
+ * Facet counts computed on the client from the returned page — used when a
+ * payload omits `facets` (defense-in-depth; G8 ships them server-side).
+ * Shape mirrors the pool facets: {grades:{...}, formats:{...},
+ * fsp:{linked,prize}, confirmed_only:{true:N}} so FilterPanel can consume
+ * either source.
  */
 export function computeClientFacets(
   items: TalentShort[],
@@ -123,7 +124,7 @@ export function matchesSearchFilters(talent: TalentShort, f: PoolFilters): boole
 
 /**
  * Fallback pipeline over raw talents: filter → paginate (POOL_PAGE_SIZE, the
- * same page size as the pool), mirroring the target server contract (G8/G14).
+ * same page size as the pool), mirroring the server contract.
  */
 export function applyClientSearch(
   data: Pick<TalentSearchResponse, 'items' | 'total' | 'page'> | undefined,

@@ -17,12 +17,13 @@ import type {
 /**
  * FE-10 · Scouting — API layer.
  *
- * Endpoints: GET /api/leagues?specialization= (gap G7),
- * GET /api/positions/{id}/pool (filters/facets/pagination are gap G8),
- * PUT/DELETE /api/positions/{id}/shortlist/{public_id},
- * GET /api/talent/{public_id} (drawer; sections are gap G9).
- * Missing pieces are mocked with MSW in their target shape (`X-Stub: true`),
- * so nothing changes when BE ships them.
+ * Endpoints: GET /api/leagues?specialization=,
+ * GET /api/positions/{id}/pool (server-side filters/facets/pagination —
+ * G7/G8 shipped on the BE), PUT/DELETE /api/positions/{id}/shortlist/{public_id},
+ * GET /api/talent/{public_id} (drawer; deep sections remain gap G9).
+ * The `missing` MSW mode still serves these routes in the contract shape
+ * (`X-Stub: true`) for backend-less demos; capability detection below stays
+ * as defense-in-depth for older payloads.
  */
 
 const GRADE_VALUES = ['intern', 'junior', 'middle', 'senior'] as const
@@ -102,12 +103,10 @@ export function usePool(positionId: string, filters: PoolFilters, enabled = true
 }
 
 /**
- * Shortlist tray. gap G16: there is no "list shortlist" endpoint on the real
- * backend yet, so we build the tray from `shortlisted: true` pool items and
- * keep it in a cache that survives filter changes (entries accumulate across
- * queries). If/when the BE ships GET /api/positions/{id}/shortlist (the MSW
- * mock already serves the target shape), the same key refreshes from the
- * server — capability detection, not hardcoding.
+ * Shortlist tray. GET /api/positions/{id}/shortlist is live on the BE (G16
+ * shipped); additionally the tray accumulates `shortlisted: true` pool items
+ * client-side so it survives filter changes between refreshes (entries merge
+ * into the same query cache).
  */
 export function talentDetailToShort(detail: TalentDetail): TalentShort {
   return {
@@ -138,9 +137,9 @@ export type ToggleShortlistArgs = {
 }
 
 /**
- * Shortlist tray. gap G16: there is no "list shortlist" endpoint on older
- * mocks; we maintain the tray in TanStack Query and sync with GET /api/positions/{id}/shortlist
- * when available.
+ * Shortlist tray sync. The tray lives in the TanStack Query cache keyed by
+ * position; pool batches merge their `shortlisted: true` entries into it and
+ * GET /api/positions/{id}/shortlist refreshes the same key from the server.
  */
 export function useShortlistTray(positionId: string) {
   const client = useQueryClient()
@@ -301,9 +300,10 @@ export function useTalent(publicId: string | null) {
 
 /**
  * FE-12 · GET /api/talent/search — plain talent search (no position context).
- * Same filter wire format as the pool (filtersToParams). The response shape is
- * {items: TalentShort[], total, page}; `pages`/`facets` are gaps G8/G14 — the
- * caller detects them and falls back to client-side filtering/facet counting.
+ * Same filter wire format as the pool (filtersToParams). The response is
+ * {items, total, page, pages?, facets?}; when a deployment omits
+ * `pages`/`facets`, the caller detects it and falls back to client-side
+ * filtering/facet counting (defense-in-depth for older payloads).
  */
 export function useTalentSearch(filters: PoolFilters, enabled = true) {
   const query = filtersToParams(filters).toString()

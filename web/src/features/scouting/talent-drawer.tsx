@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * FE-10 · Candidate drawer (`?c=<public_id>` → GET /api/talent/{public_id}).
- * Sections for topics / assessments / integrity flags come later (gap G9):
+ * Sections for topics / assessments / integrity flags remain gap G9:
  * they are hidden while absent. Contacts are null until the company gets a
  * grant (accepted offer) — then {full_name, email, phone, telegram}.
  */
@@ -140,7 +140,7 @@ function DrawerBody({
       )}
 
       {talent.league?.rating != null && (
-        <RatingBadge rating={talent.league.rating} percentile={talent.league.percentile} />
+        <RatingBadge rating={talent.league.rating} percentile={talent.league.percentile ?? undefined} />
       )}
 
       {talent.fsp && (
@@ -171,7 +171,7 @@ function DrawerBody({
         </section>
       )}
 
-      {/* Gap G9 — these sections arrive later; hide them while absent. */}
+      {/* G9 — these sections arrive later; hide them while absent. */}
       {talent.topics && talent.topics.length > 0 && (
         <section className="flex flex-col gap-1.5">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground">Темы теста</h3>

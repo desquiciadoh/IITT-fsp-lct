@@ -143,7 +143,7 @@ export function PositionForm({
     formState: { errors },
   } = useForm<PositionFormState>({
     // Raw form state is looser than the schema input (string salary, taxonomy
-    // strings per G3) — zod coerces and narrows on submit.
+    // strings) — zod coerces and narrows on submit.
     resolver: zodResolver(positionFormSchema) as never,
     defaultValues,
   })
@@ -199,7 +199,7 @@ export function PositionForm({
 
   const skillSuggestions = taxonomy?.skills ?? []
 
-  // Prefer the live taxonomy lists (G3) when the mock/BE returns them; fall
+  // Prefer the live taxonomy lists when the mock/BE returns them; fall
   // back to the static constants so the form keeps working without taxonomy.
   const specs: readonly string[] =
     taxonomy?.specs && taxonomy.specs.length > 0 ? taxonomy.specs : SPECS

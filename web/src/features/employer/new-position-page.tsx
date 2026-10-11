@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 /**
  * FE-09 · New position wizard (`/employer/positions/new`).
- *  Step 1: paste a JD → POST /api/positions/parse (gap G6, mocked).
+ *  Step 1: paste a JD → POST /api/positions/parse (G6 shipped on the BE).
  *  Step 2: editable form prefilled with the draft; `unknown_terms` are
  *          highlighted in the skill chips; blueprint bars from the parse.
  *  Save: POST /api/positions (real endpoint).

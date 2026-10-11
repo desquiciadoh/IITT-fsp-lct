@@ -3,7 +3,6 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@12.10.1",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -34,6 +33,10 @@
   "devDependencies": {
     "@eslint/js": "^9.37.0",
     "@tailwindcss/vite": "^4.1.13",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24.7.2",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
@@ -42,6 +45,7 @@
     "eslint-plugin-react-hooks": "^6.1.1",
     "globals": "^16.5.0",
     "js-yaml": "^4.1.0",
+    "jsdom": "^29.1.1",
     "msw": "^2.8.11",
     "orval": "^7.9.0",
     "prettier": "^3.6.2",

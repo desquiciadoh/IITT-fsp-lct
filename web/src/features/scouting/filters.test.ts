@@ -3,10 +3,10 @@
  *
  * Covers the contract the UI relies on:
  *   - filters ⇄ URL params roundtrip (URL is the single source of truth);
- *   - client-side fallback semantics when the BE ignores filters (gap G8);
- *   - gaps/relaxations derivation and league-shelf aggregation (G7/G8);
+ *   - client-side fallback semantics when a payload omits facets;
+ *   - gaps/relaxations derivation and league-shelf aggregation;
  *   - the stateful scouting MSW mock over real HTTP (pool filters + facets,
- *     shortlist PUT/DELETE → 204, tray list G16, drawer contacts gating G9).
+ *     shortlist PUT/DELETE → 204, tray list, drawer contacts gating G9).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { setupServer } from 'msw/node'
@@ -88,16 +88,19 @@ const entry = (id: string, score: number, over: Partial<PoolEntry> = {}): PoolEn
     skills: ['python'],
   },
   score,
+  // dict-era shape is still legal (normalizeComponents tolerates it);
+  // `gaps` became required on the wire (G8 closed) — empty by default.
   components: { skill: 20, grade: 20 },
   reasons: [
     { kind: 'plus', text: 'покрыт must-have «python»' },
     { kind: 'minus', text: 'не покрыт must-have «django»' },
   ],
+  gaps: [],
   shortlisted: false,
   ...over,
 })
 
-describe('client-side fallback (gap G8)', () => {
+describe('client-side fallback (defense-in-depth)', () => {
   it('detects server filtering by the presence of facets', () => {
     expect(needsClientFiltering(undefined, withFilters({ grades: ['middle'] }))).toBe(true)
     expect(needsClientFiltering({ grades: { middle: 3 } }, withFilters({ grades: ['middle'] }))).toBe(false)
@@ -133,7 +136,8 @@ describe('client-side fallback (gap G8)', () => {
 })
 
 describe('gaps & relaxations derivation', () => {
-  it('derives gaps from minus-reasons until the target field ships', () => {
+  it('passes wire gaps through; falls back to minus-reasons only when empty (G8 closed)', () => {
+    // gaps is required on the wire now — dict-era fixture (gaps: []) derives from reasons
     expect(deriveGaps(entry('a', 1))).toEqual(['не покрыт must-have «django»'])
     // target shape passes through untouched
     expect(deriveGaps(entry('a', 1, { gaps: ['нет kafka'] }))).toEqual(['нет kafka'])
@@ -149,7 +153,7 @@ describe('gaps & relaxations derivation', () => {
   })
 })
 
-describe('league shelves aggregation (gap G7)', () => {
+describe('league shelves aggregation', () => {
   const shelves: LeagueShelf[] = [
     { specialization: 'backend', grade: 'junior', confirmed: 3, unconfirmed: 2, median_expectation: 180000 },
     { specialization: 'backend', grade: 'middle', confirmed: 5, unconfirmed: 1, median_expectation: 280000 },

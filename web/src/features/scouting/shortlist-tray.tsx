@@ -4,9 +4,10 @@ import { LeagueBadge, type Grade, type LeagueStatus, type Spec } from '@/compone
 import { SalaryTag } from '@/components/domain/salary-tag'
 
 /**
- * FE-10 · Shortlist tray. Built from `shortlisted: true` pool items (gap G16 —
- * no list endpoint on the real BE yet); the cache lives in TanStack Query and
- * survives filter changes. Clicking a row opens the candidate drawer (?c=…).
+ * FE-10 · Shortlist tray. Synced from GET /api/positions/{id}/shortlist (G16
+ * shipped) and merged with `shortlisted: true` pool items; the cache lives in
+ * TanStack Query and survives filter changes. Clicking a row opens the
+ * candidate drawer (?c=…).
  */
 export function ShortlistTray({
   talents,

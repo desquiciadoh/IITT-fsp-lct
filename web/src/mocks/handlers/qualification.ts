@@ -2,8 +2,8 @@ import { http, HttpResponse } from 'msw'
 import type {
   AnswerOutcome,
   AssessmentItem,
-  AssessmentResult,
   AssessmentSession,
+  MockAssessmentResult,
 } from '@/api/types'
 import { completeCandidateQualification } from '@/mocks/handlers/core'
 
@@ -24,7 +24,7 @@ import { completeCandidateQualification } from '@/mocks/handlers/core'
  *                                    → {done:false,next} | {done:true,result},
  *                                      409 `item_not_current`,
  *                                      409 `assessment_expired`.
- * - POST /api/assessments/{id}/finish (G5) → finalizes early.
+ * - POST /api/assessments/{id}/finish → finalizes early (G5 shipped on the BE).
  *
  * SECURITY: answers carry no per-item correctness; the key never leaves here.
  */
@@ -58,7 +58,18 @@ const problemWith = (
 
 // --- item bank (sample families: python loop / sql group-by / js event loop) ---
 
-type BankItem = Omit<AssessmentItem, 'deadline_at' | 'served_at'>
+/** Wire shape of a served item (schema ItemView): `format` and
+`max_items` are readonly on the schema — the mock keeps them so the
+fixtures match the generated contract. */
+type BankItem = Omit<AssessmentItem, 'deadline_at' | 'served_at'> & {
+  /** item family label from the BE bank (python/sql/javascript) */
+  format: string
+  /** total items in this session mode; mirrors GET session.max_items */
+  max_items: number
+}
+
+/** 8 sample items (python/sql/javascript families); keeps BANK free of a TDZ self-reference. */
+const BANK_SIZE = 8
 
 const BANK: BankItem[] = [
   {
@@ -74,6 +85,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 1,
+    format: 'python',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-2',
@@ -88,6 +101,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 1,
+    format: 'python',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-sql-1',
@@ -102,6 +117,8 @@ const BANK: BankItem[] = [
     input_type: 'number',
     time_limit_s: 90,
     level: 2,
+    format: 'sql',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-js-1',
@@ -119,6 +136,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 2,
+    format: 'javascript',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-3',
@@ -129,6 +148,8 @@ const BANK: BankItem[] = [
     input_type: 'number',
     time_limit_s: 45,
     level: 2,
+    format: 'python',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-sql-2',
@@ -144,6 +165,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 45,
     level: 3,
+    format: 'sql',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-js-2',
@@ -154,6 +177,8 @@ const BANK: BankItem[] = [
     input_type: 'text',
     time_limit_s: 120,
     level: 3,
+    format: 'javascript',
+    max_items: BANK_SIZE,
   },
   {
     item_id: 'q-py-4',
@@ -168,6 +193,8 @@ const BANK: BankItem[] = [
     input_type: 'choice',
     time_limit_s: 60,
     level: 3,
+    format: 'python',
+    max_items: BANK_SIZE,
   },
 ]
 
@@ -227,8 +254,8 @@ export function resetQualificationMock(): void {
 }
 
 /** Items served per mode (FE2.md §FE-05: full/express choice on the start
- *  screen). The backend does not adapt item count yet (gap G5); the mock
- *  truncates its 8-item bank so the runner can be exercised in both modes. */
+ *  screen). The mock truncates its 8-item bank per mode so the runner can be
+ *  exercised in both modes without a full item bank. */
 function maxItemsFor(s: MockSession): number {
   return s.mode === 'express' ? Math.ceil(BANK.length / 2) : BANK.length
 }
@@ -277,7 +304,7 @@ function isCorrect(answer: StoredAnswer): boolean {
 }
 
 /** MK3 scoring: θ = (correct − max/2) / 2; confirmed when θ ≥ 1 for the claim. */
-function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
+function finalize(s: MockSession, now: Date = mockNow()): MockAssessmentResult {
   s.status = 'finished'
   s.finishedAt = now.toISOString()
   completeCandidateQualification()
@@ -321,7 +348,7 @@ function finalize(s: MockSession, now: Date = mockNow()): AssessmentResult {
     evidence,
     fallback: null,
     next_attempt_at: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
-  } as unknown as AssessmentResult
+  } as unknown as MockAssessmentResult
 }
 
 function gradeAnswer(item: AssessmentItem, optionId?: string, value?: string): boolean {
@@ -492,8 +519,8 @@ export const qualificationHandlers = [
     return json(outcome)
   }),
 
-  /** G5 — early finish. Real backend returns 503 until it ships; the mock
-   *  lets the runner's "Завершить досрочно" flow be tested end-to-end. */
+  /** Early finish (G5 shipped on the BE). The stateful mock lets the
+   *  runner's "Завершить досрочно" flow be tested end-to-end offline. */
   http.post('*/api/assessments/:id/finish', ({ params }) => {
     const s = sessions.find((x) => x.id === String(params.id))
     if (!s) return problem(404, 'not_found', 'Assessment session not found.')

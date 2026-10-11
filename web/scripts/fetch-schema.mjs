@@ -26,7 +26,8 @@ async function fromBackend() {
 }
 
 async function fromDocsFile() {
-  const docs = join(root, '..', 'docs', 'openapi.json')
+  // root is <repo>/web/scripts — the repo docs/ dir is two levels up.
+  const docs = join(root, '..', '..', 'docs', 'openapi.json')
   if (!existsSync(docs)) return null
   const yaml = await import('js-yaml')
   return yaml.load(readFileSync(docs, 'utf8'))

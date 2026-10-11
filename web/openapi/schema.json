@@ -15,9 +15,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -25,10 +22,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AssessmentResult"
-                  }
+                  "$ref": "#/components/schemas/AssessmentPaginatedResponse"
                 }
               }
             },
@@ -45,22 +39,20 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StartAssessmentRequest"
+                "$ref": "#/components/schemas/StartAssessment"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/StartAssessmentRequest"
+                "$ref": "#/components/schemas/StartAssessment"
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -97,9 +89,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -151,9 +140,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -162,6 +148,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/assessments/{id}/fallback": {
+      "post": {
+        "operationId": "assessments_fallback_create",
+        "description": "Fallback to a lower grade or short-test after an unconfirmed assessment (G5).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "assessments"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FallbackRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FallbackRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult"
+                }
+              }
+            },
+            "description": ""
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentSession"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/assessments/{id}/finish": {
+      "post": {
+        "operationId": "assessments_finish_create",
+        "description": "Abandon / finish early an in-progress assessment.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "assessments"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentResult"
                 }
               }
             },
@@ -190,9 +274,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -218,9 +299,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -233,6 +311,96 @@
               }
             },
             "description": ""
+          }
+        }
+      }
+    },
+    "/api/auth/csrf": {
+      "get": {
+        "operationId": "auth_csrf_retrieve",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/api/auth/fsp-id/callback": {
+      "get": {
+        "operationId": "auth_fsp_id_callback_retrieve",
+        "description": "OIDC callback endpoint for FSP ID flow",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authorization code",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            },
+            "description": "State parameter",
+            "required": true
+          }
+        ],
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "302": {
+            "description": "No response body"
+          },
+          "409": {
+            "description": "FSP ID already linked to another account"
+          }
+        }
+      }
+    },
+    "/api/auth/fsp-id/login": {
+      "get": {
+        "operationId": "auth_fsp_id_login_retrieve",
+        "description": "Initiate OIDC flow for FSP ID login or linking",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "intent",
+            "schema": {
+              "type": "string",
+              "default": "login"
+            },
+            "description": "Intent: login or link"
+          }
+        ],
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "302": {
+            "description": "No response body"
           }
         }
       }
@@ -262,9 +430,6 @@
           {
             "cookieAuth": []
           },
-          {
-            "basicAuth": []
-          },
           {}
         ],
         "responses": {
@@ -290,9 +455,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -327,9 +489,6 @@
           {
             "cookieAuth": []
           },
-          {
-            "basicAuth": []
-          },
           {}
         ],
         "responses": {
@@ -346,6 +505,40 @@
         }
       }
     },
+    "/api/auth/verify-email": {
+      "post": {
+        "operationId": "auth_verify_email_create",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
     "/api/candidates/me": {
       "get": {
         "operationId": "candidates_me_retrieve",
@@ -355,9 +548,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -395,9 +585,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -414,28 +601,123 @@
         }
       }
     },
-    "/api/candidates/me/card.pdf": {
+    "/api/candidates/me/applications": {
       "get": {
-        "operationId": "candidates_me_card.pdf_retrieve",
+        "operationId": "candidates_me_applications_list",
+        "description": "List of candidate's own applications (Task BE-17).",
         "tags": [
           "candidates"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
           "200": {
-            "description": "No response body"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationCandidate"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/applications/{id}/withdraw": {
+      "post": {
+        "operationId": "candidates_me_applications_withdraw_create",
+        "description": "Candidate withdraws their application (Task BE-17).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationCandidate"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/card.pdf": {
+      "get": {
+        "operationId": "candidates_me_card.pdf_retrieve",
+        "description": "Generate candidate player card PDF",
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "description": ""
           }
         }
       }
     },
     "/api/candidates/me/consents": {
+      "get": {
+        "operationId": "candidates_me_consents_retrieve",
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentsResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
       "put": {
         "operationId": "candidates_me_consents_update",
         "tags": [
@@ -445,12 +727,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConsentsRequest"
+                "$ref": "#/components/schemas/ConsentUpdate"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/ConsentsRequest"
+                "$ref": "#/components/schemas/ConsentUpdate"
               }
             }
           }
@@ -458,9 +740,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -477,18 +756,178 @@
         }
       }
     },
-    "/api/candidates/me/resume": {
-      "post": {
-        "operationId": "candidates_me_resume_create",
+    "/api/candidates/me/grants": {
+      "get": {
+        "operationId": "candidates_me_grants_list",
         "tags": [
           "candidates"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContactGrant"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/grants/{id}/revoke": {
+      "post": {
+        "operationId": "candidates_me_grants_revoke_create",
+        "parameters": [
           {
-            "basicAuth": []
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateGrantRevokeResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/micro-tasks": {
+      "get": {
+        "operationId": "candidates_me_micro_tasks_list",
+        "description": "Candidate lists their assigned micro-task drops (Task BE-18).",
+        "tags": [
+          "candidates"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MicroTaskDropCandidate"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/micro-tasks/{drop_id}/submit": {
+      "post": {
+        "operationId": "candidates_me_micro_tasks_submit_create",
+        "description": "Candidate submits a solution to an assigned micro-task drop (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drop_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "candidates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskSubmit"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskSubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicroTaskDropCandidate"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/candidates/me/resume": {
+      "post": {
+        "operationId": "candidates_me_resume_create",
+        "tags": [
+          "candidates"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -497,6 +936,96 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResumeParseResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/companies": {
+      "get": {
+        "operationId": "companies_retrieve",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search companies by name for candidate blocklist (min length 2)",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20, max 100)"
+          }
+        ],
+        "tags": [
+          "companies"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyPaginatedResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "companies_create",
+        "tags": [
+          "companies"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Company"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Company"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
                 }
               }
             },
@@ -514,9 +1043,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -555,9 +1081,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -593,14 +1116,12 @@
                 "$ref": "#/components/schemas/PersonaRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           },
           {}
         ],
@@ -610,6 +1131,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/demo/reset": {
+      "post": {
+        "operationId": "demo_reset_create",
+        "description": "Resets the caller's persona data and clock offset in DEMO_MODE.",
+        "tags": [
+          "demo"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoResetResponse"
                 }
               }
             },
@@ -637,14 +1184,12 @@
                 "$ref": "#/components/schemas/TimeTravelRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -664,21 +1209,25 @@
     "/api/events": {
       "get": {
         "operationId": "events_retrieve",
-        "description": "Server-Sent Events (SSE) endpoint for real-time notifications.",
+        "description": "Server-Sent Events (SSE) notification stream",
         "tags": [
           "events"
         ],
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
           "200": {
-            "description": "No response body"
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
           }
         }
       }
@@ -707,9 +1256,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -736,9 +1282,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -747,6 +1290,149 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FSPSyncResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/lab/families": {
+      "get": {
+        "operationId": "lab_families_retrieve",
+        "description": "Lab catalog endpoint returning all registered question families with empirical exposure & drift.",
+        "tags": [
+          "lab"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabFamiliesResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/lab/report": {
+      "get": {
+        "operationId": "lab_report_retrieve",
+        "description": "Validation Lab metrics report (G11).\n\nServes validation/out/report.json if present; otherwise serves\nreport.fixture.json labeled with synthetic_fixture=True.\nA corrupt report gives a logged 500 report_unreadable.",
+        "tags": [
+          "lab"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/lab/twins": {
+      "get": {
+        "operationId": "lab_twins_retrieve",
+        "description": "Lab twin-generator endpoint for side-by-side verification of difficulty matching.\n\nProduces two unique rendered instances with identical parameters without leaking answers.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "grade",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "position_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "tags": [
+          "lab"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTwinsResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/leagues": {
+      "get": {
+        "operationId": "leagues_list",
+        "description": "League shelves with candidate counts and median salary expectation (G7).",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specialization to filter by"
+          }
+        ],
+        "tags": [
+          "leagues"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LeagueShelf"
+                  }
                 }
               }
             },
@@ -764,9 +1450,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -775,6 +1458,268 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/micro-tasks": {
+      "get": {
+        "operationId": "micro_tasks_list",
+        "description": "Employer lists or creates company micro-tasks (Task BE-18).",
+        "tags": [
+          "micro-tasks"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MicroTask"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "micro_tasks_create",
+        "description": "Employer lists or creates company micro-tasks (Task BE-18).",
+        "tags": [
+          "micro-tasks"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskCreate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicroTask"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/micro-tasks/{id}": {
+      "get": {
+        "operationId": "micro_tasks_retrieve",
+        "description": "Employer retrieves or deletes a micro-task (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "micro-tasks"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicroTask"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "micro_tasks_destroy",
+        "description": "Employer retrieves or deletes a micro-task (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "micro-tasks"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/api/micro-tasks/{id}/submissions": {
+      "get": {
+        "operationId": "micro_tasks_submissions_list",
+        "description": "Employer views all candidate submissions for a micro-task (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "micro-tasks"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MicroTaskSubmissionEmployer"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/micro-tasks/submissions/{drop_id}/prefill-offer": {
+      "post": {
+        "operationId": "micro_tasks_submissions_prefill_offer_create",
+        "description": "Prefills a Draft Offer from a candidate's micro-task submission (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drop_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "micro-tasks"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicroTaskPrefillOfferResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/micro-tasks/submissions/{drop_id}/rate": {
+      "post": {
+        "operationId": "micro_tasks_submissions_rate_create",
+        "description": "Employer rates a candidate's micro-task submission (Task BE-18).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drop_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "micro-tasks"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskRate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MicroTaskRate"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicroTaskSubmissionEmployer"
                 }
               }
             },
@@ -792,9 +1737,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -802,10 +1744,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Offer"
-                  }
+                  "$ref": "#/components/schemas/OfferPaginatedResponse"
                 }
               }
             },
@@ -822,12 +1761,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Offer"
+                "$ref": "#/components/schemas/CreateOffer"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Offer"
+                "$ref": "#/components/schemas/CreateOffer"
               }
             }
           },
@@ -836,9 +1775,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -875,9 +1811,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -915,12 +1848,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferAcceptRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferAcceptRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -929,9 +1862,67 @@
         "security": [
           {
             "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferProblemDetails"
+                }
+              }
+            },
+            "description": "Offer expired (code: offer_expired) or version conflict (code: version_conflict)"
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/close": {
+      "post": {
+        "operationId": "offers_close_create",
+        "parameters": [
           {
-            "basicAuth": []
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -969,12 +1960,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferDeclineRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferDeclineRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -983,9 +1974,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -998,6 +1986,128 @@
               }
             },
             "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferProblemDetails"
+                }
+              }
+            },
+            "description": "Offer expired (code: offer_expired) or version conflict (code: version_conflict)"
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/hired": {
+      "post": {
+        "operationId": "offers_hired_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/offers/{id}/interview": {
+      "post": {
+        "operationId": "offers_interview_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "offers"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            },
+            "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferProblemDetails"
+                }
+              }
+            },
+            "description": "Offer expired (code: offer_expired) or version conflict (code: version_conflict)"
           }
         }
       }
@@ -1023,12 +2133,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferViewRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferViewRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -1037,9 +2147,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1052,6 +2159,16 @@
               }
             },
             "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferProblemDetails"
+                }
+              }
+            },
+            "description": "Offer expired (code: offer_expired) or version conflict (code: version_conflict)"
           }
         }
       }
@@ -1077,12 +2194,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OfferWithdrawRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/OfferWithdrawRequest"
+                "$ref": "#/components/schemas/OfferAction"
               }
             }
           },
@@ -1091,9 +2208,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1106,6 +2220,16 @@
               }
             },
             "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferProblemDetails"
+                }
+              }
+            },
+            "description": "Offer expired (code: offer_expired) or version conflict (code: version_conflict)"
           }
         }
       }
@@ -1119,9 +2243,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1163,9 +2284,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1202,9 +2320,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1254,9 +2369,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1273,10 +2385,10 @@
         }
       }
     },
-    "/api/positions/{id}/pool": {
+    "/api/positions/{id}/applications": {
       "get": {
-        "operationId": "positions_pool_retrieve",
-        "description": "Scouted talent pool for a position with explainable scores and reason chips.",
+        "operationId": "positions_applications_list",
+        "description": "Employer view of applications for a specific position (Task BE-17).",
         "parameters": [
           {
             "in": "path",
@@ -1294,9 +2406,155 @@
         "security": [
           {
             "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationEmployer"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/health": {
+      "get": {
+        "operationId": "positions_health_retrieve",
+        "description": "Need Health analytics for a position: funnel metrics, decline reasons, diagnosis (Task BE-20).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "positions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionHealthResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/pool": {
+      "get": {
+        "operationId": "positions_pool_retrieve",
+        "description": "Scouted talent pool for a position with explainable scores and reason chips.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "confirmed_only",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true to show only verified league grades"
           },
           {
-            "basicAuth": []
+            "in": "query",
+            "name": "formats",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated work formats: remote,hybrid,office"
+          },
+          {
+            "in": "query",
+            "name": "fsp",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true/false filter for FSP achievements"
+          },
+          {
+            "in": "query",
+            "name": "grades",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated grades, e.g. junior,middle"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "preset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Preset filter: fsp_stars, confirmed"
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Max salary expectations"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20)"
+          },
+          {
+            "in": "query",
+            "name": "skills",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated skill IDs or names"
+          }
+        ],
+        "tags": [
+          "positions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1305,6 +2563,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PositionPoolResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/positions/{id}/shortlist": {
+      "get": {
+        "operationId": "positions_shortlist_list",
+        "description": "List shortlisted talent for a position.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "positions"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TalentShort"
+                  }
                 }
               }
             },
@@ -1341,9 +2639,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1379,9 +2674,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1391,10 +2683,110 @@
         }
       }
     },
+    "/api/positions/{position_pk}/applications/{id}/status": {
+      "patch": {
+        "operationId": "positions_applications_status_partial_update",
+        "description": "Employer updates candidate application status in pipeline (Task BE-17).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "position_pk",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "positions"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedApplicationStatusUpdate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedApplicationStatusUpdate"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationEmployer"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/positions/parse": {
+      "post": {
+        "operationId": "positions_parse_create",
+        "description": "Parse a job description into a position draft.",
+        "tags": [
+          "positions"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JdParseRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/JdParseRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JdParseResult"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
     "/api/talent/{public_id}": {
       "get": {
         "operationId": "talent_retrieve",
-        "description": "Talent card view for employers.\n\nSECURITY INVARIANT: Contacts are only unmasked if an active ContactGrant exists!",
+        "description": "Talent card view for employers.\n\nSECURITY INVARIANT: Only visible candidates are shown.\nContacts are only unmasked if an active ContactGrant exists!",
         "parameters": [
           {
             "in": "path",
@@ -1411,9 +2803,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           }
         ],
         "responses": {
@@ -1430,19 +2819,127 @@
         }
       }
     },
-    "/api/talent/search": {
+    "/api/talent/{public_id}/card.pdf": {
       "get": {
-        "operationId": "talent_search_retrieve",
-        "description": "General talent search without a specific position.",
+        "operationId": "talent_card.pdf_retrieve",
+        "description": "Export watermarked candidate player card PDF for employer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
         "tags": [
           "talent"
         ],
         "security": [
           {
             "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/talent/search": {
+      "get": {
+        "operationId": "talent_search_retrieve",
+        "description": "General talent search without a specific position.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "confirmed_only",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true to show only verified league grades"
           },
           {
-            "basicAuth": []
+            "in": "query",
+            "name": "formats",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated work formats: remote,hybrid,office"
+          },
+          {
+            "in": "query",
+            "name": "fsp",
+            "schema": {
+              "type": "string"
+            },
+            "description": "true/false filter for FSP achievements"
+          },
+          {
+            "in": "query",
+            "name": "grades",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated grades, e.g. junior,middle"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "preset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Preset filter: fsp_stars, confirmed"
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Max salary expectations"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20)"
+          },
+          {
+            "in": "query",
+            "name": "skills",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated skill IDs or names"
+          }
+        ],
+        "tags": [
+          "talent"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1451,6 +2948,215 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TalentSearchResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/taxonomy": {
+      "get": {
+        "operationId": "taxonomy_retrieve",
+        "description": "Platform taxonomy: specializations, grades, skills, and decline reasons (G3, N5).",
+        "tags": [
+          "taxonomy"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Taxonomy"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/vacancies": {
+      "get": {
+        "operationId": "vacancies_list",
+        "description": "Public listing of published vacancies (Task BE-17).",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "grades",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated grades"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page number (default 1)"
+          },
+          {
+            "in": "query",
+            "name": "salary_max",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximum salary"
+          },
+          {
+            "in": "query",
+            "name": "salary_min",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Minimum salary"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Text search in title/description"
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20)"
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specialization filter"
+          },
+          {
+            "in": "query",
+            "name": "work_formats",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated work formats"
+          }
+        ],
+        "tags": [
+          "vacancies"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VacancyListResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/vacancies/{id}": {
+      "get": {
+        "operationId": "vacancies_retrieve",
+        "description": "Public vacancy detail view (Task BE-17).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "vacancies"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vacancy"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/vacancies/{id}/apply": {
+      "post": {
+        "operationId": "vacancies_apply_create",
+        "description": "Candidate submits a direct application to a vacancy (Task BE-17).\n\nINVARIANT: Atomic creation of Application and ContactGrant.\nCandidate contacts become accessible to the employer upon application.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "vacancies"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreate"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationCandidate"
                 }
               }
             },
@@ -1470,6 +3176,14 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specialization filter"
           }
         ],
         "tags": [
@@ -1478,9 +3192,6 @@
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "basicAuth": []
           },
           {}
         ],
@@ -1537,6 +3248,177 @@
           "done"
         ]
       },
+      "ApplicationCandidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "position": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Vacancy"
+              }
+            ],
+            "readOnly": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicationStatusEnum"
+          },
+          "note": {
+            "type": "string",
+            "description": "Cover letter or candidate note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "position",
+          "updated_at"
+        ]
+      },
+      "ApplicationCreate": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "default": ""
+          }
+        }
+      },
+      "ApplicationEmployer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "candidate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentShort"
+              }
+            ],
+            "readOnly": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicationStatusEnum"
+          },
+          "note": {
+            "type": "string",
+            "description": "Cover letter or candidate note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "candidate",
+          "created_at",
+          "id",
+          "updated_at"
+        ]
+      },
+      "ApplicationStatusEnum": {
+        "enum": [
+          "applied",
+          "reviewing",
+          "invited",
+          "rejected",
+          "hired",
+          "withdrawn"
+        ],
+        "type": "string",
+        "description": "* `applied` - Applied\n* `reviewing` - Reviewing\n* `invited` - Invited\n* `rejected` - Rejected\n* `hired` - Hired\n* `withdrawn` - Withdrawn"
+      },
+      "AssessmentEvidence": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer"
+          },
+          "level": {
+            "type": "string"
+          },
+          "correct": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "required": [
+          "level",
+          "seq"
+        ]
+      },
+      "AssessmentFallback": {
+        "type": "object",
+        "properties": {
+          "grade": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grade",
+          "mode"
+        ]
+      },
+      "AssessmentModeEnum": {
+        "enum": [
+          "full",
+          "express"
+        ],
+        "type": "string",
+        "description": "* `full` - Full\n* `express` - Express"
+      },
+      "AssessmentPaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentResult"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
+        ]
+      },
       "AssessmentResult": {
         "type": "object",
         "properties": {
@@ -1545,20 +3427,20 @@
             "format": "uuid",
             "readOnly": true
           },
+          "kind": {
+            "$ref": "#/components/schemas/KindEnum"
+          },
           "specialization": {
             "$ref": "#/components/schemas/SpecializationEnum"
           },
           "claimed_grade": {
-            "$ref": "#/components/schemas/GradesEnum"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/KindEnum"
+            "$ref": "#/components/schemas/GradeEnum"
           },
           "mode": {
-            "$ref": "#/components/schemas/ModeEnum"
+            "$ref": "#/components/schemas/AssessmentModeEnum"
           },
           "status": {
-            "$ref": "#/components/schemas/Status61dEnum"
+            "$ref": "#/components/schemas/AssessmentStatusEnum"
           },
           "theta": {
             "type": "number",
@@ -1579,10 +3461,14 @@
             "nullable": true,
             "description": "Sport-style rating: 1000 + 200θ"
           },
+          "rating_ci": {
+            "type": "integer",
+            "readOnly": true
+          },
           "result_grade": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/GradesEnum"
+                "$ref": "#/components/schemas/GradeEnum"
               },
               {
                 "$ref": "#/components/schemas/BlankEnum"
@@ -1606,6 +3492,34 @@
             "type": "boolean",
             "description": "False for fallback tests — failing does not burn a retake"
           },
+          "fallback": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentFallback"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentTopic"
+            },
+            "readOnly": true
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentEvidence"
+            },
+            "readOnly": true
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
           "started_at": {
             "type": "string",
             "format": "date-time",
@@ -1619,9 +3533,14 @@
         },
         "required": [
           "claimed_grade",
+          "evidence",
+          "fallback",
           "id",
+          "next_attempt_at",
+          "rating_ci",
           "specialization",
-          "started_at"
+          "started_at",
+          "topics"
         ]
       },
       "AssessmentSession": {
@@ -1636,19 +3555,23 @@
             "$ref": "#/components/schemas/SpecializationEnum"
           },
           "claimed_grade": {
-            "$ref": "#/components/schemas/GradesEnum"
+            "$ref": "#/components/schemas/GradeEnum"
           },
           "kind": {
             "$ref": "#/components/schemas/KindEnum"
           },
           "mode": {
-            "$ref": "#/components/schemas/ModeEnum"
+            "$ref": "#/components/schemas/AssessmentModeEnum"
           },
           "status": {
-            "$ref": "#/components/schemas/Status61dEnum"
+            "$ref": "#/components/schemas/AssessmentStatusEnum"
           },
           "current": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemView"
+              }
+            ],
             "readOnly": true
           },
           "theta": {
@@ -1673,7 +3596,7 @@
           "result_grade": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/GradesEnum"
+                "$ref": "#/components/schemas/GradeEnum"
               },
               {
                 "$ref": "#/components/schemas/BlankEnum"
@@ -1712,6 +3635,31 @@
           "started_at"
         ]
       },
+      "AssessmentStatusEnum": {
+        "enum": [
+          "in_progress",
+          "finished",
+          "abandoned",
+          "expired"
+        ],
+        "type": "string",
+        "description": "* `in_progress` - In Progress\n* `finished` - Finished\n* `abandoned` - Abandoned\n* `expired` - Expired"
+      },
+      "AssessmentTopic": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "topic"
+        ]
+      },
       "BlankEnum": {
         "enum": [
           ""
@@ -1721,27 +3669,115 @@
         "type": "object",
         "properties": {
           "email": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "email",
-                "maxLength": 254
-              },
-              {
-                "type": "string",
-                "maxLength": 0
-              }
-            ]
+            "type": "string",
+            "maxLength": 512
           },
           "phone": {
             "type": "string",
-            "maxLength": 30
+            "maxLength": 512
           },
           "telegram": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 512
           }
         }
+      },
+      "CandidateContactsDisplay": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "telegram": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "CandidateFSP": {
+        "type": "object",
+        "properties": {
+          "participant_id": {
+            "type": "string"
+          },
+          "sports_rank": {
+            "type": "string",
+            "nullable": true
+          },
+          "sync_status": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FSPResult"
+            }
+          }
+        },
+        "required": [
+          "participant_id",
+          "results",
+          "sports_rank",
+          "sync_status"
+        ]
+      },
+      "CandidateGrantRevokeResponse": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean"
+          },
+          "grant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_id",
+          "revoked"
+        ]
+      },
+      "CandidateLeague": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "percentile": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "strength": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "grade",
+          "percentile",
+          "rating",
+          "specialization",
+          "status",
+          "strength"
+        ]
       },
       "CandidateProfile": {
         "type": "object",
@@ -1775,7 +3811,7 @@
           "claimed_grade": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/GradesEnum"
+                "$ref": "#/components/schemas/GradeEnum"
               },
               {
                 "$ref": "#/components/schemas/BlankEnum"
@@ -1857,23 +3893,51 @@
             "description": "Profile completeness 0-100"
           },
           "contacts": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateContact"
+              }
+            ],
             "readOnly": true
           },
           "skills": {
-            "type": "string",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CandidateSkill"
+            },
             "readOnly": true
           },
+          "unknown_skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "readOnly": true,
+            "description": "Skills submitted by candidate that could not be mapped to canonical taxonomy"
+          },
           "league": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateLeague"
+              }
+            ],
             "readOnly": true
           },
           "fsp": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateFSP"
+              }
+            ],
             "readOnly": true
           },
           "consents": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConsentsResponse"
+              }
+            ],
             "readOnly": true
           }
         },
@@ -1884,7 +3948,8 @@
           "fsp",
           "league",
           "public_id",
-          "skills"
+          "skills",
+          "unknown_skills"
         ]
       },
       "CandidateProfileUpdate": {
@@ -1915,7 +3980,7 @@
           "claimed_grade": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/GradesEnum"
+                "$ref": "#/components/schemas/GradeEnum"
               },
               {
                 "$ref": "#/components/schemas/BlankEnum"
@@ -2002,6 +4067,42 @@
           }
         }
       },
+      "CandidateSkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "readOnly": true
+          },
+          "source": {
+            "$ref": "#/components/schemas/CandidateSkillSourceEnum"
+          },
+          "level": {
+            "type": "number",
+            "format": "double",
+            "description": "Skill level 0.0-1.0"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source"
+        ]
+      },
+      "CandidateSkillSourceEnum": {
+        "enum": [
+          "test",
+          "fsp",
+          "microtask",
+          "declared"
+        ],
+        "type": "string",
+        "description": "* `test` - Verified by test\n* `fsp` - Verified by FSP\n* `microtask` - Verified by micro-task\n* `declared` - Declared"
+      },
       "Company": {
         "type": "object",
         "properties": {
@@ -2077,7 +4178,88 @@
           "trust_level"
         ]
       },
-      "ConsentsRequest": {
+      "CompanyMinimal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "CompanyPaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyMinimal"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
+        ]
+      },
+      "CompanyPublic": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "trust_level": {
+            "$ref": "#/components/schemas/TrustLevelEnum"
+          },
+          "website": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 200
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ConsentUpdate": {
         "type": "object",
         "properties": {
           "processing": {
@@ -2124,6 +4306,143 @@
         "type": "string",
         "description": "* `email` - Email\n* `phone` - Phone\n* `telegram` - Telegram\n* `platform` - Platform"
       },
+      "ContactGrant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "company": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContactGrantCompany"
+              }
+            ],
+            "readOnly": true
+          },
+          "source": {
+            "$ref": "#/components/schemas/ContactGrantSourceEnum"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the offer or application that created this grant"
+          },
+          "is_active": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "revoked_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set when candidate revokes contact access"
+          }
+        },
+        "required": [
+          "company",
+          "granted_at",
+          "id",
+          "is_active",
+          "source",
+          "source_id"
+        ]
+      },
+      "ContactGrantCompany": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "email_domain": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "trust_level": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contact_email",
+          "email_domain",
+          "id",
+          "name",
+          "trust_level",
+          "website"
+        ]
+      },
+      "ContactGrantSourceEnum": {
+        "enum": [
+          "offer",
+          "application"
+        ],
+        "type": "string",
+        "description": "* `offer` - Offer\n* `application` - Application"
+      },
+      "CreateOffer": {
+        "type": "object",
+        "properties": {
+          "candidate_public_id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "default": "Draft Offer",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "default": ""
+          },
+          "salary_min": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "salary_max": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "salary_type": {
+            "$ref": "#/components/schemas/SalaryTypeEnum"
+          },
+          "contact_channel": {
+            "$ref": "#/components/schemas/ContactChannelEnum"
+          },
+          "contact_value": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "candidate_public_id",
+          "contact_channel",
+          "contact_value",
+          "salary_max",
+          "salary_min",
+          "salary_type"
+        ]
+      },
       "DecisionEnum": {
         "enum": [
           "confirmed",
@@ -2144,6 +4463,21 @@
         ],
         "type": "string",
         "description": "* `salary` - Salary\n* `stack` - Stack\n* `format` - Format\n* `company` - Company\n* `timing` - Timing\n* `not_looking` - Not Looking\n* `other` - Other"
+      },
+      "DemoResetResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "clock_offset_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clock_offset_days",
+          "status"
+        ]
       },
       "EligibilityResponse": {
         "type": "object",
@@ -2204,6 +4538,41 @@
           "sync_status"
         ]
       },
+      "FSPResult": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "event_name": {
+            "type": "string"
+          },
+          "discipline": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "integer"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "participants_total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "discipline",
+          "event_id",
+          "event_name",
+          "participants_total",
+          "placement",
+          "tier"
+        ]
+      },
       "FSPSyncResponse": {
         "type": "object",
         "properties": {
@@ -2219,7 +4588,28 @@
           "synced_at"
         ]
       },
-      "GradesEnum": {
+      "FallbackRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FallbackRequestModeEnum"
+              }
+            ],
+            "default": "instant"
+          }
+        }
+      },
+      "FallbackRequestModeEnum": {
+        "enum": [
+          "instant",
+          "short_test"
+        ],
+        "type": "string",
+        "description": "* `instant` - Instant\n* `short_test` - Short Test"
+      },
+      "GradeEnum": {
         "enum": [
           "intern",
           "junior",
@@ -2244,6 +4634,18 @@
             "minimum": -2147483648,
             "description": "Item sequence number within the assessment"
           },
+          "max_items": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "level": {
+            "type": "string",
+            "readOnly": true
+          },
+          "format": {
+            "type": "string",
+            "readOnly": true
+          },
           "stem_md": {
             "type": "string",
             "readOnly": true
@@ -2265,7 +4667,8 @@
           "deadline_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Item-level time limit deadline"
+            "nullable": true,
+            "description": "Item-level deadline; set when the item becomes current, NULL until served"
           },
           "served_at": {
             "type": "string",
@@ -2275,14 +4678,136 @@
         },
         "required": [
           "code",
-          "deadline_at",
+          "format",
           "input_type",
           "item_id",
+          "level",
+          "max_items",
           "options",
           "seq",
           "served_at",
           "stem_md",
           "time_limit_s"
+        ]
+      },
+      "JdDraft": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "default": ""
+          },
+          "specialization": {
+            "type": "string",
+            "default": "backend"
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "must_skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nice_skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "location": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          },
+          "salary_min": {
+            "type": "integer",
+            "nullable": true
+          },
+          "salary_max": {
+            "type": "integer",
+            "nullable": true
+          },
+          "salary_type": {
+            "type": "string",
+            "default": "gross"
+          },
+          "team_context": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "default": ""
+          }
+        }
+      },
+      "JdParseBlueprintItem": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "topic",
+          "weight"
+        ]
+      },
+      "JdParseRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 10
+          },
+          "raw_text": {
+            "type": "string",
+            "minLength": 10
+          }
+        }
+      },
+      "JdParseResult": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/JdDraft"
+          },
+          "unknown_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blueprint": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JdParseBlueprintItem"
+            }
+          },
+          "source": {
+            "type": "string",
+            "default": "rules"
+          }
+        },
+        "required": [
+          "draft"
         ]
       },
       "KindEnum": {
@@ -2294,6 +4819,198 @@
         ],
         "type": "string",
         "description": "* `initial` - Initial\n* `fallback` - Fallback\n* `promotion` - Promotion\n* `screening` - Screening"
+      },
+      "LabFamiliesResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabFamilyItem"
+            }
+          }
+        },
+        "required": [
+          "families",
+          "total"
+        ]
+      },
+      "LabFamilyItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "specs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "format": {
+            "type": "string"
+          },
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          },
+          "c": {
+            "type": "number",
+            "format": "double"
+          },
+          "time_limit_s": {
+            "type": "integer"
+          },
+          "exposures": {
+            "type": "integer"
+          },
+          "exposure_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "correct_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "expected_p_theta0": {
+            "type": "number",
+            "format": "double"
+          },
+          "drift_flag": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c",
+          "correct_rate",
+          "drift_flag",
+          "expected_p_theta0",
+          "exposure_rate",
+          "exposures",
+          "format",
+          "id",
+          "specs",
+          "time_limit_s",
+          "topic",
+          "version"
+        ]
+      },
+      "LabTwinItem": {
+        "type": "object",
+        "properties": {
+          "family_id": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          },
+          "time_limit_s": {
+            "type": "integer"
+          },
+          "instance_a": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "instance_b": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "b",
+          "family_id",
+          "instance_a",
+          "instance_b",
+          "level",
+          "time_limit_s",
+          "topic"
+        ]
+      },
+      "LabTwinsResponse": {
+        "type": "object",
+        "properties": {
+          "position_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "position_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "twins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabTwinItem"
+            }
+          }
+        },
+        "required": [
+          "grade",
+          "specialization",
+          "twins"
+        ]
+      },
+      "LeagueShelf": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "integer"
+          },
+          "unconfirmed": {
+            "type": "integer"
+          },
+          "median_expectation": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "confirmed",
+          "grade",
+          "specialization",
+          "unconfirmed"
+        ]
       },
       "Login": {
         "type": "object",
@@ -2384,13 +5101,306 @@
           "role"
         ]
       },
-      "ModeEnum": {
+      "MicroTask": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "company": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CompanyPublic"
+              }
+            ],
+            "readOnly": true
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "specialization": {
+            "$ref": "#/components/schemas/SpecializationEnum"
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradeEnum"
+            }
+          },
+          "format": {
+            "$ref": "#/components/schemas/MicroTaskFormatEnum"
+          },
+          "family_id": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          },
+          "prompt_md": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "company",
+          "created_at",
+          "id",
+          "prompt_md",
+          "specialization",
+          "title"
+        ]
+      },
+      "MicroTaskCreate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "specialization": {
+            "$ref": "#/components/schemas/SpecializationEnum"
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradeEnum"
+            }
+          },
+          "format": {
+            "$ref": "#/components/schemas/MicroTaskFormatEnum"
+          },
+          "family_id": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          },
+          "prompt_md": {
+            "type": "string"
+          },
+          "key": {
+            "writeOnly": true,
+            "nullable": true,
+            "description": "Server-side secret grading key. Never returned in responses."
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "prompt_md",
+          "specialization",
+          "title"
+        ]
+      },
+      "MicroTaskDropCandidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "task": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MicroTask"
+              }
+            ],
+            "readOnly": true
+          },
+          "dropped_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "answer": {
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "employer_rating": {
+            "type": "integer",
+            "maximum": 32767,
+            "minimum": -32768,
+            "nullable": true,
+            "description": "1 to 5 rating by employer"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dropped_at",
+          "id",
+          "task"
+        ]
+      },
+      "MicroTaskFormatEnum": {
         "enum": [
-          "full",
-          "express"
+          "auto",
+          "open"
         ],
         "type": "string",
-        "description": "* `full` - Full\n* `express` - Express"
+        "description": "* `auto` - Auto\n* `open` - Open"
+      },
+      "MicroTaskPrefillOfferResponse": {
+        "type": "object",
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "candidate_public_id": {
+            "type": "string"
+          },
+          "candidate_name": {
+            "type": "string"
+          },
+          "company_id": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "salary_min": {
+            "type": "integer"
+          },
+          "salary_max": {
+            "type": "integer"
+          },
+          "salary_type": {
+            "type": "string"
+          },
+          "contact_channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "candidate_name",
+          "candidate_public_id",
+          "company_id",
+          "company_name",
+          "contact_channel",
+          "description",
+          "salary_max",
+          "salary_min",
+          "salary_type",
+          "title"
+        ]
+      },
+      "MicroTaskRate": {
+        "type": "object",
+        "properties": {
+          "employer_rating": {
+            "type": "integer",
+            "maximum": 5,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "employer_rating"
+        ]
+      },
+      "MicroTaskSubmissionEmployer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "candidate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentShort"
+              }
+            ],
+            "readOnly": true
+          },
+          "dropped_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "answer": {
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "employer_rating": {
+            "type": "integer",
+            "maximum": 32767,
+            "minimum": -32768,
+            "nullable": true,
+            "description": "1 to 5 rating by employer"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "candidate",
+          "dropped_at",
+          "id",
+          "task_id"
+        ]
+      },
+      "MicroTaskSubmit": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "description": "Candidate solution or approach"
+          }
+        },
+        "required": [
+          "answer"
+        ]
       },
       "Offer": {
         "type": "object",
@@ -2416,6 +5426,14 @@
           "candidate_public_id": {
             "type": "string",
             "writeOnly": true
+          },
+          "talent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentShort"
+              }
+            ],
+            "readOnly": true
           },
           "title": {
             "type": "string",
@@ -2469,7 +5487,23 @@
           "decline_comment": {
             "type": "string"
           },
+          "decline": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OfferDecline"
+              }
+            ],
+            "readOnly": true
+          },
           "why_you": {
+            "readOnly": true
+          },
+          "below_floor": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "acceptance_likelihood": {
+            "type": "string",
             "readOnly": true
           },
           "version": {
@@ -2478,7 +5512,11 @@
             "description": "Incremented on every status change for optimistic locking"
           },
           "candidate_contacts": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CandidateContactsDisplay"
+              }
+            ],
             "readOnly": true
           },
           "expires_at": {
@@ -2499,11 +5537,14 @@
           }
         },
         "required": [
+          "acceptance_likelihood",
+          "below_floor",
           "candidate_contacts",
           "company",
           "contact_channel",
           "contact_value",
           "created_at",
+          "decline",
           "description",
           "expires_at",
           "id",
@@ -2511,39 +5552,104 @@
           "salary_min",
           "salary_type",
           "status",
+          "talent",
           "title",
           "updated_at",
           "version",
           "why_you"
         ]
       },
-      "OfferAcceptRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version"
-        ]
-      },
-      "OfferDeclineRequest": {
+      "OfferAction": {
         "type": "object",
         "properties": {
           "version": {
             "type": "integer"
           },
           "reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeclineReasonEnum"
+              },
+              {
+                "$ref": "#/components/schemas/BlankEnum"
+              }
+            ]
+          },
+          "comment": {
             "type": "string",
-            "default": "salary"
+            "default": ""
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "OfferDecline": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
           },
           "comment": {
             "type": "string"
           }
         },
         "required": [
-          "version"
+          "comment",
+          "reason"
+        ]
+      },
+      "OfferPaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
+        ]
+      },
+      "OfferProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail",
+          "status",
+          "title",
+          "type"
         ]
       },
       "OfferStatusEnum": {
@@ -2561,36 +5667,59 @@
         "type": "string",
         "description": "* `sent` - Sent\n* `viewed` - Viewed\n* `accepted` - Accepted\n* `declined` - Declined\n* `expired` - Expired\n* `withdrawn` - Withdrawn\n* `interview` - Interview\n* `hired` - Hired\n* `closed` - Closed"
       },
-      "OfferViewRequest": {
+      "PatchedApplicationStatusUpdate": {
         "type": "object",
         "properties": {
-          "version": {
-            "type": "integer"
+          "status": {
+            "$ref": "#/components/schemas/ApplicationStatusEnum"
           }
-        },
-        "required": [
-          "version"
-        ]
+        }
       },
-      "OfferWithdrawRequest": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "version"
-        ]
+      "PersonaEnum": {
+        "enum": [
+          "candidate_fsp",
+          "candidate_plain",
+          "employer"
+        ],
+        "type": "string",
+        "description": "* `candidate_fsp` - candidate_fsp\n* `candidate_plain` - candidate_plain\n* `employer` - employer"
       },
       "PersonaRequest": {
         "type": "object",
         "properties": {
           "persona": {
-            "type": "string",
-            "default": "candidate_fsp"
+            "$ref": "#/components/schemas/PersonaEnum"
           }
-        }
+        },
+        "required": [
+          "persona"
+        ]
+      },
+      "PoolComponent": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          },
+          "contribution": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "contribution",
+          "key",
+          "value",
+          "weight"
+        ]
       },
       "PoolItem": {
         "type": "object",
@@ -2603,8 +5732,10 @@
             "format": "double"
           },
           "components": {
-            "type": "object",
-            "additionalProperties": {}
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolComponent"
+            }
           },
           "reasons": {
             "type": "array",
@@ -2613,12 +5744,19 @@
               "additionalProperties": {}
             }
           },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "shortlisted": {
             "type": "boolean"
           }
         },
         "required": [
           "components",
+          "gaps",
           "reasons",
           "score",
           "shortlisted",
@@ -2635,7 +5773,8 @@
           },
           "company": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "readOnly": true
           },
           "title": {
             "type": "string",
@@ -2647,7 +5786,7 @@
           "grades": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/GradesEnum"
+              "$ref": "#/components/schemas/GradeEnum"
             },
             "description": "Acceptable grades for this position"
           },
@@ -2732,6 +5871,73 @@
           "title"
         ]
       },
+      "PositionHealthResponse": {
+        "type": "object",
+        "properties": {
+          "position_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_offers": {
+            "type": "integer"
+          },
+          "accepted_offers": {
+            "type": "integer"
+          },
+          "declined_offers": {
+            "type": "integer"
+          },
+          "expired_offers": {
+            "type": "integer"
+          },
+          "acceptance_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "decline_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "decline_reasons": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "top_decline_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "health_status": {
+            "type": "string"
+          },
+          "diagnosis": {
+            "type": "string"
+          },
+          "credits_remaining": {
+            "type": "integer"
+          },
+          "weekly_credits_remaining": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "acceptance_rate",
+          "accepted_offers",
+          "credits_remaining",
+          "decline_rate",
+          "decline_reasons",
+          "declined_offers",
+          "diagnosis",
+          "expired_offers",
+          "health_status",
+          "position_id",
+          "title",
+          "top_decline_reason",
+          "total_offers",
+          "weekly_credits_remaining"
+        ]
+      },
       "PositionPoolResponse": {
         "type": "object",
         "properties": {
@@ -2746,11 +5952,27 @@
           },
           "page": {
             "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "relaxations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
+          "facets",
           "items",
           "page",
+          "pages",
+          "relaxations",
           "total"
         ]
       },
@@ -2804,6 +6026,9 @@
           },
           "email_verified": {
             "type": "boolean"
+          },
+          "verify_link": {
+            "type": "string"
           }
         },
         "required": [
@@ -2836,11 +6061,10 @@
       "RoleEnum": {
         "enum": [
           "candidate",
-          "employer",
-          "admin"
+          "employer"
         ],
         "type": "string",
-        "description": "* `candidate` - Candidate\n* `employer` - Employer\n* `admin` - Admin"
+        "description": "* `candidate` - Candidate\n* `employer` - Employer"
       },
       "SalaryTypeEnum": {
         "enum": [
@@ -2859,37 +6083,36 @@
         "type": "string",
         "description": "* `backend` - Backend\n* `frontend` - Frontend\n* `ml_data` - ML & Data"
       },
-      "StartAssessmentRequest": {
+      "StartAssessment": {
         "type": "object",
         "properties": {
           "specialization": {
-            "type": "string",
-            "default": "backend"
+            "$ref": "#/components/schemas/SpecializationEnum"
           },
           "claimed_grade": {
-            "type": "string",
-            "default": "middle"
+            "$ref": "#/components/schemas/GradeEnum"
           },
           "mode": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentModeEnum"
+              }
+            ],
             "default": "full"
           }
-        }
-      },
-      "Status61dEnum": {
-        "enum": [
-          "in_progress",
-          "finished",
-          "abandoned",
-          "expired"
-        ],
-        "type": "string",
-        "description": "* `in_progress` - In Progress\n* `finished` - Finished\n* `abandoned` - Abandoned\n* `expired` - Expired"
+        },
+        "required": [
+          "claimed_grade",
+          "specialization"
+        ]
       },
       "TalentDetailResponse": {
         "type": "object",
         "properties": {
           "public_id": {
+            "type": "string"
+          },
+          "display_name": {
             "type": "string"
           },
           "city": {
@@ -2928,6 +6151,39 @@
               "additionalProperties": {}
             }
           },
+          "verified_topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "fsp_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "assessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "integrity_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "about": {
             "type": "string"
           },
@@ -2942,17 +6198,77 @@
         },
         "required": [
           "about",
+          "assessments",
           "city",
           "contacts",
+          "display_name",
           "experience_text",
           "fsp",
+          "fsp_results",
+          "integrity_flags",
           "league",
           "public_id",
           "salary_max",
           "salary_min",
           "salary_type",
           "skills",
+          "topics",
+          "verified_topics",
           "work_formats"
+        ]
+      },
+      "TalentFSP": {
+        "type": "object",
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "results_count": {
+            "type": "integer"
+          },
+          "sports_rank": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "linked",
+          "results_count",
+          "sports_rank"
+        ]
+      },
+      "TalentLeague": {
+        "type": "object",
+        "properties": {
+          "specialization": {
+            "type": "string"
+          },
+          "grade": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "percentile": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "strength": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "grade",
+          "percentile",
+          "rating",
+          "specialization",
+          "status",
+          "strength"
         ]
       },
       "TalentSearchResponse": {
@@ -2969,11 +6285,20 @@
           },
           "page": {
             "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {}
           }
         },
         "required": [
+          "facets",
           "items",
           "page",
+          "pages",
           "total"
         ]
       },
@@ -2983,6 +6308,10 @@
           "public_id": {
             "type": "string",
             "maxLength": 10
+          },
+          "display_name": {
+            "type": "string",
+            "readOnly": true
           },
           "city": {
             "type": "string",
@@ -3017,15 +6346,33 @@
             ]
           },
           "league": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentLeague"
+              }
+            ],
             "readOnly": true
           },
           "fsp": {
-            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TalentFSP"
+              }
+            ],
             "readOnly": true
           },
           "skills": {
-            "type": "string",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TalentSkill"
+            },
+            "readOnly": true
+          },
+          "verified_topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
             "readOnly": true
           },
           "last_active_at": {
@@ -3035,9 +6382,199 @@
           }
         },
         "required": [
+          "display_name",
           "fsp",
           "league",
-          "skills"
+          "skills",
+          "verified_topics"
+        ]
+      },
+      "TalentSkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source"
+        ]
+      },
+      "Taxonomy": {
+        "type": "object",
+        "properties": {
+          "specializations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomySpecialization"
+            }
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyGrade"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyTopic"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomySkill"
+            }
+          },
+          "decline_reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyDeclineReason"
+            }
+          }
+        },
+        "required": [
+          "decline_reasons",
+          "grades",
+          "skills",
+          "specializations"
+        ]
+      },
+      "TaxonomyDeclineReason": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "TaxonomyGrade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_ru": {
+            "type": "string"
+          },
+          "descriptor": {
+            "type": "string"
+          },
+          "descriptor_ru": {
+            "type": "string"
+          },
+          "theta_cut": {
+            "type": "number",
+            "format": "double"
+          },
+          "rating_cut": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "descriptor",
+          "id",
+          "name",
+          "rating_cut"
+        ]
+      },
+      "TaxonomySkill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aliases",
+          "id",
+          "name",
+          "topic"
+        ]
+      },
+      "TaxonomySpecialization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_ru": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "topics"
+        ]
+      },
+      "TaxonomyTopic": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name_ru": {
+            "type": "string"
+          },
+          "specs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name_ru",
+          "skills",
+          "specs"
         ]
       },
       "TimeTravelRequest": {
@@ -3045,9 +6582,13 @@
         "properties": {
           "days": {
             "type": "integer",
-            "default": 30
+            "maximum": 365,
+            "minimum": 0
           }
-        }
+        },
+        "required": [
+          "days"
+        ]
       },
       "TimeTravelResponse": {
         "type": "object",
@@ -3069,6 +6610,360 @@
         "type": "string",
         "description": "* `none` - None\n* `domain` - Domain verified\n* `verified` - Verified"
       },
+      "Vacancy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "company": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CompanyPublic"
+              }
+            ],
+            "readOnly": true
+          },
+          "specialization": {
+            "$ref": "#/components/schemas/SpecializationEnum"
+          },
+          "grades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradeEnum"
+            },
+            "description": "Acceptable grades for this position"
+          },
+          "must_skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Required skills (weight=2 in matching)"
+          },
+          "nice_skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Nice-to-have skills (weight=1 in matching)"
+          },
+          "work_formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkFormatsEnum"
+            }
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "salary_min": {
+            "type": "integer",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "description": "Minimum salary in RUB/month. Must be > 0."
+          },
+          "salary_max": {
+            "type": "integer",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "description": "Maximum salary in RUB/month. Must be >= salary_min."
+          },
+          "salary_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalaryTypeEnum"
+              }
+            ],
+            "description": "Gross or net — mandatory for salary transparency\n\n* `gross` - Gross\n* `net` - Net"
+          },
+          "salary": {
+            "type": "object",
+            "additionalProperties": {},
+            "readOnly": true
+          },
+          "team_context": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "company",
+          "created_at",
+          "grades",
+          "id",
+          "salary",
+          "salary_max",
+          "salary_min",
+          "salary_type",
+          "specialization",
+          "title"
+        ]
+      },
+      "VacancyListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Vacancy"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pages",
+          "total"
+        ]
+      },
+      "ValidationAssessmentMetrics": {
+        "type": "object",
+        "properties": {
+          "simulees": {
+            "type": "integer"
+          },
+          "exact_acc": {
+            "type": "number",
+            "format": "double"
+          },
+          "adjacent_acc": {
+            "type": "number",
+            "format": "double"
+          },
+          "qwk": {
+            "type": "number",
+            "format": "double"
+          },
+          "retest_same_grade": {
+            "type": "number",
+            "format": "double"
+          },
+          "retest_r": {
+            "type": "number",
+            "format": "double"
+          },
+          "median_len": {
+            "type": "number",
+            "format": "double"
+          },
+          "max_family_exposure": {
+            "type": "number",
+            "format": "double"
+          },
+          "collision_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "generator_errors": {
+            "type": "integer"
+          },
+          "confusion": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          "tif": {
+            "$ref": "#/components/schemas/ValidationTif"
+          },
+          "leak_attack": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationLeakAttack"
+            }
+          }
+        },
+        "required": [
+          "adjacent_acc",
+          "collision_rate",
+          "confusion",
+          "exact_acc",
+          "generator_errors",
+          "leak_attack",
+          "max_family_exposure",
+          "median_len",
+          "qwk",
+          "retest_r",
+          "retest_same_grade",
+          "simulees",
+          "tif"
+        ]
+      },
+      "ValidationLeakAttack": {
+        "type": "object",
+        "properties": {
+          "leak_share": {
+            "type": "number",
+            "format": "double"
+          },
+          "static_dtheta": {
+            "type": "number",
+            "format": "double"
+          },
+          "parametric_dtheta": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "leak_share",
+          "parametric_dtheta",
+          "static_dtheta"
+        ]
+      },
+      "ValidationMatchingMetrics": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "integer"
+          },
+          "needs": {
+            "type": "integer"
+          },
+          "non_fsp_parity": {
+            "type": "number",
+            "format": "double"
+          },
+          "pool_p95_ms": {
+            "type": "number",
+            "format": "double"
+          },
+          "systems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationMatchingSystem"
+            }
+          }
+        },
+        "required": [
+          "candidates",
+          "needs",
+          "non_fsp_parity",
+          "pool_p95_ms",
+          "systems"
+        ]
+      },
+      "ValidationMatchingSystem": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ndcg10": {
+            "type": "number",
+            "format": "double"
+          },
+          "p10": {
+            "type": "number",
+            "format": "double"
+          },
+          "r50": {
+            "type": "number",
+            "format": "double"
+          },
+          "mrr": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "mrr",
+          "name",
+          "ndcg10",
+          "p10",
+          "r50"
+        ]
+      },
+      "ValidationReport": {
+        "type": "object",
+        "properties": {
+          "generated_at": {
+            "type": "string"
+          },
+          "git_sha": {
+            "type": "string"
+          },
+          "synthetic_fixture": {
+            "type": "boolean"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/ValidationAssessmentMetrics"
+          },
+          "matching": {
+            "$ref": "#/components/schemas/ValidationMatchingMetrics"
+          }
+        },
+        "required": [
+          "assessment",
+          "generated_at",
+          "git_sha",
+          "matching",
+          "synthetic_fixture"
+        ]
+      },
+      "ValidationTif": {
+        "type": "object",
+        "properties": {
+          "theta": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "info": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "required": [
+          "info",
+          "theta"
+        ]
+      },
+      "VerifyEmailRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
       "VerifyPublicIdResponse": {
         "type": "object",
         "properties": {
@@ -3079,20 +6974,30 @@
             "type": "boolean"
           },
           "specialization": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "grade": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "rating": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
           "grade",
+          "issued_at",
           "public_id",
           "rating",
           "specialization",
@@ -3111,10 +7016,6 @@
       }
     },
     "securitySchemes": {
-      "basicAuth": {
-        "type": "http",
-        "scheme": "basic"
-      },
       "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",

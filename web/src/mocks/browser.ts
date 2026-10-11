@@ -11,8 +11,9 @@ import { employerHandlers } from '@/mocks/handlers/employer'
 
 /**
  * VITE_API_MOCKS=all    → mock everything (no backend needed)
- * VITE_API_MOCKS=missing→ mock only real gaps (G1–G17 + demo/reset),
- *                         pass everything the backend serves through
+ * VITE_API_MOCKS=missing→ mock only still-open pieces (G9 deep talent
+ *                         sections, lab report), pass everything the
+ *                         backend serves through
  * VITE_API_MOCKS=off    → no mocks (default)
  */
 const mode = import.meta.env.VITE_API_MOCKS ?? 'off'
@@ -43,7 +44,8 @@ export async function startMocks(): Promise<void> {
           ...coreHandlers,
         ]
       : [
-          // Gaps G1–G17 are live on backend (BE.md §2.3). Missing mode only stubs what is still unreleased.
+          // Former gaps G1–G8 and G16/G17 are live on the backend (BE.md §2.3);
+          // `missing` mode keeps their handlers empty — nothing left to stub.
         ]
   const worker = setupWorker(...handlers)
   await worker.start({

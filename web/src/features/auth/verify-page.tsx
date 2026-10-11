@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button'
 
 /**
  * Email verification.
- * Backend gap G2: POST /api/auth/verify-email is missing and mocked in the
- * target shape; in DEMO_MODE accounts are auto-verified, so without a token
- * we show the "confirmed" state when /api/me says so (FE-02).
+ * POST /api/auth/verify-email is live on the BE (G2 shipped); the `missing`
+ * MSW mode keeps a stub for offline demos. In DEMO_MODE accounts are
+ * auto-verified, so without a token we show the "confirmed" state when
+ * /api/me says so (FE-02).
  */
 export function VerifyPage() {
   const [params] = useSearchParams()

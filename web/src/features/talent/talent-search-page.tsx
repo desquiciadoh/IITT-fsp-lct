@@ -25,7 +25,7 @@ import { ApiError } from '@/api/client'
  * Reuses the whole FE-10 stack: URL-synced filters (useScoutingFilters is a
  * pure hook over search params), FilterPanel, TalentRow, TalentDrawer and the
  * shortlist machinery. The target contract is
- * GET /api/talent/search → {items, total, page} (+ pages/facets, gaps G8/G14):
+ * GET /api/talent/search → {items, total, page, pages?, facets?}:
  * capability detection everywhere — server facets win when present; otherwise
  * filtering and facet counts happen on the client (features/talent/search.ts).
  *
@@ -51,7 +51,7 @@ export function TalentSearchPage() {
   const toggle = useToggleShortlist(positionId)
   const { tray, remove } = useShortlistTray(positionId)
 
-  // Capability detection (G8/G14): facets in the response ⇒ server did it.
+  // Capability detection: facets in the response ⇒ server did the filtering.
   const fallback = needsClientFiltering(search.data?.facets, filters)
   const view = fallback ? applyClientSearch(search.data, filters) : null
   const items = view ? view.items : (search.data?.items ?? [])

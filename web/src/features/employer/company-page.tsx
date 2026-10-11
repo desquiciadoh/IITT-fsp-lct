@@ -16,9 +16,9 @@ import { TrustBadge } from '@/components/domain/trust-badge'
 /**
  * FE-09 · Company (`/employer/company`).
  * GET/PUT /api/companies/me; `trust_level` is read-only and shown as TrustBadge.
- * After the BE fix for B1, employers without a company get 403
- * `company_required` — then this screen becomes a create form (gap G17,
- * POST /api/companies). Both branches share one form component.
+ * Once the BE stops auto-creating companies (bug B1), employers without
+ * one get 403 `company_required` — then this screen becomes a create form
+ * (POST /api/companies, G17 shipped). Both branches share one form.
  */
 
 const FIELDS: { name: keyof CompanyFormValues; label: string; hint?: string; textarea?: boolean }[] = [
@@ -126,7 +126,7 @@ export function CompanyPage() {
 
   if (isLoading) return <Skeleton className="h-64 rounded-xl" />
 
-  // Gap G17: after BE fixes B1 the endpoint answers 403 company_required.
+  // G17 branch: after BE fixes B1 the endpoint answers 403 company_required.
   if (isError && !missing) {
     return <ErrorState code={error instanceof ApiError ? error.code : undefined} onRetry={() => void refetch()} />
   }

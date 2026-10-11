@@ -4,7 +4,7 @@ import { keys } from '@/api/keys'
 import { usePollingInterval } from '@/api/events'
 import type { ContactChannel, Offer } from '@/api/types'
 
-/** GET /api/offers?status= returns an array today; also accept {items} (gap G14). */
+/** GET /api/offers?status= returns a plain array; also tolerate {items} pages. */
 export function useOffers(status?: string) {
   const interval = usePollingInterval()
   const query = status && status !== 'all' ? `?status=${status}` : ''

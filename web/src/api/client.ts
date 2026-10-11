@@ -42,7 +42,8 @@ function readCookie(name: string): string | null {
 
 let csrfPriming: Promise<void> | null = null
 
-/** Best effort: Django sets the cookie after login; GET /api/auth/csrf is gap G1. */
+/** Best effort: Django sets the csrftoken cookie after login; GET /api/auth/csrf
+ *  (live on the BE) primes it for unsafe requests when the cookie is missing. */
 async function ensureCsrfCookie(): Promise<void> {
   if (readCookie('csrftoken')) return
   if (!csrfPriming) {

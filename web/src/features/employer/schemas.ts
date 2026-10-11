@@ -81,7 +81,7 @@ export type PositionFormInput = Omit<z.input<typeof positionFormSchema>, 'must_s
 /**
  * Form values as they live inside react-hook-form BEFORE zod coercion runs:
  * salary arrives from <input type="number"> as string, and taxonomy-driven
- * option lists (grades / work_formats, gap G3) are plain `string[]` — the
+ * option lists (grades / work_formats) are plain `string[]` — the
  * renderers index label maps by them, and `toPositionInput` narrows/filters
  * them to the contract enums below.
  */
@@ -97,7 +97,7 @@ export function uniqueSkills(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean))]
 }
 
-/** Narrow free-form taxonomy strings (G3) to the schema's enum values at runtime. */
+/** Narrow free-form taxonomy strings to the schema's enum values at runtime. */
 const isGrade = (g: string): g is 'intern' | 'junior' | 'middle' | 'senior' =>
   ['intern', 'junior', 'middle', 'senior'].includes(g)
 const isFormat = (f: string): f is 'office' | 'hybrid' | 'remote' =>
@@ -107,7 +107,7 @@ const isSpec = (s: string): s is 'backend' | 'frontend' | 'ml_data' =>
 
 /**
  * Map raw form input (before zod coercion/defaults) onto PositionFormValues.
- * Taxonomy-driven options are plain strings (G3), so unknown values are
+ * Taxonomy-driven options are plain strings, so unknown values are
  * filtered out here; zod validation still guards the required fields.
  */
 export function toPositionInput(values: PositionFormState): PositionFormValues {

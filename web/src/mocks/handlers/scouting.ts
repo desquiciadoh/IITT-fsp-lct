@@ -4,13 +4,15 @@ import type { Grade, LeagueShelf, PoolEntry, Spec, TalentShort, WorkFormat } fro
 /**
  * FE-10 · Scouting — stateful MSW mock.
  *
- * Serves the gap endpoints in their TARGET shape (`X-Stub: true`):
- *   G7  GET /api/leagues?specialization= → plain array of shelves;
- *   G8  GET /api/positions/{id}/pool     → server-side filters, facets,
+ * Serves the scouting routes in their contract shape (`X-Stub: true`) for
+ * backend-less demos (G7/G8/G16 shipped on the BE; deep talent sections G9
+ * still come later):
+ *   GET /api/leagues?specialization=  → plain array of shelves;
+ *   GET /api/positions/{id}/pool      → server-side filters, facets,
  *       pagination, components as a list, gaps + relaxations;
  *   PUT/DELETE /api/positions/{id}/shortlist/{public_id} → 204 (stateful);
- *   G16 GET /api/positions/{id}/shortlist → tray list (until BE ships it);
- *   G9  GET /api/talent/{public_id}      → detail with contacts gated by an
+ *   GET /api/positions/{id}/shortlist → tray list;
+ *   GET /api/talent/{public_id}       → detail with contacts gated by an
  *       offer grant (null otherwise), topics section present in target shape.
  *
  * Registered BEFORE employerHandlers so its "…/api/leagues" wins over the
@@ -236,13 +238,13 @@ export const scoutingHandlers = [
     return stub({ detail: 'ok' })
   }),
 
-  // G7 — plain array of shelves in the target shape.
+  // Contract shape: plain array of shelves.
   http.get('*/api/leagues', ({ request }) => {
     const spec = new URL(request.url).searchParams.get('specialization') ?? 'backend'
     return stub(shelfCounts(spec))
   }),
 
-  // G8 — pool with server-side filters, facets, pagination, list components.
+  // Contract shape: pool with server-side filters, facets, pagination, list components.
   http.get('*/api/positions/:id/pool', ({ request, params }) => {
     const positionId = String(params.id)
     const sp = new URL(request.url).searchParams
@@ -283,7 +285,7 @@ export const scoutingHandlers = [
       .map(({ talent: t, score, components, reasons, gaps }) => ({
         talent: { ...t, skills: t.skillsList.map((s) => s.name) } as TalentShort,
         score,
-        // G8 target: components arrive as a weighted list.
+        // Components arrive as a weighted list (contract shape).
         components: Object.entries(components).map(([key, contribution]) => ({
           key: key as never,
           value: contribution,
@@ -316,7 +318,7 @@ export const scoutingHandlers = [
     })
   }),
 
-  // FE-12 · G8/G14 — plain talent search: same filters/facets/pagination as
+  // FE-12 · plain talent search: same filters/facets/pagination as
   // the pool, minus scoring. Registered BEFORE */api/talent/:publicId (MSW is
   // first-match-wins, otherwise "search" would be swallowed as a public id).
   http.get('*/api/talent/search', ({ request }) => {
@@ -379,7 +381,7 @@ export const scoutingHandlers = [
     })
   }),
 
-  // G16 — shortlist list (BE will ship it; the tray works from pool flags until then).
+  // Shortlist list (live on the BE; the tray also syncs from pool flags).
   http.get('*/api/positions/:id/shortlist', ({ params }) => {
     const listed = shortlists.get(String(params.id)) ?? new Set<string>()
     const items = talentSeed
@@ -400,7 +402,7 @@ export const scoutingHandlers = [
     return new HttpResponse(null, { status: 204, headers: { 'X-Stub': 'true' } })
   }),
 
-  // G9 — talent card for the drawer. Contacts are null unless granted.
+  // Talent card for the drawer (G9). Contacts are null unless granted.
   http.get('*/api/talent/:publicId', ({ params }) => {
     const t = talentSeed.find((x) => x.public_id === params.publicId)
     if (!t) return problem(404, 'not_found', 'Кандидат не найден.')
@@ -427,7 +429,7 @@ export const scoutingHandlers = [
             telegram: '@fsp_candidate',
           }
         : null,
-      // G9 target sections — present here so the UI can render them when real BE omits them.
+      // G9 sections — present here so the UI can render them when the real BE omits them.
       topics: [
         { key: 'algorithms', label: 'Алгоритмы', correct: 8, total: 10 },
         { key: 'databases', label: 'Базы данных', correct: 6, total: 8 },
