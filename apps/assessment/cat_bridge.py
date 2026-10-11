@@ -31,8 +31,8 @@ from assessment.engine.cat import (
 from assessment.engine.cat import item_level as _ml_item_level
 from assessment.engine.content import load_content
 from assessment.families.base import FamilyMeta as RegistryFamilyMeta
-from assessment.families.registry import all_families
 from assessment.families.registry import active_metas as registry_active_metas
+from assessment.families.registry import all_families
 from assessment.families.registry import make_rng as registry_make_rng
 
 ENGINE = IrtCatEngine(content=load_content())
